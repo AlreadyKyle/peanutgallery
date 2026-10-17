@@ -1,17 +1,18 @@
 import './style.css';
 import { awaySeconds, parseSavedAt, parseSavedState } from '../sim/save';
-import { createSim, step } from '../sim/sim';
+import { createSim, findPerk, step } from '../sim/sim';
 import type { SimState } from '../sim/types';
 import { AccessibleControls } from './controls';
 import { countEvent } from './count';
-import { fill, formatDuration, formatDust } from './format';
+import { describePerk, milestoneWords, weatherView } from './depth';
+import { fill, formatDust, formatDuration, formatPercent } from './format';
 import { Game, SAVE_INTERVAL_MS, SAVE_KEY } from './game';
 import { Hud } from './hud';
 import { loadGameData, type GameData } from './load';
 import { loadNextCard, showNextCard } from './next-card';
 import { DustScene, type SafeArea } from './scene';
 import { decodeSeed, seedFromSearch } from './seed-code';
-import { attachSeedButton, offerSeed } from './seed-ui';
+import { attachGalleryLink, attachSeedButton, offerSeed } from './seed-ui';
 import { attachShare } from './share';
 import { runWhatsNew } from './whats-new';
 
@@ -99,7 +100,7 @@ function run(data: GameData): void {
   const scene = new DustScene(host, config, calm);
   scene.setState(initial);
   const hud = new Hud(stage, config, strings, calm);
-  const controls = controlsRoot === null ? null : new AccessibleControls(controlsRoot, config, strings, initial);
+  const controls = controlsRoot === null ? null : new AccessibleControls(controlsRoot, config, strings, initial, calm);
   controls?.attach(game);
 
   let clock = 0;
@@ -118,7 +119,39 @@ function run(data: GameData): void {
       scene.unlocked();
       hud.unlocked(rows);
     },
+    milestone: (unit, owned) => {
+      const words = milestoneWords(config, strings, unit, owned);
+      scene.milestone(unit, owned);
+      hud.milestone(words.title, words.body);
+      controls?.say(words.said);
+    },
+    weather: (kind, state) => {
+      scene.weatherTurned();
+      const view = weatherView(state, config, strings);
+      controls?.say(
+        kind === null || view === null
+          ? strings.depth.weatherCleared
+          : fill(strings.depth.weatherSaid, { name: kind.name, effect: view.effect, seconds: String(view.secondsLeft) }),
+      );
+    },
+    pressed: (gems, state) => {
+      const season = String((state.season ?? 0) + 1);
+      scene.pressed();
+      hud.pressed(
+        fill(strings.depth.pressedTitle, { season }),
+        fill(strings.depth.pressedBody, { gems: String(gems), percent: formatPercent(1 + (config.unlocks.gems?.bonusPerGem ?? 0)) }),
+      );
+      controls?.say(fill(strings.depth.pressedSaid, { season, gems: String(state.gems ?? 0) }));
+      game.save(Date.now());
+    },
+    perk: (id) => {
+      const perk = findPerk(config, id);
+      scene.perk();
+      hud.bought();
+      if (perk !== null) controls?.say(fill(strings.depth.perkBought, { name: perk.name, effect: describePerk(perk, config, strings) }));
+    },
   });
+  if (controls !== null) controls.refused = (_unit, reason) => hud.flash(reason);
 
   // A tap anywhere on the island strikes; the Strike button does the same from the keyboard.
   scene.canvas.addEventListener('pointerdown', (event) => {
@@ -134,6 +167,7 @@ function run(data: GameData): void {
   const seedButton = document.getElementById('seed-save');
   if (seedButton instanceof HTMLButtonElement && shareStatus !== null) {
     attachSeedButton(seedButton, shareStatus, () => game.state, config, strings);
+    attachGalleryLink(seedButton, () => game.state, strings);
   }
 
   // Framing: the island stays inside whatever the HUD and the shop leave open. The sizes are read in

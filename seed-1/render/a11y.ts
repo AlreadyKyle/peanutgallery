@@ -83,6 +83,8 @@ export class Announcer {
   // The message for this tick, or null to leave the region as it is.
   tick(state: SimState, now: number): string | null {
     const messages: string[] = [];
+    // A new season (the pile pressed) starts the unlock list over.
+    if (state.unlocked.length < this.seenUnlocks) this.seenUnlocks = 0;
     for (const event of state.unlocked.slice(this.seenUnlocks)) {
       const row = findUnlock(this.config, event.id);
       if (row === null) continue;

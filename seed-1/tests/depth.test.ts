@@ -202,12 +202,13 @@ describe('gems and perks', () => {
     return { ...state, dust: total, owned: { gatherer: 30, cart: 20, mill: 10, forge: 5, foundry: 2 } };
   }
 
-  it('opens at the pressing stone and gives floor(sqrt(total / dustPerGem)) gems', () => {
+  it('opens at the pressing stone and gives floor(cbrt(total / dustPerGem)) gems', () => {
     expect(gemsOpen(ready(stone.atTotalDust - 1), live)).toBe(false);
     expect(gemsOpen(ready(stone.atTotalDust), live)).toBe(true);
     expect(gemsForPress(ready(1_000_000), live)).toBe(2);
-    expect(gemsForPress(ready(25_000_000), live)).toBe(10);
-    expect(dustForNextGem(ready(1_000_000), live)).toBe(9 * 250_000);
+    expect(gemsForPress(ready(125_000_000), live)).toBe(10);
+    expect(gemsForPress(ready(124_000_000), live)).toBe(9);
+    expect(dustForNextGem(ready(1_000_000), live)).toBe(27 * 125_000);
     expect(canPress(ready(stone.atTotalDust - 1), live)).toBe(false);
   });
 
@@ -219,7 +220,7 @@ describe('gems and perks', () => {
     expect(Object.values(after.owned).every((n) => n === 0)).toBe(true);
     expect(after.unlocked).toEqual([]);
     expect(after.weather).toBeUndefined();
-    expect(after.gems).toBe(4);
+    expect(after.gems).toBe(3);
     expect(after.season).toBe(1);
     expect(after.pastDust).toBe(4_000_000);
     expect(after.elapsedSeconds).toBe(40);
@@ -232,12 +233,12 @@ describe('gems and perks', () => {
 
   it('every unspent gem adds ten percent to production', () => {
     const season = apply(ready(4_000_000), live, { type: 'press' });
-    expect(gemBonus(season, live)).toBeCloseTo(1.4);
-    expect(ratePerSecond(season, live)).toBeCloseTo(1.4);
+    expect(gemBonus(season, live)).toBeCloseTo(1.3);
+    expect(ratePerSecond(season, live)).toBeCloseTo(1.3);
   });
 
   it('perks cost gems, are bought once and change the next seasons', () => {
-    let state = apply(ready(25_000_000), live, { type: 'press' });
+    let state = apply(ready(125_000_000), live, { type: 'press' });
     expect(state.gems).toBe(10);
     expect(canBuyPerk(state, live, 'golden-pile')).toBe(true);
     state = apply(state, live, { type: 'perk', perk: 'strong-arms' });

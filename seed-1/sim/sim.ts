@@ -127,11 +127,15 @@ function thriftFactor(state: SimState, config: SimConfig): number {
   return factor;
 }
 
-/** The gems pressing the pile now would give: floor(sqrt(totalDust / dustPerGem)), 0 without gems. */
+/**
+ * The gems pressing the pile now would give: the cube root of totalDust / dustPerGem, rounded down
+ * (0 without gems). A cube root, so a long season pays more but never runs away: eight times the dust
+ * for twice the gems.
+ */
 export function gemsForPress(state: SimState, config: SimConfig): number {
   const table = config.unlocks.gems;
   if (table === undefined) return 0;
-  return Math.floor(Math.sqrt(state.totalDust / table.dustPerGem));
+  return Math.floor(Math.cbrt(state.totalDust / table.dustPerGem) + 1e-9);
 }
 
 /** The lifetime dust at which the next press would give one more gem. */
@@ -139,7 +143,7 @@ export function dustForNextGem(state: SimState, config: SimConfig): number | nul
   const table = config.unlocks.gems;
   if (table === undefined) return null;
   const next = gemsForPress(state, config) + 1;
-  return next * next * table.dustPerGem;
+  return next * next * next * table.dustPerGem;
 }
 
 /** Whether the gem layer shows: its unlock opened this season, or the pile was pressed before. */

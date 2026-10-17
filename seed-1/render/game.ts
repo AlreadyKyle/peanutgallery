@@ -2,9 +2,9 @@
 // step and the save. The scene (render/scene.ts), the HUD (render/hud.ts) and the accessible controls
 // (render/controls.ts) all read this one state and listen for its moments, so a strike from the canvas
 // and a strike from the keyboard are the same strike (tests/game.test.ts).
-import { apply, findUnlock, ownedCount, step } from '../sim/sim';
+import { apply, currentWeather, findUnlock, milestoneTier, ownedCount, step } from '../sim/sim';
 import { awaySeconds, serializeState } from '../sim/save';
-import type { SimAction, SimConfig, SimState, UnlockRow } from '../sim/types';
+import type { SimAction, SimConfig, SimState, UnlockRow, WeatherKind } from '../sim/types';
 
 // The localStorage key the game saves under. e2e/frames.spec.ts reads this line as text to plant its states.
 export const SAVE_KEY = 'dust.save';
@@ -19,6 +19,14 @@ export interface GameListener {
   bought?(unit: string, owned: number, state: SimState): void;
   /** One or more unlocks opened, in order. */
   unlocked?(rows: UnlockRow[], state: SimState): void;
+  /** A purchase took a unit past a milestone: the unit and how many are owned. */
+  milestone?(unit: string, owned: number, state: SimState): void;
+  /** The weather changed: the kind now in force, or null when it cleared. */
+  weather?(kind: WeatherKind | null, state: SimState): void;
+  /** The pile was pressed: the gems it gave, and the new season's state. */
+  pressed?(gems: number, state: SimState): void;
+  /** A perk was bought. */
+  perk?(id: string, state: SimState): void;
 }
 
 type SaveStore = Pick<Storage, 'setItem'>;
@@ -59,9 +67,19 @@ export class Game {
       const gain = after.dust - before.dust;
       for (const listener of this.listeners) listener.strike?.(gain, after);
     } else if (action.type === 'buy' && ownedCount(after, action.unit) > ownedCount(before, action.unit)) {
-      for (const listener of this.listeners) listener.bought?.(action.unit, ownedCount(after, action.unit), after);
+      const owned = ownedCount(after, action.unit);
+      for (const listener of this.listeners) listener.bought?.(action.unit, owned, after);
+      if (milestoneTier(this.config, owned) > milestoneTier(this.config, owned - 1)) {
+        for (const listener of this.listeners) listener.milestone?.(action.unit, owned, after);
+      }
+    } else if (action.type === 'press' && (after.season ?? 0) > (before.season ?? 0)) {
+      const gems = (after.gems ?? 0) - (before.gems ?? 0);
+      for (const listener of this.listeners) listener.pressed?.(gems, after);
+    } else if (action.type === 'perk' && (after.perks?.length ?? 0) > (before.perks?.length ?? 0)) {
+      for (const listener of this.listeners) listener.perk?.(action.perk, after);
     }
     this.announceUnlocks(before, after);
+    this.announceWeather(before, after);
     return after;
   }
 
@@ -74,6 +92,7 @@ export class Game {
     }
     this.lastStepAt = now;
     this.announceUnlocks(before, this.current);
+    this.announceWeather(before, this.current);
     return this.current;
   }
 
@@ -90,6 +109,14 @@ export class Game {
   /** Stops saving for good: the page is about to reload into a save written elsewhere (a seed). */
   stopSaving(): void {
     this.saving = false;
+  }
+
+  private announceWeather(before: SimState, after: SimState): void {
+    const was = before.weather?.kind ?? null;
+    const now = after.weather?.kind ?? null;
+    if (was === now) return;
+    const kind = currentWeather(after, this.config);
+    for (const listener of this.listeners) listener.weather?.(kind, after);
   }
 
   private announceUnlocks(before: SimState, after: SimState): void {

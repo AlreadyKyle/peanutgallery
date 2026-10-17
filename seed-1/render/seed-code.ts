@@ -10,6 +10,9 @@ import type { SimState } from '../sim/types';
 export const SEED_GAME = 'dust';
 export const SEED_PARAM = 'seed';
 export const PLAY_URL = 'https://play.mobmachine.games/';
+// The site's seed gallery: it saves a seed to the signed-in player's profile from `?save=<code>`.
+export const GALLERY_URL = 'https://mobmachine.games/seeds';
+export const GALLERY_PARAM = 'save';
 // A played state's save is a few hundred characters; anything far longer is not one of ours.
 export const MAX_SEED_LENGTH = 4096;
 
@@ -56,4 +59,11 @@ export function seedLink(code: string, base = PLAY_URL): string {
 export function seedFromSearch(search: string): string | null {
   const value = new URLSearchParams(search).get(SEED_PARAM);
   return value === null || value === '' ? null : value;
+}
+
+/** The link that saves a seed to the gallery: https://mobmachine.games/seeds?save=<code>. */
+export function galleryLink(code: string, base = GALLERY_URL): string {
+  const url = new URL(base);
+  url.searchParams.set(GALLERY_PARAM, code);
+  return url.toString();
 }

@@ -5,7 +5,7 @@
 import type { SimConfig, SimState } from '../sim/types';
 import { fill, formatDust } from './format';
 import { BACKUP_KEY, SAVE_KEY } from './game';
-import { encodeSeed, seedLink } from './seed-code';
+import { encodeSeed, galleryLink, seedLink } from './seed-code';
 import type { Strings } from './strings';
 import { serializeState } from '../sim/save';
 
@@ -55,6 +55,29 @@ export function attachSeedButton(
       if ((error as { name?: unknown } | null)?.name !== 'AbortError') copy();
     });
   });
+}
+
+/**
+ * Adds "Save to gallery" after Save as seed: a link that opens the site's seed gallery in a new tab
+ * with this run's seed code (`?save=<code>`); the site handles signing in and saving. The link is
+ * built when it is about to be followed (hover, focus, press), so it always carries the run as it
+ * is then. Returns the link.
+ */
+export function attachGalleryLink(after: HTMLElement, current: () => SimState, strings: Strings): HTMLAnchorElement {
+  const link = document.createElement('a');
+  link.id = 'seed-gallery';
+  link.className = 'gallery-link';
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.textContent = strings.seed.gallery;
+  link.setAttribute('aria-label', strings.seed.galleryLabel);
+  const refresh = (): void => {
+    link.href = galleryLink(encodeSeed(current()));
+  };
+  refresh();
+  for (const event of ['pointerenter', 'pointerdown', 'focus', 'click', 'contextmenu']) link.addEventListener(event, refresh);
+  after.insertAdjacentElement('afterend', link);
+  return link;
 }
 
 export interface SeedOfferElements {

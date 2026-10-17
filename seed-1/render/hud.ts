@@ -6,6 +6,7 @@
 import { ratePerSecond } from '../sim/sim';
 import type { SimConfig, SimState, UnlockRow } from '../sim/types';
 import { describeEffect } from './a11y';
+import { firstStep, gemGoal, weatherView } from './depth';
 import { fill, formatDust, formatDuration, formatRate } from './format';
 import { nextGoal } from './goals';
 import type { Strings } from './strings';
@@ -33,7 +34,27 @@ interface Banner {
   kicker: string;
   title: string;
   body: string;
+  /** The banner's look: an unlock (magenta), a welcome back, a milestone or a new season. */
+  tone: 'unlock' | 'welcome' | 'milestone' | 'season';
 }
+
+// How long a refusal's reason stays under the totals.
+const FLASH_SECONDS = 2.2;
+
+// Small line-style glyphs for the weather chip, drawn in code (never an image asset). The chip also
+// names the weather in words, so the glyph never carries the meaning alone.
+const WEATHER_GLYPHS: Record<string, string> = {
+  breeze:
+    '<path d="M3 8h11a3 3 0 1 0-3-3M3 13h15a3 3 0 1 1-3 3M3 18h7" fill="none" stroke="#151515" stroke-width="2.4" stroke-linecap="round"/>',
+  rain:
+    '<path d="M6 13a4 4 0 0 1 1-7.9A5 5 0 0 1 16.5 6 3.5 3.5 0 0 1 17 13z" fill="#8db9e8" stroke="#151515" stroke-width="2.2" stroke-linejoin="round"/><path d="M8 16l-1 3M12 16l-1 3M16 16l-1 3" stroke="#151515" stroke-width="2.2" stroke-linecap="round"/>',
+  heatwave:
+    '<circle cx="12" cy="12" r="4.5" fill="#f5b97a" stroke="#151515" stroke-width="2.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2" stroke="#151515" stroke-width="2.2" stroke-linecap="round"/>',
+  'shooting-star':
+    '<path d="M14 3l2 4.5 4.8.5-3.6 3.2 1 4.8-4.2-2.5-4.2 2.5 1-4.8L7.2 8l4.8-.5z" fill="#f5dc7a" stroke="#151515" stroke-width="2" stroke-linejoin="round"/><path d="M3 21l5-5M2 16l3-3" stroke="#151515" stroke-width="2.2" stroke-linecap="round"/>',
+};
+const WEATHER_GLYPH_DEFAULT =
+  '<path d="M6 16a4 4 0 0 1 1-7.9A5 5 0 0 1 16.5 9 3.5 3.5 0 0 1 17 16z" fill="#fdfcf8" stroke="#151515" stroke-width="2.2" stroke-linejoin="round"/>';
 
 function div(className: string, parent: HTMLElement): HTMLElement {
   const node = document.createElement('div');
@@ -57,6 +78,19 @@ export class Hud {
   private readonly bannerBody: HTMLElement;
   private readonly queue: Banner[] = [];
   private banner: Banner | null = null;
+  private readonly hint: HTMLElement;
+  private readonly weatherChip: HTMLElement;
+  private readonly weatherIcon: HTMLElement;
+  private readonly weatherName: HTMLElement;
+  private readonly weatherEffect: HTMLElement;
+  private readonly weatherLeft: HTMLElement;
+  private shownWeather: string | null = null;
+  private weatherAt = -10;
+  private flashText = '';
+  private flashAt = -10;
+  // The dust total as drawn: it rises toward the real total over a few frames instead of jumping.
+  private shownDust: number | null = null;
+  private lastFrame: number | null = null;
   private time = 0;
   private lastStrike = -10;
   private streak = 0;
@@ -86,6 +120,18 @@ export class Hud {
     const track = div('hud-goal-track', this.goal);
     this.goalFill = div('hud-goal-fill', track);
     this.goalLeft = div('hud-goal-left', this.goal);
+    // Under the HUD, outside its height so nothing here reframes the island: the first steps (or a
+    // refused purchase's reason) at the left, the weather at the right.
+    const below = div('hud-below', hud);
+    this.hint = div('hud-hint', below);
+    this.hint.style.opacity = '0';
+    this.weatherChip = div('hud-weather', below);
+    this.weatherIcon = div('hud-weather-icon', this.weatherChip);
+    const weatherWords = div('hud-weather-words', this.weatherChip);
+    this.weatherName = div('hud-weather-name', weatherWords);
+    this.weatherEffect = div('hud-weather-effect', weatherWords);
+    this.weatherLeft = div('hud-weather-left', this.weatherChip);
+    this.weatherChip.style.opacity = '0';
 
     const fx = div('fx', stage);
     fx.setAttribute('aria-hidden', 'true');
@@ -143,6 +189,7 @@ export class Hud {
         kicker: this.strings.labels.unlockedTitle,
         title: row.name,
         body: describeEffect(row, this.config, this.strings),
+        tone: 'unlock',
       });
     }
   }
@@ -154,14 +201,44 @@ export class Hud {
       kicker: this.strings.labels.welcomeTitle,
       title: fill(this.strings.labels.dustGain, { amount: formatDust(gain) }),
       body: fill(this.strings.labels.awayFor, { time: formatDuration(seconds) }),
+      tone: 'welcome',
     });
+  }
+
+  /** A unit passed a milestone. */
+  milestone(title: string, body: string): void {
+    this.pulseAt = this.time;
+    this.queue.push({ born: 0, until: 0, kicker: this.strings.depth.milestoneKicker, title, body, tone: 'milestone' });
+  }
+
+  /** The pile was pressed: a new season's banner goes first, and the count snaps to the new total. */
+  pressed(title: string, body: string): void {
+    this.queue.length = 0;
+    this.banner = null;
+    this.shownDust = null;
+    this.queue.push({ born: 0, until: 0, kicker: this.strings.depth.pressedKicker, title, body, tone: 'season' });
+  }
+
+  /** A short line under the totals, such as why a purchase was refused. */
+  flash(text: string): void {
+    this.flashText = text;
+    this.flashAt = this.time;
   }
 
   frame(ms: number, state: SimState): void {
     this.time = ms / 1000;
     const t = this.time;
+    const dt = this.lastFrame === null ? 0 : Math.max(0, t - this.lastFrame);
+    this.lastFrame = t;
 
-    const total = formatDust(state.dust);
+    // Gains count up toward the total; spending (or a new season) drops it at once.
+    const target = state.dust;
+    if (this.shownDust === null || this.calm || target <= this.shownDust) this.shownDust = target;
+    else {
+      this.shownDust += (target - this.shownDust) * Math.min(1, dt * 12);
+      if (target - this.shownDust < Math.max(0.5, target * 1e-6)) this.shownDust = target;
+    }
+    const total = formatDust(this.shownDust);
     if (total !== this.shownTotal) {
       this.shownTotal = total;
       this.total.textContent = total;
@@ -172,7 +249,13 @@ export class Hud {
     setText(this.rate, `${formatRate(ratePerSecond(state, this.config))} ${this.strings.labels.perSecond}`);
 
     const goal = nextGoal(state, this.config);
-    if (goal === null) {
+    const gem = goal === null ? gemGoal(state, this.config) : null;
+    if (gem !== null) {
+      // Every unlock is open: the bar runs to the next gem instead, so there is always a goal.
+      setText(this.goalName, this.strings.depth.nextGem);
+      setText(this.goalLeft, fill(this.strings.labels.toGo, { amount: formatDust(Math.ceil(gem.remaining)) }));
+      this.setGoal(gem.progress);
+    } else if (goal === null) {
       setText(this.goalName, this.strings.labels.allUnlocked);
       setText(this.goalLeft, '');
       this.setGoal(1);
@@ -208,7 +291,49 @@ export class Hud {
       this.streakNode.style.opacity = '0';
     }
 
+    this.drawHint(t, state);
+    this.drawWeather(t, state);
     this.drawBanner(t);
+  }
+
+  private drawHint(t: number, state: SimState): void {
+    const flashing = t - this.flashAt < FLASH_SECONDS && this.flashText !== '';
+    const text = flashing ? this.flashText : firstStep(state, this.config, this.strings);
+    if (text === null) {
+      if (this.hint.style.opacity !== '0') this.hint.style.opacity = '0';
+      return;
+    }
+    setText(this.hint, text);
+    this.hint.classList.toggle('flash', flashing);
+    const fade = flashing ? Math.min(1, (FLASH_SECONDS - (t - this.flashAt)) / 0.3) : 1;
+    // The first step breathes gently so the eye finds it; under reduced motion it stays still.
+    const breathe = this.calm || flashing ? 1 : 1 + Math.sin(t * 3.2) * 0.03;
+    this.hint.style.opacity = fade.toFixed(3);
+    this.hint.style.transform = `scale(${breathe.toFixed(3)})`;
+  }
+
+  private drawWeather(t: number, state: SimState): void {
+    const view = weatherView(state, this.config, this.strings);
+    const id = view?.kind.id ?? null;
+    if (id !== this.shownWeather) {
+      this.shownWeather = id;
+      this.weatherAt = t;
+      if (view !== null) {
+        this.weatherIcon.innerHTML = `<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">${WEATHER_GLYPHS[view.kind.id] ?? WEATHER_GLYPH_DEFAULT}</svg>`;
+        setText(this.weatherName, view.kind.name);
+        setText(this.weatherEffect, view.effect);
+        this.weatherChip.dataset['kind'] = view.kind.id;
+      }
+    }
+    if (view === null) {
+      if (this.weatherChip.style.opacity !== '0') this.weatherChip.style.opacity = '0';
+      return;
+    }
+    setText(this.weatherLeft, fill(this.strings.depth.weatherLeft, { seconds: String(view.secondsLeft) }));
+    const k = Math.min(1, (t - this.weatherAt) / 0.45);
+    const s = this.calm ? 1 : 0.6 + 0.4 * easeOutBack(k);
+    this.weatherChip.style.opacity = this.calm ? '1' : Math.min(1, k * 3).toFixed(3);
+    this.weatherChip.style.transform = `scale(${s.toFixed(3)})`;
   }
 
   private setGoal(progress: number): void {
@@ -221,14 +346,14 @@ export class Hud {
   private drawBanner(t: number): void {
     if ((this.banner === null || t >= this.banner.until) && this.queue.length > 0) {
       const next = this.queue.shift()!;
-      const welcome = next.kicker === this.strings.labels.welcomeTitle;
+      const long = next.tone === 'welcome' || next.tone === 'season';
       next.born = t;
-      next.until = t + (welcome ? WELCOME_SECONDS : BANNER_SECONDS);
+      next.until = t + (long ? WELCOME_SECONDS : BANNER_SECONDS);
       this.banner = next;
       this.bannerKicker.textContent = next.kicker;
       this.bannerTitle.textContent = next.title;
       this.bannerBody.textContent = next.body;
-      this.bannerNode.classList.toggle('welcome', welcome);
+      for (const tone of ['welcome', 'milestone', 'season'] as const) this.bannerNode.classList.toggle(tone, next.tone === tone);
     }
     const banner = this.banner;
     if (banner === null) return;

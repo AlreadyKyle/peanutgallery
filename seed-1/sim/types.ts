@@ -68,7 +68,7 @@ export interface PerkRow {
   effect: PerkEffect;
 }
 
-// Gems (optional), the rebirth layer: pressing the pile ends the season for floor(sqrt(totalDust /
+// Gems (optional), the rebirth layer: pressing the pile ends the season for floor(cbrt(totalDust /
 // dustPerGem)) gems. Dust, units and unlocks start over; gems and perks stay. Every unspent gem adds
 // bonusPerGem to production; perks cost gems and last for good.
 export interface GemTable {

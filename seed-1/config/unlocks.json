@@ -50,7 +50,7 @@
       "atTotalDust": 40000,
       "effect": {
         "type": "strike",
-        "value": 2
+        "value": 1.5
       }
     },
     {
@@ -175,7 +175,7 @@
       "atTotalDust": 800000000,
       "effect": {
         "type": "strike",
-        "value": 2
+        "value": 1.5
       }
     },
     {
@@ -267,7 +267,7 @@
     ]
   },
   "gems": {
-    "dustPerGem": 250000,
+    "dustPerGem": 125000,
     "bonusPerGem": 0.1,
     "perks": [
       {

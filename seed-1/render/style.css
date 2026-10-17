@@ -117,7 +117,7 @@ a:focus-visible {
 }
 
 .hud-total {
-  font-size: 38px;
+  font-size: 34px;
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -141,8 +141,8 @@ a:focus-visible {
 }
 
 .hud-goal {
-  flex: 0 1 190px;
-  min-width: 150px;
+  flex: 0 1 176px;
+  min-width: 140px;
   padding: 6px 10px 7px;
   background: var(--paper);
   border: 2px solid var(--ink);
@@ -671,6 +671,271 @@ footer {
 }
 
 /* A wide screen: the shop is a side panel on the right, the unlock list shows, the HUD stacks. */
+
+/* Under the HUD, outside its height so nothing here reframes the island: the first steps (or why a
+   purchase was refused) at the left, the weather at the right. Moved by render/hud.ts, never a CSS
+   animation. */
+.hud-below {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.hud-hint {
+  max-width: 62%;
+  padding: 4px 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--yellow);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 2px 2px 0 var(--ink);
+  transform-origin: 0 50%;
+}
+
+.hud-hint.flash {
+  background: var(--paper);
+}
+
+.hud-weather {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  max-width: 64%;
+  padding: 3px 10px 3px 6px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 2px 2px 0 var(--ink);
+  transform-origin: 100% 0;
+}
+
+.hud-weather-icon svg {
+  display: block;
+}
+
+.hud-weather-words {
+  min-width: 0;
+}
+
+.hud-weather-name {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.hud-weather-effect {
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--muted);
+}
+
+.hud-weather-left {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.banner.milestone .banner-kicker {
+  color: var(--ink);
+  background: var(--yellow);
+}
+
+.banner.season .banner-kicker {
+  color: var(--ink);
+  background: #cbbdee;
+}
+
+/* A unit's next milestone ("×2 at 25"). */
+.unit-next {
+  display: none;
+}
+
+/* Gems: press the pile for a new season, and perks. */
+.gems {
+  padding: 6px 8px 8px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.gems[hidden],
+.press-confirm[hidden] {
+  display: none;
+}
+
+.gems-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.gems-season {
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+}
+
+.gems-held {
+  margin: 1px 0 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.press,
+.press-yes,
+.press-no,
+.perk {
+  min-height: 44px;
+  font-weight: 700;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.press {
+  width: 100%;
+  padding: 6px 12px;
+  font-size: 15px;
+  background: #cbbdee;
+}
+
+.press[aria-disabled='true'] {
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--paper);
+  box-shadow: none;
+  border-style: dashed;
+}
+
+.press-confirm {
+  margin-top: 6px;
+  padding: 6px 8px 8px;
+  background: var(--sand-light);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+}
+
+.press-confirm-text {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.press-confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.press-yes {
+  flex: 1;
+  color: var(--paper);
+  background: var(--magenta);
+}
+
+.press-no {
+  flex: 1;
+  background: var(--paper);
+}
+
+.perks-heading {
+  margin: 6px 0 3px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* On a phone the perks scroll sideways inside the sheet; the page never does. */
+.perks {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 0 2px 4px 0;
+}
+
+.perk {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 8px;
+  max-width: 220px;
+  padding: 3px 10px;
+  text-align: left;
+  background: var(--paper);
+}
+
+.perk[aria-disabled='false'] {
+  background: var(--sand);
+}
+
+.perk.owned {
+  background: #e7f3e9;
+  border-style: solid;
+}
+
+.perk[aria-disabled='true']:not(.owned) {
+  color: var(--muted);
+}
+
+.perk-name {
+  font-size: 13px;
+}
+
+.perk-effect {
+  grid-column: 1 / span 2;
+  font-size: 11px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.perk-cost {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 11px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Save to gallery: a link that opens the site's seed gallery in a new tab, drawn like its neighbours. */
+.share-row .gallery-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 8px 18px;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: none;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 22px;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.share-row .gallery-link::after {
+  content: '↗';
+  margin-left: 5px;
+}
+
+.share-row .gallery-link:hover {
+  background: var(--sand-light);
+}
+
 @media (min-width: 860px) and (min-height: 520px) {
   .hud {
     top: 18px;
@@ -789,5 +1054,54 @@ footer {
 
   .banner-title {
     font-size: 34px;
+  }
+
+  .unit-rate-row {
+    display: block;
+  }
+
+  .unit-rate {
+    display: inline;
+  }
+
+  .unit-next {
+    display: inline;
+    margin-left: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--magenta);
+  }
+
+  .hud-below {
+    justify-content: flex-start;
+  }
+
+  .hud-weather {
+    margin-left: 0;
+  }
+
+  .perks {
+    display: grid;
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .perk {
+    grid-template-columns: 1fr auto;
+    column-gap: 8px;
+  }
+
+  .perk-effect {
+    grid-column: 1;
+    white-space: normal;
+  }
+
+  .perks-heading {
+    margin: 8px 0 4px;
+  }
+
+  .perk-cost {
+    grid-column: 2;
+    grid-row: 1;
   }
 }

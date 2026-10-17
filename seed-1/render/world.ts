@@ -123,3 +123,35 @@ export function easeOutBack(k: number): number {
   const c3 = c1 + 1;
   return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2);
 }
+
+/** The most flowers the island blooms with, however many seasons have passed. */
+export const MAX_FLOWERS = 36;
+
+const POND = { x: 4.1, z: 2.85 };
+
+/**
+ * Where the i-th season flower stands: on the grass, clear of the pile's clearing and the track, the
+ * buildings' slots and the pond, from the fixed hash, so every draw puts it in the same place.
+ */
+export function flowerSpot(index: number): { x: number; z: number; rot: number; scale: number } {
+  const slots = Object.values(STRUCTURE_SLOTS).flat();
+  for (let attempt = 0; attempt < 64; attempt += 1) {
+    const seed = index * 131 + attempt * 17 + 2000;
+    const x = (hash01(seed) - 0.5) * ISLAND_HALF * 1.8;
+    const z = (hash01(seed + 1) - 0.5) * ISLAND_HALF * 1.8;
+    if (Math.hypot(x, z) < 4.2) continue;
+    if (Math.hypot(x - POND.x, z - POND.z) < 1.3) continue;
+    if (slots.some((slot) => Math.hypot(x - slot.x, z - slot.z) < 1.2)) continue;
+    return { x, z, rot: hash01(seed + 2) * Math.PI * 2, scale: 0.8 + hash01(seed + 3) * 0.5 };
+  }
+  // Every island has room; this is only a fallback so the function is total.
+  return { x: ISLAND_HALF - 0.6, z: -ISLAND_HALF + 0.6, rot: 0, scale: 1 };
+}
+
+// The milestone tiers' colours, climbing from the creature fills to the Dust suit's magenta.
+const MILESTONE_COLOURS = [0xf5dc7a, 0x9bd3a6, 0x8db9e8, 0xf3b0c6, 0xb0226a];
+
+/** The colour of a hat or pennant at a milestone tier (1 is the first). */
+export function milestoneColour(tier: number): number {
+  return MILESTONE_COLOURS[Math.max(0, Math.min(MILESTONE_COLOURS.length - 1, tier - 1))]!;
+}

@@ -55,7 +55,11 @@ export interface Strings {
     start: string;
     keep: string;
     invalid: string;
+    gallery: string;
+    galleryLabel: string;
   };
+  // The layers after the units: first steps, milestones, weather, gems and perks (render/depth.ts).
+  depth: Record<(typeof DEPTH_KEYS)[number], string>;
   // The accessible DOM layer's text (render/controls.ts): the canvas is hidden from assistive technology.
   a11y: {
     controls: string;
@@ -95,7 +99,51 @@ const LABEL_KEYS = [
 
 const SHARE_KEYS = ['button', 'text', 'copied', 'failed', 'imageDust', 'imageUnlocks'] as const;
 
-const SEED_KEYS = ['button', 'text', 'copied', 'failed', 'offerTitle', 'offerBody', 'offerReplace', 'start', 'keep', 'invalid'] as const;
+const SEED_KEYS = ['button', 'text', 'copied', 'failed', 'offerTitle', 'offerBody', 'offerReplace', 'start', 'keep', 'invalid', 'gallery', 'galleryLabel'] as const;
+
+const DEPTH_KEYS = [
+  'hintStrike',
+  'hintBuy',
+  'notEnough',
+  'milestoneKicker',
+  'milestoneTitle',
+  'milestoneBody',
+  'milestoneNext',
+  'milestoneSaid',
+  'weatherKicker',
+  'weatherLeft',
+  'weatherSaid',
+  'weatherCleared',
+  'weatherAll',
+  'weatherStrike',
+  'weatherUnit',
+  'gemsHeading',
+  'gemsHeld',
+  'seasonLabel',
+  'press',
+  'pressLabel',
+  'pressNotYet',
+  'pressConfirm',
+  'pressYes',
+  'pressNo',
+  'pressedKicker',
+  'pressedTitle',
+  'pressedBody',
+  'pressedSaid',
+  'perksHeading',
+  'perkCost',
+  'perkOwned',
+  'perkLabel',
+  'perkOwnedLabel',
+  'perkBought',
+  'perkProduction',
+  'perkStrike',
+  'perkStart',
+  'perkWeather',
+  'perkThrift',
+  'nextGem',
+  'gemsIntro',
+] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -138,6 +186,10 @@ export function parseStrings(raw: unknown): Strings {
   if (!isRecord(seedRaw)) throw new Error('strings: "seed" must be an object');
   const seed = {} as Strings['seed'];
   for (const key of SEED_KEYS) seed[key] = requireText(seedRaw, key, 'strings.seed');
+  const depthRaw = raw['depth'];
+  if (!isRecord(depthRaw)) throw new Error('strings: "depth" must be an object');
+  const depth = {} as Strings['depth'];
+  for (const key of DEPTH_KEYS) depth[key] = requireText(depthRaw, key, 'strings.depth');
   return {
     title: requireText(raw, 'title', 'strings'),
     tabTitle: requireText(raw, 'tabTitle', 'strings'),
@@ -153,6 +205,7 @@ export function parseStrings(raw: unknown): Strings {
     },
     share,
     seed,
+    depth,
     a11y,
   };
 }

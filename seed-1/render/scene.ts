@@ -45,6 +45,7 @@ import {
 } from 'three';
 import { ownedCount } from '../sim/sim';
 import type { SimConfig, SimState } from '../sim/types';
+import { DepthLayer } from './scene-depth';
 import { addSmoothNormals, INK, merge, outlineMaterial, outlineUniform, part, Prop, toonMaterial } from './toon';
 import {
   CART_ORDER,
@@ -490,6 +491,8 @@ export class DustScene {
   private squashAt = -10;
   private squashPower = 0;
   private punchAt = -10;
+  private punchPower = 1;
+  private readonly depth: DepthLayer;
 
   private readonly track = new Group();
   private readonly gatherers: Prop;
@@ -576,6 +579,7 @@ export class DustScene {
       if (prop.outline !== null) this.scene.add(prop.outline);
     }
     for (let i = 0; i < UNIT_CAPS['gatherer']!; i += 1) this.gatherers.colour(i, scratchC.set(CREATURES[gathererPath(i).colour]!));
+    this.depth = new DepthLayer(this.scene, config, calm);
 
     // Motes of dust drifting over the island.
     const motes = 70;
@@ -641,7 +645,7 @@ export class DustScene {
     const t = this.time;
     const sway = this.calm ? 0 : Math.sin(t * 0.55) * 0.02;
     const punchK = Math.max(0, 1 - (t - this.punchAt) / 0.6);
-    const punch = this.calm ? 0 : Math.sin(punchK * Math.PI) * 0.035 * punchK;
+    const punch = this.calm ? 0 : Math.sin(punchK * Math.PI) * 0.035 * punchK * this.punchPower;
     const breathe = this.calm ? 0 : Math.sin(t * 0.8) * 0.006;
     const zoom = 1 - punch - breathe;
     const direction = this.direction.clone().applyAxisAngle(UP, sway);
@@ -672,6 +676,7 @@ export class DustScene {
   }
 
   strike(gain: number, streak: number): void {
+    const starry = this.state?.weather?.kind === 'shooting-star';
     this.squashAt = this.time;
     this.squashPower = Math.min(1, 0.55 + streak * 0.05);
     if (this.calm || !(gain > 0)) return;
@@ -687,7 +692,91 @@ export class DustScene {
         v: new Vector3(Math.cos(a) * speed, 3.2 + this.random() * 2.6, Math.sin(a) * speed),
         spin: (this.random() - 0.5) * 14,
         size: 0.06 + this.random() * 0.06,
-        colour: this.random() < 0.3 ? PALETTE.sandDeep : PALETTE.sand,
+        colour: starry ? (this.random() < 0.5 ? PALETTE.yellow : PALETTE.paper) : this.random() < 0.3 ? PALETTE.sandDeep : PALETTE.sand,
+      });
+    }
+    // A strike that lands big (a long streak, or under a shooting star) nudges the camera too.
+    if (streak >= 8 || starry) this.punch(0.35);
+  }
+
+  private punch(power: number): void {
+    // A smaller nudge never cuts short a bigger one still playing.
+    const left = Math.max(0, 1 - (this.time - this.punchAt) / 0.6) * this.punchPower;
+    if (power < left) return;
+    this.punchAt = this.time;
+    this.punchPower = power;
+  }
+
+  /** A unit passed a milestone: a nudge and a burst of confetti where it stands. */
+  milestone(unit: string, owned: number): void {
+    this.punch(0.6);
+    if (this.calm) return;
+    const index = Math.min(owned, UNIT_CAPS[unit] ?? 1) - 1;
+    const where = this.unitPosition(unit, Math.max(0, index)) ?? new Vector3(0, 0, 0);
+    this.burst(where.clone().setY(1.2), 26, 0.7);
+  }
+
+  /** The pile was pressed: the island's biggest moment. */
+  pressed(): void {
+    this.punch(1.6);
+    this.squashAt = this.time;
+    this.squashPower = 1;
+    // Whatever the new season starts with pops in again.
+    this.popAt.clear();
+    for (const unit of Object.keys(UNIT_CAPS)) this.popAt.set(unit, Array.from({ length: UNIT_CAPS[unit]! }, (_, i) => this.time + 0.3 + i * 0.05));
+    if (this.calm) return;
+    this.burst(new Vector3(0, this.pileShown * 1.4, 0), CONFETTI, 1.5);
+    for (let i = 0; i < 40; i += 1) {
+      const a = this.random() * Math.PI * 2;
+      const speed = 2 + this.random() * 4;
+      this.spawn(this.chunks, CHUNKS, {
+        born: this.time,
+        life: 1.2 + this.random() * 0.6,
+        p: new Vector3(Math.cos(a) * 0.4, this.pileShown, Math.sin(a) * 0.4),
+        v: new Vector3(Math.cos(a) * speed, 5 + this.random() * 4, Math.sin(a) * speed),
+        spin: (this.random() - 0.5) * 14,
+        size: 0.08 + this.random() * 0.08,
+        colour: [PALETTE.lavender, PALETTE.teal, PALETTE.pink, PALETTE.sand][i % 4]!,
+      });
+    }
+  }
+
+  /** A perk was bought: the gem ring glints. */
+  perk(): void {
+    this.punch(0.4);
+    if (this.calm) return;
+    const r = this.pileShown * 1.08 + 0.55;
+    for (let i = 0; i < 24; i += 1) {
+      const a = (i / 24) * Math.PI * 2;
+      this.spawn(this.chunks, CHUNKS, {
+        born: this.time + (i % 6) * 0.03,
+        life: 0.8,
+        p: new Vector3(Math.cos(a) * r, 0.4, Math.sin(a) * r),
+        v: new Vector3(Math.cos(a) * 0.6, 3 + this.random() * 1.5, Math.sin(a) * 0.6),
+        spin: 8,
+        size: 0.07,
+        colour: [PALETTE.yellow, PALETTE.paper, PALETTE.lavender][i % 3]!,
+      });
+    }
+  }
+
+  /** The weather turned: a small beat so the eye goes to it. */
+  weatherTurned(): void {
+    this.punch(0.3);
+  }
+
+  private burst(at: Vector3, count: number, scale: number): void {
+    for (let i = 0; i < count; i += 1) {
+      const a = this.random() * Math.PI * 2;
+      const speed = (1.2 + this.random() * 3.2) * Math.sqrt(scale);
+      this.spawn(this.confetti, CONFETTI, {
+        born: this.time,
+        life: 2 + this.random() * 1.0,
+        p: at.clone(),
+        v: new Vector3(Math.cos(a) * speed, (4 + this.random() * 4) * Math.sqrt(scale), Math.sin(a) * speed),
+        spin: (this.random() - 0.5) * 16,
+        size: 0.7 + this.random() * 0.6,
+        colour: [PALETTE.magenta, PALETTE.blue, PALETTE.yellow, PALETTE.green, PALETTE.pink, PALETTE.lavender][i % 6]!,
       });
     }
   }
@@ -703,10 +792,11 @@ export class DustScene {
     } else {
       this.bumpAt.set(unit, this.time);
     }
+    this.punch(0.25);
   }
 
   unlocked(): void {
-    this.punchAt = this.time;
+    this.punch(1);
     if (this.calm) return;
     const top = this.pileShown * 1.9;
     for (let i = 0; i < 60; i += 1) {
@@ -726,7 +816,7 @@ export class DustScene {
 
   /** The welcome-back moment: dust rains into the pile. */
   welcome(): void {
-    this.punchAt = this.time;
+    this.punch(1);
     if (this.calm) return;
     for (let i = 0; i < 50; i += 1) {
       const a = this.random() * Math.PI * 2;
@@ -785,7 +875,7 @@ export class DustScene {
   private popScale(unit: string, index: number): number {
     const at = this.popAt.get(unit)?.[index];
     let s = 1;
-    if (at !== undefined && !this.calm) s = easeOutBack(Math.min(1, (this.time - at) / POP_SECONDS));
+    if (at !== undefined && !this.calm) s = easeOutBack(Math.min(1, Math.max(0, (this.time - at) / POP_SECONDS)));
     const bump = this.bumpAt.get(unit);
     if (bump !== undefined && !this.calm) {
       const k = (this.time - bump) / 0.35;
@@ -808,6 +898,7 @@ export class DustScene {
     const state = this.state;
     if (state === null) return;
     const t = this.calm ? 0 : this.time;
+    this.depth.begin();
     let shadows = 0;
     const shadow = (x: number, z: number, r: number): void => {
       if (shadows >= this.shadows.capacity || r <= 0.01) return;
@@ -853,6 +944,7 @@ export class DustScene {
       const pop = this.popScale('gatherer', i);
       const tilt = walking ? Math.sin(t * 9 + i) * 0.08 : 0;
       this.gatherers.set(i, compose(x, bob, z, heading, pop, pop, pop, 0, tilt));
+      this.depth.hat(state, x, bob, z, heading, pop, tilt);
       shadow(x, z, 0.3 * pop);
       if (inbound && pop > 0.01) {
         const back = -0.2;
@@ -873,6 +965,7 @@ export class DustScene {
       const pop = this.popScale('cart', i);
       const rattle = this.calm ? 0 : Math.abs(Math.sin(t * 14 + i * 2)) * 0.025;
       this.carts.set(i, compose(x, rattle, z, a, pop));
+      this.depth.pennant(state, 'cart', new Vector3(x - Math.sin(a) * 0.25, 0.45 + rattle, z - Math.cos(a) * 0.25), -a, pop, t);
       shadow(x, z, 0.45 * pop);
     }
     this.carts.commit(carts);
@@ -885,6 +978,7 @@ export class DustScene {
       this.mills.set(i, compose(slot.x, 0, slot.z, slot.rot, pop));
       const hub = this.local(slot, 0, 1.3, 0.7, pop);
       this.sails.set(i, compose(hub.x, hub.y, hub.z, slot.rot, pop, pop, pop, 0, t * 1.4 + i));
+      this.depth.pennant(state, 'mill', this.local(slot, 0, 1.92, 0, pop), slot.rot, pop, t);
       shadow(slot.x, slot.z, 0.75 * pop);
     }
     this.mills.commit(mills);
@@ -900,6 +994,7 @@ export class DustScene {
       const pop = this.popScale('forge', i);
       this.forges.set(i, compose(slot.x, 0, slot.z, slot.rot, pop));
       this.glows.set(i, compose(slot.x, 0, slot.z, slot.rot, pop));
+      this.depth.pennant(state, 'forge', this.local(slot, 0.05, 1.16, 0.05, pop), slot.rot, pop, t);
       shadow(slot.x, slot.z, 0.8 * pop);
       if (this.calm) continue;
       for (let j = 0; j < 6; j += 1) {
@@ -922,6 +1017,7 @@ export class DustScene {
       const slot = STRUCTURE_SLOTS['foundry']![i]!;
       const pop = this.popScale('foundry', i);
       this.foundries.set(i, compose(slot.x, 0, slot.z, slot.rot, pop));
+      this.depth.pennant(state, 'foundry', this.local(slot, 0.0, 1.42, 0.3, pop), slot.rot, pop, t);
       shadow(slot.x, slot.z, 1.05 * pop);
       for (let c = 0; c < 2; c += 1) {
         for (let j = 0; j < 3; j += 1) {
@@ -937,6 +1033,20 @@ export class DustScene {
     }
     this.foundries.commit(foundries);
     this.smoke.commit(puffs);
+
+    // The later layers: milestone badges, gems, season flowers and the weather; a shooting star
+    // trails sparkles into the particle pool.
+    for (const sparkle of this.depth.update(state, this.time, dt, s)) {
+      this.spawn(this.chunks, CHUNKS, {
+        born: this.time,
+        life: 0.7,
+        p: sparkle.at.clone(),
+        v: new Vector3((this.random() - 0.5) * 0.8, -0.5 - this.random(), (this.random() - 0.5) * 0.8),
+        spin: 10,
+        size: 0.05 + this.random() * 0.04,
+        colour: sparkle.colour,
+      });
+    }
 
     // Strike dust, purchase puffs and the welcome-back rain.
     this.chunks.splice(0, this.chunks.length, ...this.chunks.filter((c) => this.time - c.born < c.life));
@@ -978,16 +1088,17 @@ export class DustScene {
 
     this.shadows.commit(shadows);
 
-    // Motes drift on slow loops above the island.
+    // Motes drift on slow loops above the island, faster in a breeze.
+    const tw = this.calm ? 0 : this.depth.windTime;
     const motes = this.motePositions.length / 3;
     for (let i = 0; i < motes; i += 1) {
       const bx = (hash01(i * 3 + 1) - 0.5) * ISLAND_HALF * 2.1;
       const bz = (hash01(i * 3 + 2) - 0.5) * ISLAND_HALF * 2.1;
       const by = 0.3 + hash01(i * 3 + 3) * 3.2;
       const w = 0.2 + hash01(i + 900) * 0.3;
-      this.motePositions[i * 3] = bx + Math.sin(t * w + i) * 0.6;
-      this.motePositions[i * 3 + 1] = by + Math.sin(t * w * 1.3 + i * 2) * 0.35;
-      this.motePositions[i * 3 + 2] = bz + Math.cos(t * w * 0.9 + i) * 0.6;
+      this.motePositions[i * 3] = bx + Math.sin(tw * w + i) * 0.6;
+      this.motePositions[i * 3 + 1] = by + Math.sin(tw * w * 1.3 + i * 2) * 0.35;
+      this.motePositions[i * 3 + 2] = bz + Math.cos(tw * w * 0.9 + i) * 0.6;
     }
     this.motes.geometry.attributes['position']!.needsUpdate = true;
   }
