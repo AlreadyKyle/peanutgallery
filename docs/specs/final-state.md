@@ -78,9 +78,9 @@ Every card has one suit. The suit says what the money pays for and is drawn as a
 The kernel stands: no agent with write access reads free text from the public. The pipeline:
 
 1. A signed-in player submits a suggestion: a game or area (a fixed list), a title of at most 80 characters and a description of at most 500. Links, code fences and markup are stripped; the content filter runs; a rate limit of 3 a day per account applies. It is stored in `community.suggestions`, which no write-capable role can select.
-2. The Scout, a new read-only role with no tools at all, reads queued suggestions in batches and returns only JSON in `platform/agents/schemas/suggestion-triage.schema.json`: area, kind (bug, feature, content, balance), a duplicate cluster id, a fit score against the pillars, safety flags, and a summary in its own words of at most 140 characters. Anything outside the schema is discarded; a suggestion flagged as an instruction to the agents is declined and never summarised.
+2. The Curator, a new read-only role with no tools at all, reads queued suggestions in batches and returns only JSON in `platform/agents/schemas/suggestion-triage.schema.json`: area, kind (bug, feature, content, balance), a duplicate cluster id, a fit score against the pillars, safety flags, and a summary in its own words of at most 140 characters. Anything outside the schema is discarded; a suggestion flagged as an instruction to the agents is declined and never summarised.
 3. Players upvote suggestions (one vote per account). Clusters rank by votes, fit and age.
-4. The Game Designer (or the Head of Product for Platform suggestions) drafts cards from the top clusters using the Scout's structured fields and summary, never the player's text. The Directors grade the draft as for any card.
+4. The Game Designer (or the Head of Product for Platform suggestions) drafts cards from the top clusters using the Curator's structured fields and summary, never the player's text. The Directors grade the draft as for any card.
 5. The card credits "Suggested by" the players in the cluster, and the suggestion's page shows its state: received, reviewed, clustered, drafted, open for funding, building, live, or declined with a reason from a fixed list.
 
 ### Seeds and instances
