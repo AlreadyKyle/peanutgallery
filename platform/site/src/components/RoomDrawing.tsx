@@ -165,7 +165,7 @@ function Bench({ plan }: { plan: RoomPlan }) {
       {line([[b.x + 0.25, b.y + 0.2, b.h + 0.35], [b.x + 0.45, b.y + 0.2, b.h + 0.5], [b.x + 0.65, b.y + 0.2, b.h + 0.2], [b.x + 0.85, b.y + 0.2, b.h + 0.45], [b.x + 1.05, b.y + 0.2, b.h + 0.35]], 'room-thin')}
       {box({ x: b.x + 1.4, y: b.y + 0.3, w: 0.35, d: 0.35, z: b.h, h: 0.45 }, 'flask')}
       {box({ x: b.x + 1.95, y: b.y + 0.25, w: 0.45, d: 0.45, z: b.h, h: 0.2 }, 'probe')}
-      {[0.45, 0.95, 1.45].map((dx) => {
+      {[0.35, 0.75, 1.15].map((dx) => {
         const { sx, sy } = iso(b.x + dx, b.y + b.d, b.h * 0.55, TILE);
         return <ellipse key={dx} className="room-fill room-strong" cx={sx} cy={sy} rx={5} ry={5} />;
       })}
