@@ -659,7 +659,7 @@ begin
         if not ('instruction_to_agents' = any (v_flags)) then v_flags := array_append(v_flags, 'instruction_to_agents'); end if;
       end if;
       insert into community.suggestion_triage (suggestion_id, area, kind, cluster_key, fit, flags, summary, job_run_id)
-      values (v_id, it->>'area', it->>'kind', it->>'cluster_key', (it->>'fit')::numeric, v_flags,
+      values (v_id, v_area, it->>'kind', it->>'cluster_key', (it->>'fit')::numeric, v_flags,
         case when v_summary is null then null else left(btrim(v_summary), 140) end, p_run)
       on conflict (suggestion_id) do nothing;
       if 'instruction_to_agents' = any (v_flags) then
@@ -679,6 +679,9 @@ begin
         when 'studio' then 'the studio' else 'the site' end || ' was reviewed', 'reviewed:' || v_id);
       v_written := v_written + 1;
     exception when others then
+      -- A bad item is skipped and stays received, so the next batch offers it again; the warning
+      -- names it in the database log.
+      raise warning 'curator_record_triage skipped %: %', it->>'id', sqlerrm;
       v_skipped := v_skipped + 1;
     end;
   end loop;

@@ -24,7 +24,7 @@ Hierarchy and legibility at each width: the eye lands on what matters first, and
 
 ### all_ages
 
-Nothing unsuitable for all ages: the rating is an ESRB E / PEGI 3 bar. No chips, dice or other chance cues near money, and never Cards Against Humanity's tone. revise with rating_concern, gambling_cue_near_money or cah_tone.
+Nothing unsuitable for all ages: the rating is an ESRB E / PEGI 3 bar. No chips, dice or other chance cues near money, and never a shock-humour party-game tone. revise with rating_concern, gambling_cue_near_money or cah_tone.
 
 ## The verdict
 

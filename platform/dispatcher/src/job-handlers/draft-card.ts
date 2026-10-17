@@ -36,6 +36,7 @@ import type { JobContext, JobHandler } from '../jobs.js';
 import { errorMessage } from '../log.js';
 import { round4 } from '../pricing.js';
 import { runRoleSession, type RoleSessionRequest, type RoleSessionResult } from '../role-session.js';
+import { guardFlags } from './curator-triage.js';
 import { moneyBounds } from '../throttle.js';
 import { schemaRepoPath, type TypedOutput } from '../typed-output.js';
 import { shortId } from '../worktree.js';
@@ -110,7 +111,8 @@ export interface ClusterBrief {
 const CLUSTER_KEYS = ['id', 'key', 'area', 'kind', 'fit', 'summary', 'votes', 'suggestions'] as const;
 
 // The cluster brief, strictly: exactly its eight keys, each of its type; a summary no longer than the
-// Curator's 140 characters. Anything else fails the run, so no other text reaches the Designer.
+// Curator's 140 characters that the Curator's guard does not flag. Anything else fails the run, so no
+// other text reaches the Designer.
 export function parseClusterBrief(value: unknown): ClusterBrief {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('draft_card cluster must be an object');
   const brief = value as Record<string, unknown>;
@@ -122,7 +124,9 @@ export function parseClusterBrief(value: unknown): ClusterBrief {
     typeof brief.area === 'string' && ['dust', 'new_game', 'studio', 'site'].includes(brief.area) &&
     (brief.kind === null || (typeof brief.kind === 'string' && ['bug', 'feature', 'content', 'balance'].includes(brief.kind))) &&
     (brief.fit === null || (typeof brief.fit === 'number' && brief.fit >= 0 && brief.fit <= 1)) &&
-    (brief.summary === null || (typeof brief.summary === 'string' && Array.from(brief.summary).length <= 140 && !/[<>\n]/.test(brief.summary))) &&
+    (brief.summary === null ||
+      (typeof brief.summary === 'string' && Array.from(brief.summary).length <= 140 && !/[<>\n]/.test(brief.summary) &&
+        guardFlags({ title: brief.summary, body: '' }).length === 0)) &&
     typeof brief.votes === 'number' && Number.isInteger(brief.votes) &&
     typeof brief.suggestions === 'number' && Number.isInteger(brief.suggestions);
   if (!ok) throw new Error('draft_card cluster is not a valid cluster brief');
