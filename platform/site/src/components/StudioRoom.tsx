@@ -320,7 +320,13 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
 
   // Each agent's walk: a new place in the data starts a walk round the furniture from wherever it
   // stands now. An agent with no card keeps wandering; one given a card walks to its station at once.
+  // A new room (the era arrives after the first draw) starts everyone afresh at their places in it.
   const now = () => (typeof performance === 'undefined' ? Date.now() : performance.now());
+  const planOfAnims = useRef(plan);
+  if (planOfAnims.current !== plan) {
+    planOfAnims.current = plan;
+    anims.current.clear();
+  }
   for (const place of places) {
     const id = place.role.id;
     const idle = IDLE.has(place.activity);

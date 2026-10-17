@@ -73,8 +73,9 @@ export function roomPlan(era: EraKey, decor?: readonly string[]): RoomPlan {
   const bench: Box = { x: w - 4.4, y: 0.15, w: 2.6, d: 0.9, h: 0.8 };
   const dock: Box = { x: w - 2.6, y: d - 2.4, w: 2.6, d: 2.4, h: 0.25 };
   // The gate stands clear of the dock (in the garage its second post would stand in the dock's edge),
-  // and near the right-hand wall, low enough that its lintel clears the desks and the bench behind it.
-  const gate: Box = { x: w - 1.1, y: Math.min(Math.round(d * 0.42 * 2) / 2, dock.y - 2.2), w: 0.3, d: 1.8, h: 1.7 };
+  // and near the right-hand wall, its lintel clear of the desks and the bench behind it and just over
+  // the reviewer's mark.
+  const gate: Box = { x: w - 1.1, y: Math.min(Math.round(d * 0.42 * 2) / 2, dock.y - 2.2), w: 0.3, d: 1.8, h: 1.9 };
   const sofa: Box = { x: 0.35, y: d - 1.5, w: 2.6, d: 0.95, h: 0.45 };
   const table: Box = { x: sofa.x + 0.9, y: sofa.y - 1.4, w: 0.9, d: 0.6, h: 0.35 };
   const hopper: Box = { x: 1.3, y: 0.15, w: 0.9, d: 0.8, h: 1 };
