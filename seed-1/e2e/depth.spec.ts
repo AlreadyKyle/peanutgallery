@@ -36,7 +36,7 @@ async function plant(page: Page, state: unknown): Promise<void> {
 async function ready(page: Page): Promise<void> {
   await page.goto('/');
   await page.locator('#game canvas').waitFor();
-  await expect(page.getByRole('button', { name: 'Strike' })).toBeAttached();
+  await expect(page.getByRole('button', { name: 'Strike', exact: true })).toBeAttached();
 }
 
 async function axeSeriousOrCritical(page: Page): Promise<string[]> {
@@ -46,15 +46,24 @@ async function axeSeriousOrCritical(page: Page): Promise<string[]> {
     .map((violation) => `${violation.id}: ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`);
 }
 
-test('a new player sees what to do first, and a refused purchase says why', async ({ page }) => {
+test('a new player sees what to do first', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await ready(page);
   await expect(page.locator('.hud-hint')).toHaveText('Tap the pile to gather dust');
-  const gatherer = page.getByRole('button', { name: /^Buy Gatherer: costs 10 dust, 0 owned$/ });
-  await expect(gatherer).toHaveAttribute('aria-disabled', 'true');
-  await gatherer.click();
-  await expect(page.locator('[aria-live="polite"]')).toContainText(/more dust for a Gatherer/);
-  await expect(page.locator('.hud-hint')).toContainText(/more dust for a Gatherer/);
+});
+
+test('a refused purchase says why', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  // A Cart costs 120 and the purse is empty, so the press is refused for a good while.
+  const state = { ...ripe(), dust: 0, totalDust: 150, owned: { gatherer: 1, cart: 0, mill: 0, forge: 0, foundry: 0 }, unlocked: OPENED.slice(0, 2).map((id) => ({ id, atSeconds: 1 })) };
+  await plant(page, state);
+  await ready(page);
+  const cart = page.getByRole('button', { name: /^Buy Cart: costs 120 dust, 0 owned$/ });
+  await expect(cart).toHaveAttribute('aria-disabled', 'true');
+  await cart.click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(/more dust for a Cart/);
+  await expect(page.locator('.hud-hint')).toContainText(/more dust for a Cart/);
+  await expect(page.getByRole('button', { name: /^Buy Cart: costs 120 dust, 0 owned$/ })).toBeAttached();
 });
 
 test('presses the pile by keyboard after confirming, then buys a perk', async ({ page }) => {

@@ -38,6 +38,8 @@ interface PerkButton {
 
 // A refused purchase shakes its button for this long (drawn from the frame clock, never a CSS animation).
 const SHAKE_MS = 360;
+// Live-region messages this close together are joined rather than replaced.
+const ANNOUNCE_JOIN_MS = 1500;
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -330,8 +332,16 @@ export class AccessibleControls {
     this.announce(message);
   }
 
+  private announcedAt = -Infinity;
+
+  // Messages that land close together are said together, so an unlock right after a purchase does
+  // not wipe the purchase out of the live region before it is read.
   private announce(message: string): void {
-    this.live.textContent = message;
+    const now = Date.now();
+    const recent = now - this.announcedAt < ANNOUNCE_JOIN_MS;
+    const previous = this.live.textContent ?? '';
+    this.live.textContent = recent && previous !== '' && !previous.includes(message) ? `${previous} ${message}` : message;
+    this.announcedAt = now;
   }
 }
 
