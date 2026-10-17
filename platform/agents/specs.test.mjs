@@ -20,7 +20,8 @@ const DESIGNER_SET = ['Read', 'Glob', 'Grep', 'Bash'];
 const CLASSES = ['writer', 'planner', 'reviewer', 'read_only', 'web_only'];
 
 // The roster: the nine launch roles and the seven added on 23 September 2026 with no tools and a
-// budget_share of 0, each with its place in the launch roster (README.md).
+// budget_share of 0, each with its place in the launch roster (README.md). The Curator and the Art
+// Director join the roster as eighteen (docs/specs/final-state.md, docs/specs/community-core.md).
 const LAUNCH_VALUES = {
   'studio-head': { model: 'MODEL_DIRECTOR', budget_share: 0.1, voice: 'terse', tools: READ_SET, metrics: ['estimate_accuracy', 'cost_per_ship'], class: 'planner', status: 'planned' },
   'game-designer': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'precise', tools: DESIGNER_SET, metrics: ['estimate_accuracy', 'first_pass_rate'], class: 'planner', status: 'running' },
@@ -37,6 +38,8 @@ const LAUNCH_VALUES = {
   'head-of-product': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'candid', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'web_only', status: 'starts' },
   'biz-dev': { model: 'MODEL_BUILDER', budget_share: 0.025, voice: 'curious', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'web_only', status: 'starts' },
   community: { model: 'MODEL_BUILDER', budget_share: 0.025, voice: 'warm', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'web_only', status: 'starts' },
+  curator: { model: 'MODEL_BUILDER', budget_share: 0, voice: 'level', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'web_only', status: 'starts' },
+  'art-director': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'keen', tools: READ_SET, metrics: ['first_pass_rate', 'reopen_rate'], class: 'reviewer', status: 'starts' },
   host: { model: 'MODEL_HOST', budget_share: 0.05, voice: 'cheerful', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'web_only', status: 'planned' },
 };
 
@@ -96,7 +99,7 @@ test('the README schema requires thirteen keys, allows trigger besides them, and
   assert.deepEqual(schema.properties.status.enum, ['running', 'starts', 'planned']);
 });
 
-test('the folder holds exactly the sixteen roster files', () => {
+test('the folder holds exactly the eighteen roster files', () => {
   assert.deepEqual(specs.map(({ file }) => file.replace(/\.json$/, '')), Object.keys(LAUNCH_VALUES).sort());
 });
 

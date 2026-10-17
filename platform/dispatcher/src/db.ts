@@ -452,6 +452,34 @@ export interface Db extends OutboundDb {
   openFindings(): Promise<OpenFinding[]>;
   producerSignals(): Promise<ProducerSignal[]>;
   schemaFingerprint(): Promise<Record<string, string>>;
+  // The Curator (docs/specs/community-core.md, job-handlers/curator-triage.ts): curator_take_batch
+  // hands out received suggestions, the one read of player text a role job makes; curator_record_triage
+  // writes the validated structured answer and nothing else. Optional, so a test double without them
+  // fails a curator_triage run rather than every Db.
+  curatorTakeBatch?(limit: number): Promise<CuratorBatch>;
+  curatorRecordTriage?(runId: string, items: readonly CuratorTriageItem[]): Promise<Record<string, unknown>>;
+}
+
+export interface CuratorSuggestion {
+  id: string;
+  area: string;
+  title: string;
+  body: string;
+}
+
+export interface CuratorBatch {
+  enabled: boolean;
+  items: CuratorSuggestion[];
+}
+
+export interface CuratorTriageItem {
+  id: string;
+  area: string;
+  kind: string;
+  cluster_key: string;
+  fit: number;
+  safety_flags: string[];
+  summary: string | null;
 }
 
 type Row = Record<string, unknown>;
@@ -991,6 +1019,25 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       });
       if (error || typeof data !== 'boolean') fail('record_finding', error);
       return data as boolean;
+    },
+
+    async curatorTakeBatch(limit) {
+      const { data, error } = await client.rpc('curator_take_batch', { p_limit: limit });
+      if (error || typeof data !== 'object' || data === null) fail('curator_take_batch', error);
+      const row = data as Row;
+      const items = (Array.isArray(row.items) ? (row.items as Row[]) : []).map((item) => ({
+        id: text(item, 'id'),
+        area: text(item, 'area'),
+        title: text(item, 'title'),
+        body: text(item, 'body'),
+      }));
+      return { enabled: row.enabled === true, items };
+    },
+
+    async curatorRecordTriage(runId, items) {
+      const { data, error } = await client.rpc('curator_record_triage', { p_run: runId, p_items: items });
+      if (error || typeof data !== 'object' || data === null) fail('curator_record_triage', error);
+      return data as Record<string, unknown>;
     },
 
     async closeFinding(fingerprint) {
