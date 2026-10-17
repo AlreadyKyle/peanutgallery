@@ -34,6 +34,7 @@ import {
   type Page,
   type Row,
 } from './lib/community';
+import { swapView } from './lib/motion';
 import { errorMessage } from './lib/supabase';
 
 export const COMMUNITY_LINE =
@@ -554,7 +555,7 @@ export function Community({ client }: { client: SupabaseClient }) {
       <p className="muted">{COMMUNITY_LINE}</p>
       <div className="row" role="group" aria-label="Community tabs">
         {COMMUNITY_TABS.map((name) => (
-          <button key={name} type="button" className={tab === name ? undefined : 'button-secondary'} aria-pressed={tab === name} onClick={() => setTab(name)}>
+          <button key={name} type="button" className={tab === name ? undefined : 'button-secondary'} aria-pressed={tab === name} onClick={() => swapView(() => setTab(name))}>
             {name}
           </button>
         ))}
