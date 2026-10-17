@@ -48,18 +48,22 @@ export const pageRoutes: readonly PageRoute[] = [
   { path: BROADCAST_PATH, element: <Broadcast /> },
 ];
 
-/** The top bar's links to these pages, before the kernel's Ledger, Play, Discord and Contribute. */
+/** The top bar's links to these pages, before the kernel's Ledger, Play and Contribute. The top bar
+ * keeps to the pages a first visit needs; the rest are in the footer (docs/specs/brand.md). */
 export const pageNav: readonly NavItem[] = [
   { to: '/how-it-works', label: copy.howItWorksNav },
   { to: '/team', label: copy.teamNav },
-  { to: '/goals', label: copy.nav.goals },
-  { to: '/seeds', label: copy.nav.seeds },
   { to: '/suggest', label: copy.nav.suggest },
   { to: '/faq', label: copy.nav.faq },
 ];
 
-/** The footer's links to these pages, after the reports and the feed. */
-export const footerNav: readonly NavItem[] = [
-  { to: '/studio/history', label: copy.nav.history },
+/** The footer's Follow along links to these pages, after the reports and the feed. */
+export const footerNav: readonly NavItem[] = [{ to: '/studio/history', label: copy.nav.history }];
+
+/** The footer's Take part column: the community pages and the player's own page. */
+export const communityNav: readonly NavItem[] = [
+  { to: '/suggest', label: copy.nav.suggest },
+  { to: '/seeds', label: copy.nav.seeds },
+  { to: '/goals', label: copy.nav.goals },
   { to: '/me', label: copy.nav.me },
 ];

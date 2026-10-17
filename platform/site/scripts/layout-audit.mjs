@@ -340,6 +340,9 @@ export function auditLayout(limits) {
     const prev = before(heading);
     const prior = prev === null ? null : before(prev);
     if (prior === null) continue;
+    // Rhythm is for stacked blocks: a block a grid sets beside or below the heading (/thanks's reward,
+    // two columns from 64rem) is not the block before it on the page.
+    if (box(prev).bottom > box(heading).top || box(prior).bottom > box(prev).top) continue;
     const above = box(heading).top - box(prev).bottom;
     const between = box(prev).top - box(prior).bottom;
     if (above + 1 < between) out.push(`rhythm: ${name(heading)} sits ${Math.round(above)}px under ${name(prev)}, which sits ${Math.round(between)}px under the block before it`);

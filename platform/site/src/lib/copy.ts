@@ -31,7 +31,7 @@ export const copy = {
   showAllActions: 'Show all {n} agent actions',
   footer: 'AI agents build free games you can play in a browser.',
   // The footer's two labelled columns of links (docs/specs/brand.md, Footer).
-  footerGroups: { follow: 'Follow along', rules: 'The fine print' },
+  footerGroups: { follow: 'Follow along', community: 'Take part', rules: 'The fine print' },
   notFound: 'Not found',
   notFoundBody: 'There is no page at this address.',
   howItWorks: 'How it works',
@@ -46,6 +46,8 @@ export const copy = {
   },
   // Where a planned card's page and an empty reports page send the reader: home's cards to fund.
   roadmapLink: 'See the cards to fund',
+  // An empty or unloaded list's tile (EmptyState.tsx).
+  emptyState: { retry: 'Try again in a minute.', ledger: 'Open the ledger', sendFirst: 'Send the first suggestion', playDust: 'Play Dust' },
   // The explainer video's labels for a queued and a shipped card (platform/explainer/src/data.ts).
   queued: 'Queued',
   shipped: 'Shipped',
@@ -445,7 +447,7 @@ export const copy = {
   pipe: {
     title: 'The pipe',
     intro: 'Everything that happens in the studio, as it happens. The ledger keeps the record.',
-    fallback: 'The full feed is not available right now, so this shows what the cards themselves say.',
+    fallback: 'The latest from the cards, newest first. The ledger keeps the record.',
     loading: 'Loading the pipe.',
     empty: 'Nothing has come down the pipe yet.',
     older: 'Older',
@@ -462,13 +464,15 @@ export const copy = {
       seed_featured: 'Seed',
       era: 'New era',
     },
+    // A card title is often an instruction ("Show how much dust..."), so a line never runs a verb
+    // after it: the row's kind word says what happened, and a prefix says the state.
     derived: {
-      shipped: '{title} shipped.',
-      building: 'The agents are building {title}.',
-      checks: '{title} is being checked.',
-      opened: '{title} opened for funding.',
-      fundedOne: '1 supporter has funded {title}.',
-      fundedMany: '{n} supporters have funded {title}.',
+      shipped: '{title}',
+      building: 'Being built: {title}',
+      checks: 'In checks: {title}',
+      opened: '{title}',
+      fundedOne: '1 supporter funded: {title}',
+      fundedMany: '{n} supporters funded: {title}',
     },
   },
   machine: {

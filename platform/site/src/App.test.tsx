@@ -163,7 +163,7 @@ describe('Terms, Privacy, Refunds and Contact', () => {
 
 describe('Site chrome', () => {
   // docs/specs/final-state.md adds the studio's history and the player's own page to the footer.
-  it('links Weekly reports, the feed, Terms, Privacy, Refunds and Contact in the footer of every page', () => {
+  it('links Weekly reports, the feed, the community pages, Terms, Privacy, Refunds and Contact in the footer of every page', () => {
     for (const path of ['/', '/ledger', '/contribute', '/how-it-works', '/team', '/roadmap', '/reports', '/terms', '/contact', '/board', '/no-such-page']) {
       renderAt(path);
       const footer = screen.getByRole('contentinfo');
@@ -174,6 +174,9 @@ describe('Site chrome', () => {
         [copy.reportsNav, '/reports'],
         [copy.feedLink, '/feed.xml'],
         [copy.nav.history, '/studio/history'],
+        [copy.nav.suggest, '/suggest'],
+        [copy.nav.seeds, '/seeds'],
+        [copy.nav.goals, '/goals'],
         [copy.nav.me, '/me'],
         [legal.footerLinks.terms, '/terms'],
         [legal.footerLinks.privacy, '/privacy'],
@@ -208,9 +211,8 @@ describe('Site chrome', () => {
       [copy.studioName, '/'],
       [copy.howItWorksNav, '/how-it-works'],
       [copy.teamNav, '/team'],
-      // The final state's pages (docs/specs/final-state.md): goals, seeds, suggestions and the FAQ.
-      [copy.nav.goals, '/goals'],
-      [copy.nav.seeds, '/seeds'],
+      // The top bar keeps to what a first visit needs; goals, seeds and the player's page are in the
+      // footer (docs/specs/brand.md, the second review).
       [copy.nav.suggest, '/suggest'],
       [copy.nav.faq, '/faq'],
       [legal.ledger, '/ledger'],
@@ -252,14 +254,12 @@ describe('Site chrome', () => {
     expect(screen.queryByRole('link', { name: 'Board' })).toBeNull();
   });
 
-  it('links Contribute in the nav and Discord in the nav and footer when the env values are set', () => {
+  it('links Contribute in the nav and Discord in the footer when the env values are set', () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', 'https://buy.stripe.com/test-link');
     vi.stubEnv('VITE_DISCORD_INVITE', 'https://discord.gg/invite-code');
     renderAt('/');
     expect(within(nav()).getByRole('link', { name: copy.contribute }).getAttribute('href')).toBe('/contribute');
-    expect(within(nav()).getByRole('link', { name: copy.discord }).getAttribute('href')).toBe(
-      'https://discord.gg/invite-code',
-    );
+    expect(within(nav()).queryByRole('link', { name: copy.discord })).toBeNull();
     expect(
       within(screen.getByRole('contentinfo')).getByRole('link', { name: copy.discord }).getAttribute('href'),
     ).toBe('https://discord.gg/invite-code');

@@ -240,7 +240,8 @@ function gsubFeatures(file: Buffer): string[] {
 describe('plain and readable', () => {
   it('uses uppercase only on the wordmark, and italic nowhere', () => {
     const upper = ALL_RULES.filter((rule) => /text-transform:\s*uppercase/.test(rule.body)).map((rule) => rule.selector);
-    expect(upper).toEqual(['.wordmark']);
+    // The wordmark is drawn twice: in the top bar and as the footer's name.
+    expect(upper).toEqual(['.wordmark', '.footer-name']);
     expect(both).not.toMatch(/font-style:\s*(italic|oblique)/);
     expect(ALL_RULES.find((rule) => rule.selector === 'body')?.body).toMatch(/font-synthesis-style:\s*none/);
   });

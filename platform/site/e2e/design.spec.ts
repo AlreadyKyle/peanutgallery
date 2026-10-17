@@ -200,8 +200,24 @@ test.describe('motion', () => {
     await nav.getByRole('link', { name: 'How it works' }).click();
     await page.waitForURL('**/how-it-works');
     // The page transition (docs/specs/final-state.md, the motion pass: view transitions are allowed)
-    // plays once on the route change and ends; nothing keeps moving after it.
-    await page.waitForFunction(() => document.getAnimations().length === 0, undefined, { timeout: 3_000 });
+    // plays once on the route change and ends; nothing keeps moving after it. The transition can
+    // start a few frames after the address changes, so the page has to stay still for half a second,
+    // not for one frame.
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          const start = performance.now();
+          let stillSince = start;
+          const tick = () => {
+            const now = performance.now();
+            if (document.getAnimations().length > 0) stillSince = now;
+            else if (now - stillSince >= 500) return resolve();
+            if (now - start > 5_000) return reject(new Error('the page was still moving after 5 seconds'));
+            requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        }),
+    );
     expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
   });
 

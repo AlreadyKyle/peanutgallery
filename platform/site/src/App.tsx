@@ -13,7 +13,7 @@ import { Contribute } from './pages/Contribute';
 import { Ledger } from './pages/Ledger';
 import { Contact, Privacy, Refunds, RefundsVersion, Terms, TermsVersion } from './pages/Legal';
 import { Thanks } from './pages/Thanks';
-import { footerNav, pageNav, pageRoutes, type PageRoute } from './routes';
+import { communityNav, footerNav, pageNav, pageRoutes, type PageRoute } from './routes';
 
 // Kernel (docs/specs/board-site.md): the frame of every page (the top bar, the footer with the legal
 // links and the credit, and the not found page, drawn by components/NotFound.tsx) and the routes of
@@ -222,11 +222,6 @@ function TopBar() {
           <li>
             <NavLink to="/ledger">{legal.ledger}</NavLink>
           </li>
-          {env.discordInvite === '' ? null : (
-            <li>
-              <a href={env.discordInvite}>{copy.discord}</a>
-            </li>
-          )}
           {play === null ? null : (
             <li className="menu-play">
               <a href={play}>{copy.play}</a>
@@ -240,7 +235,7 @@ function TopBar() {
 
 function SiteFooter() {
   const env = siteEnv();
-  // A spec sheet (docs/specs/brand.md, Footer): the mark and what the studio is, then the links in two
+  // A spec sheet (docs/specs/brand.md, Footer): the mark and what the studio is, then the links in three
   // labelled columns, then the credit under a rule.
   return (
     <footer className="site-footer">
@@ -278,6 +273,18 @@ function SiteFooter() {
                 <a href={env.discordInvite}>{copy.discord}</a>
               </li>
             )}
+          </ul>
+        </div>
+        <div className="footer-group">
+          <p className="footer-label">{copy.footerGroups.community}</p>
+          <ul className="footer-links">
+            {communityNav
+              .filter((item) => PLAIN_PATH_DEEP.test(item.to))
+              .map((item) => (
+                <li key={item.to}>
+                  <Link to={item.to}>{item.label}</Link>
+                </li>
+              ))}
           </ul>
         </div>
         <div className="footer-group">

@@ -59,7 +59,7 @@ Rules: text is ink or paper, never a colour. Coin appears where money moves and 
 
 ## Type
 
-One family: **Atkinson Hyperlegible Next**, weights 400 to 700 (SIL OFL), chosen because every character is unmistakable. The machine's labels (section numbers, footer labels) use the system monospace face, so they cost no download.
+One family: **Atkinson Hyperlegible Next**, weights 400 to 700 (SIL OFL), chosen because every character is unmistakable. The machine's labels (section numbers and every numeral that orders parts) use the system monospace face, so they cost no download.
 
 | Role | Size | Set |
 |---|---|---|
@@ -74,9 +74,9 @@ Headings are bold and sentence case, never shouting. No italic anywhere. Nothing
 
 ## Grid and layout
 
-- **One width.** Everything lines up to a 76rem (1216px) column with a 20px gutter, so the top bar, every section and the footer share a left edge.
+- **One width.** Everything lines up to a 76rem (1216px) column with a side margin that grows with the screen (20px on a phone, 5% of the width on a tablet or laptop, 64px and up on a desktop), so the top bar, every section and the footer share a left edge.
 - **Bands.** A page is a stack of full-bleed bands: the ink plate first (the top bar shares it), then paper and ink in turn. The change of ground is the only divider.
-- **The index.** Every section after the plate opens on a 2px rule with its number above the heading in the mono face: `01`, `02`, `03`. It is the machine's spec-sheet line.
+- **The index.** Every section after the plate opens on a 2px rule with its number above the heading in the mono face: `01`, `02`, `03`. It is the machine's spec-sheet line. Anything else numbered (steps, lanes, duties) uses the same two-digit mono numerals, so the machine counts one way.
 - **Four layouts**, and nothing else:
   1. **The split** (7:5): a page's plate, its heading on the left and the lede on the right, both from the plate's top.
   2. **The sheet** (5:7): text pages, the ledger, the FAQ. The heading stays in view on the left; the text fills the right.
