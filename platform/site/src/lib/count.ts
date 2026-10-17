@@ -145,7 +145,7 @@ const sendEach = (event: PlayEvent): void => countEvent(event);
 
 /**
  * The site's benchmark counters, mounted once by the frame (App.tsx):
- * - each view of home counts home_load, and home_dwell_mid and home_dwell_long once the view has been
+ * - each view of home counts home_load once it is shown, and home_dwell_mid and home_dwell_long once the view has been
  *   visible 15 and 45 seconds; leaving home stops the clock;
  * - /broadcast counts broadcast_load once a page load;
  * - an address carrying the QR code's source tag counts broadcast_qr once and drops the tag;
@@ -168,10 +168,18 @@ export function useSiteCounts(discordInvite: string, send: (event: PlayEvent) =>
 
   useEffect(() => {
     if (path !== HOME_PATH) return;
-    send('home_load');
+    // A tab opened hidden is not a view yet: home_load waits until the page is first shown.
+    let viewed = false;
+    const countView = () => {
+      if (viewed || !pageVisible()) return;
+      viewed = true;
+      send('home_load');
+    };
+    countView();
     const clock = new DwellClock();
     clock.advance(Date.now(), pageVisible());
     const timer = window.setInterval(() => {
+      countView();
       for (const mark of clock.advance(Date.now(), pageVisible())) send(mark);
     }, DWELL_CHECK_MS);
     return () => window.clearInterval(timer);

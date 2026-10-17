@@ -206,14 +206,16 @@ describe('useSiteCounts', () => {
     expect(sent).toEqual(['home_load']);
   });
 
-  it('does not count a hidden tab as time on home', () => {
+  it('does not count a hidden tab as a view or as time on home', () => {
     const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
     try {
       mount('/');
       seconds(120);
-      expect(sent).toEqual(['home_load']);
+      expect(sent).toEqual([]);
       hidden.mockReturnValue('visible');
-      seconds(15);
+      seconds(1);
+      expect(sent).toEqual(['home_load']);
+      seconds(14);
       expect(sent).toEqual(['home_load', 'home_dwell_mid']);
     } finally {
       hidden.mockRestore();

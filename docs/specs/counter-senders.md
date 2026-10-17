@@ -26,7 +26,7 @@ Every count is the event's name alone, `{"event": "<name>"}`, posted to `/api/co
 
 ### The site
 
-- `home_load`: home (`/`) is shown, once for each view of it, including a return to home inside the site.
+- `home_load`: home (`/`) is shown, once for each view of it, including a return to home inside the site. A tab opened hidden counts its view when it is first shown.
 - `home_dwell_mid` and `home_dwell_long`: that view of home has been visible 15 and 45 seconds, the Studio dwell benchmark's floor and target. The clock is read every second, counts only visible time, credits at most 5 seconds a reading and stops when the visitor leaves home. A view is in the mid bucket when it reaches 15 seconds, so the median dwell meets the floor when `home_dwell_mid / home_load` is at least a half, and the target when `home_dwell_long / home_load` is.
 - `broadcast_load`: /broadcast is shown, once per page load.
 - The QR code on /broadcast opens `https://mobmachine.games/contribute?from=broadcast`. A page that opens with `from=broadcast` in its query counts `broadcast_qr` once and drops the tag from the address (keeping the rest of the query and the hash), so a reload or a copied address does not count again.
