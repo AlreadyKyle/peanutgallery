@@ -55,17 +55,17 @@ game stages), and the news section (the feed). What it leaves for later is filed
 - folder: platform
 - horizon: next
 - rank: 3
-- summary: Count returning players, session length, home visits and where shares come from, as daily totals with nothing that names a person.
-- intent: Several rows of docs/strategy/benchmarks.md read not measured: player D1 and D7, session length, visitor counts, dwell, broadcast and Discord sources. Each would be a daily total like the play counts (docs/specs/play-counts.md): a returning flag and a session-length bucket in the game's counts, a home-load counter and a dwell bucket on the site, a source tag on the broadcast's QR link and a counter on outbound Discord links, with no cookie, identifier or address, and the Privacy page updated. It is not built yet.
-- kernel: yes
+- summary: Send the new daily counters from the site and the game: returning players, session length, home visits, dwell and where shares come from.
+- intent: The database side is built (docs/specs/operations.md): /api/count and count_play_event take the counters docs/strategy/benchmarks.md lists under Needs (a load from a save 1 or 7 days old, a session reaching 2 or 4 minutes, a seed saved or opened from a link, a home load and its dwell buckets, the broadcast's load and its QR source, a click on a Discord link), and public.daily_metrics keeps daily totals for the benchmark review. What is left is the senders: the game posts its returning, session and seed counters, the site posts the home load and dwell buckets and tags the broadcast's QR link and Discord links, each a beacon with no cookie, identifier or address, and the Privacy page names them. Until then those rows read not measured. It is not built yet.
+- kernel: no
 
 ### The review team on events
 - bucket: agents
 - folder: platform
 - horizon: next
 - rank: 4
-- summary: Specialised agents check the studio's numbers against its targets after milestones, launches and every fifty ships, and propose fixes.
-- intent: docs/strategy/operating-system.md designs a review team (Head of Finance, Head of Product, Game Director, Art Director, Janitor, Community, HR, read by the Studio Head) that runs on events rather than a calendar, writes a scoreboard of every benchmark with findings, and turns findings into typed adjustments: card drafts, priority changes, kernel pull requests or escalations to the board. Each review is a Studio card billed like a draft. It is not built yet.
+- summary: More of the review team joins the benchmark review: finance, product, games, art, upkeep and community each read their own areas.
+- intent: The benchmark review runs (docs/specs/operations.md): on events, a code-built scoreboard of every row docs/strategy/benchmarks.md can measure from the daily counts, and a Studio Head session only when a row is below its floor, whose likely cause and proposed adjustment land as findings the board lists. docs/strategy/operating-system.md designs a fuller team: the Head of Finance, Head of Product, Game Director, Art Director, Janitor, Community and HR each reviewing their own areas with their own inputs (rubric scores, frames, gate results, scorecards), a report stored in the repository, and the board's panel showing the scoreboard. It is not built yet.
 - kernel: yes
 
 ### Download and delete your profile data

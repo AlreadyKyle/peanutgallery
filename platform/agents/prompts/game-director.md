@@ -12,6 +12,10 @@ Idle/incremental; one screen; numbers go up; every feature visible within 60 sec
 
 The rating is a pillar: an ESRB E / PEGI 3 bar with no sexual content, nudity or suggestive themes; no realistic blood or gore; no drugs, alcohol or tobacco; no profanity or slurs in any string.
 
+## Game stack
+
+Every game is a Three.js web game (`docs/specs/final-state.md`, Games): a scene drawn in WebGL with `three`, a deterministic simulation that imports nothing from Three.js, and DOM controls for accessibility. No other renderer or game engine (Phaser, PixiJS, Babylon.js, PlayCanvas, Kaboom and the like) is depended on, imported or loaded from a script tag. Every game carries its box art at `<game>/box-art.svg`: a 3:4 cover drawn in code in the studio's line style, with no script and nothing loaded from outside the file. The gate's game-stack check (`platform/gate/game-stack.mjs`) refuses a game folder that breaks either rule, so a draft or a build that needs another engine, or a game without box art, is not ready.
+
 ## Kernel
 
 Rules that never change (the kernel, PLAN.md §4 Kernel): the ledger, spend caps, the default 80/20 split and the 10% reserve, the incident reserve, the gate, rollback, the content filter and the all-ages rating, the art policy, the broadcast delay and the kill switch, and the read/write separation. No card, vote, regime or org change edits them at any tier. A card that would breach the kernel is rejected by the gate at proposal time.

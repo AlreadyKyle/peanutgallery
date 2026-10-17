@@ -7,8 +7,9 @@
 #
 # The phases, in the order --phase all (the default, and the local form) runs them. Every step that
 # runs no card code comes before the first step that does.
-#   scans   secret-scan, banned-phrases, runtime-token-deny. Bash and one node call; nothing is
-#           installed and no card code runs.
+#   scans   secret-scan, banned-phrases, runtime-token-deny, and for seed-1 game-stack (a game is
+#           Three.js only and carries its box art, docs/specs/operations.md). Bash and two node
+#           calls; nothing is installed and no card code runs.
 #   build   the folder's build, then runtime-token-deny over what it wrote (runtime-token-deny-dist)
 #           and the payment-host scan (payment-host-scan.mjs). For platform that is the public site,
 #           built with the public values its netlify.toml sets, as Netlify builds it, whose build may
@@ -136,6 +137,9 @@ phase_scans() {
   done
   run_step banned-phrases "" bash "$GATE_DIR/banned-phrases.sh" "$@"
   run_step runtime-token-deny "" bash "$GATE_DIR/runtime-token-deny.sh" --repo-root "$REPO_ROOT" --folder "$FOLDER"
+  if [ "$FOLDER" = seed-1 ]; then
+    run_step game-stack "" node "$GATE_DIR/game-stack.mjs" "$REPO_ROOT/$FOLDER"
+  fi
 }
 
 # The public build values a netlify.toml sets for its site ([build.environment] VITE_* lines with a

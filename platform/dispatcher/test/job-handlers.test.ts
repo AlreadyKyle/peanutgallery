@@ -640,8 +640,9 @@ describe('the role jobs on the queue', () => {
   }
 
   it('registers draft_card and the Janitor\'s two code jobs, and no handler for the retired studio_ranking', () => {
-    // community-core adds the Curator's curator_triage (docs/specs/final-state.md).
-    expect(Object.keys(HANDLERS).sort()).toEqual(['curator_triage', 'draft_card', 'janitor', 'upkeep_merge']);
+    // community-core adds the Curator's curator_triage (docs/specs/final-state.md), and operations the
+    // Studio Head's benchmark_review (docs/specs/operations.md).
+    expect(Object.keys(HANDLERS).sort()).toEqual(['benchmark_review', 'curator_triage', 'draft_card', 'janitor', 'upkeep_merge']);
   });
 
   it('runs a schedule-origin draft with no board member signed in, billed to the card it opened, and skips a studio_ranking run as job_disabled', async () => {

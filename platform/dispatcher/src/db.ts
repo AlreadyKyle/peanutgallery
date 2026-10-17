@@ -82,7 +82,7 @@ export interface Card {
 }
 
 // The Janitor's findings (docs/specs/agent-upkeep.md): one row per check and subject, for the board.
-export type FindingKind = 'schema' | 'model' | 'cli' | 'scan' | 'producer';
+export type FindingKind = 'schema' | 'model' | 'cli' | 'scan' | 'producer' | 'benchmark';
 
 export interface Finding {
   fingerprint: string;
@@ -318,7 +318,7 @@ export type PauseReason = 'awaiting_credit' | 'spend_limit' | 'incident' | 'boar
 
 // The Discord outbox (docs/specs/studio-reports.md): one outbound_posts row per (kind, ref), inserted
 // before a post so the primary key refuses a second claim, and never posted again whatever its state.
-export type PostKind = 'ship' | 'weekly';
+export type PostKind = 'ship' | 'weekly' | 'announce';
 
 // A card that went live, with what its ship post names: the executor's name, its studio-billed cost
 // and its first supporters by number with their count (public_card_supporters).
@@ -352,6 +352,30 @@ export interface OutboundDb {
   claimPost(kind: PostKind, ref: string, state: 'sending' | 'skipped', skipReason: string | null, now: Date): Promise<boolean>;
   // A 'sending' row to 'posted' or 'failed', with Discord's status and message id.
   finishPost(kind: PostKind, ref: string, result: { state: 'posted' | 'failed'; status: number | null; messageId: string | null }, now: Date): Promise<void>;
+  // The notable feed events since `since` with no announce row, oldest first, at most `limit`, as
+  // structured fields only, and how many announcements were claimed in the last hour
+  // (announcements_pending, docs/specs/operations.md). Optional, so a test double without it leaves
+  // the announcements lane inert.
+  announcementsPending?(since: Date, limit: number): Promise<AnnouncementBatch>;
+}
+
+export type AnnouncementKind = 'funded' | 'shipped' | 'rare_card' | 'milestone' | 'era';
+
+export interface Announcement {
+  ref: string;
+  kind: AnnouncementKind;
+  card_id: string | null;
+  card_title: string | null;
+  rarity: string | null;
+  suit: string | null;
+  goal_title: string | null;
+  goal_amount_cents: number | null;
+  era_name: string | null;
+}
+
+export interface AnnouncementBatch {
+  items: Announcement[];
+  sentLastHour: number;
 }
 
 export interface Db extends OutboundDb {
@@ -458,6 +482,29 @@ export interface Db extends OutboundDb {
   // fails a curator_triage run rather than every Db.
   curatorTakeBatch?(limit: number): Promise<CuratorBatch>;
   curatorRecordTriage?(runId: string, items: readonly CuratorTriageItem[]): Promise<Record<string, unknown>>;
+  // The benchmark review (docs/specs/operations.md, job-handlers/benchmark-review.ts): its inputs, the
+  // daily counts and counts of the studio's state (benchmark_review_inputs), and its record
+  // (record_benchmark_review). Optional, so a test double without them fails a benchmark_review run.
+  benchmarkReviewInputs?(): Promise<BenchmarkInputs>;
+  recordBenchmarkReview?(review: BenchmarkReviewRecord): Promise<string>;
+}
+
+export interface BenchmarkInputs {
+  days: { day: string; metrics: Record<string, number> }[];
+  lastReviewAt: string | null;
+  // Counts only: cards by stage, live cards since the last review, goals and eras reached, open
+  // findings by kind.
+  studio: Record<string, unknown>;
+}
+
+export interface BenchmarkReviewRecord {
+  runId: string;
+  trigger: string;
+  scoreboard: readonly unknown[];
+  findings: readonly unknown[];
+  summary: string | null;
+  reviewed: boolean;
+  usd: number;
 }
 
 export interface CuratorSuggestion {
@@ -1040,6 +1087,38 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       return data as Record<string, unknown>;
     },
 
+    async benchmarkReviewInputs() {
+      const { data, error } = await client.rpc('benchmark_review_inputs');
+      if (error || typeof data !== 'object' || data === null) fail('benchmark_review_inputs', error);
+      const row = data as Row;
+      const metrics = (typeof row.metrics === 'object' && row.metrics !== null ? row.metrics : {}) as Row;
+      const days = (Array.isArray(metrics.days) ? (metrics.days as Row[]) : []).map((day) => {
+        const values: Record<string, number> = {};
+        const raw = typeof day.metrics === 'object' && day.metrics !== null ? (day.metrics as Row) : {};
+        for (const [key, value] of Object.entries(raw)) {
+          const n = typeof value === 'number' ? value : Number(value);
+          if (Number.isFinite(n)) values[key] = n;
+        }
+        return { day: String(day.day), metrics: values };
+      });
+      const { metrics: _metrics, last_review_at: last, ...studio } = row;
+      return { days, lastReviewAt: typeof last === 'string' ? last : null, studio };
+    },
+
+    async recordBenchmarkReview(review) {
+      const { data, error } = await client.rpc('record_benchmark_review', {
+        p_run: review.runId,
+        p_trigger: review.trigger,
+        p_scoreboard: review.scoreboard,
+        p_findings: review.findings,
+        p_summary: review.summary,
+        p_reviewed: review.reviewed,
+        p_usd: review.usd,
+      });
+      if (error || typeof data !== 'string') fail('record_benchmark_review', error);
+      return data as string;
+    },
+
     async closeFinding(fingerprint) {
       const { data, error } = await client.rpc('close_finding', { p_fingerprint: fingerprint });
       if (error || typeof data !== 'boolean') fail('close_finding', error);
@@ -1189,6 +1268,28 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       // unique_violation: a row already holds (kind, ref).
       if (error.code === '23505') return false;
       fail('outbound_posts claim', error);
+    },
+
+    async announcementsPending(since, limit) {
+      const { data, error } = await client.rpc('announcements_pending', { p_since: since.toISOString(), p_limit: limit });
+      if (error || typeof data !== 'object' || data === null) fail('announcements_pending', error);
+      const row = data as Row;
+      const str = (item: Row, key: string) => (typeof item[key] === 'string' ? (item[key] as string) : null);
+      const KINDS: readonly string[] = ['funded', 'shipped', 'rare_card', 'milestone', 'era'];
+      const items = (Array.isArray(row.items) ? (row.items as Row[]) : [])
+        .filter((item) => typeof item.ref === 'string' && KINDS.includes(String(item.kind)))
+        .map((item) => ({
+          ref: item.ref as string,
+          kind: item.kind as AnnouncementKind,
+          card_id: str(item, 'card_id'),
+          card_title: str(item, 'card_title'),
+          rarity: str(item, 'rarity'),
+          suit: str(item, 'suit'),
+          goal_title: str(item, 'goal_title'),
+          goal_amount_cents: typeof item.goal_amount_cents === 'number' ? item.goal_amount_cents : null,
+          era_name: str(item, 'era_name'),
+        }));
+      return { items, sentLastHour: typeof row.sent_last_hour === 'number' ? row.sent_last_hour : 0 };
     },
 
     async finishPost(kind, ref, result, now) {

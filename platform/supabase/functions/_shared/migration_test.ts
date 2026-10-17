@@ -292,6 +292,9 @@ Deno.test("migrations on PGlite", {
         "20261017100000_community_core.sql",
         "20261017100100_community_digests.sql",
         "20261017100200_community_admin.sql",
+        // operations (docs/specs/operations.md): the benchmark counters and the benchmark review.
+        "20261017200000_benchmark_counters.sql",
+        "20261017200100_benchmark_review.sql",
         "20261017210000_board_roster.sql",
       ]);
       for (const m of migrations) {
@@ -323,6 +326,7 @@ Deno.test("migrations on PGlite", {
       assertEquals(tables.map((r) => r.table_name), [
         "agent_events",
         "auto_resume_checks",
+        "benchmark_reviews",
         "board_actions",
         "board_members",
         "board_notes",
@@ -335,6 +339,7 @@ Deno.test("migrations on PGlite", {
         "contributions",
         "controller_runs",
         "credit_purchases",
+        "daily_metrics",
         "decisions",
         "deploys",
         "dispatcher_lease",
@@ -4046,6 +4051,9 @@ Deno.test("migrations on PGlite", {
           "board_jobs",
           "board_needs_you",
           "board_play_counts",
+          // operations (docs/specs/operations.md): the board's reads of the daily counts and the reviews.
+          "board_benchmark_reviews",
+          "board_daily_metrics",
           "board_role",
           "board_roles",
           "board_studio_state",
@@ -4134,6 +4142,14 @@ Deno.test("migrations on PGlite", {
           "curator_record_triage",
           "curator_take_batch",
           "enqueue_curator_triage",
+          // operations (docs/specs/operations.md): the counts, the benchmark review and the announcements.
+          "announcements_pending",
+          "benchmark_review_inputs",
+          "daily_metrics_window",
+          "enqueue_benchmark_review",
+          "record_benchmark_review",
+          "refresh_daily_metrics",
+          "refresh_recent_metrics",
         ];
         // community-core (docs/specs/final-state.md, docs/specs/community-core.md): the community
         // documents run for anon and authenticated, a player's RPCs for authenticated, and the board's

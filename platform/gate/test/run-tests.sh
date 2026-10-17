@@ -596,10 +596,15 @@ process.exitCode = result.ok ? 0 : 1;
 EOF_BOT
 write_package() {
   # $1 folder, $2 name, $3 typecheck command, $4 test command, $5 build command, $6 bot command
-  printf '{"name":"%s","private":true,"scripts":{"typecheck":"%s","test":"%s","build":"%s"%s}}\n' "$2" "$3" "$4" "$5" "${6:+,\"bot\":\"$6\"}" > "$1/package.json"
+  # The game depends on three, as every game must (game-stack.mjs).
+  local deps=""
+  [ "$2" = @backseat/seed-1 ] && deps=',"dependencies":{"three":"^0.180.0"}'
+  printf '{"name":"%s","private":true,"scripts":{"typecheck":"%s","test":"%s","build":"%s"%s}%s}\n' "$2" "$3" "$4" "$5" "${6:+,\"bot\":\"$6\"}" "$deps" > "$1/package.json"
 }
 SEED_BOT="node bots/cli.js"
 write_package "$W/seed-1" @backseat/seed-1 true true "$SEED_BUILD" "$SEED_BOT"
+# A game is Three.js only and carries its box art (game-stack.mjs, docs/specs/operations.md).
+printf '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200"><rect width="900" height="1200" fill="#fdfcf8"/></svg>\n' > "$W/seed-1/box-art.svg"
 write_package "$W/platform/dispatcher" @backseat/dispatcher true true true
 write_package "$W/platform/supabase" @backseat/supabase true true true
 write_package "$W/platform/site" @backseat/site true true "$SITE_BUILD"
@@ -724,6 +729,54 @@ mv "$W/platform/site/netlify.toml" "$T/site-netlify.toml"
 expect "ship: a site with no configured Payment Link fails the scan closed" 1 '^GATE FAIL step=payment-host-scan detail=FAIL: payment-host-scan usage: ' -- bash "$SHIP" --repo-root "$W" --folder platform --phase build --dry-run
 mv "$T/site-netlify.toml" "$W/platform/site/netlify.toml"
 rm -rf "$W/platform/site/dist" "$W/platform/board/dist"
+
+# ---------------------------------------------------------------- game-stack.mjs
+# Every game is a Three.js web game with box art (docs/specs/final-state.md, docs/specs/operations.md).
+GS="$GATE_DIR/game-stack.mjs"
+G="$T/gs"
+game() {
+  # $1 folder, $2 dependencies JSON
+  mkdir -p "$G/$1/src"
+  printf '{"name":"%s","private":true,"dependencies":%s}\n' "$1" "$2" > "$G/$1/package.json"
+  printf 'import * as THREE from "three";\nexport const scene = new THREE.Scene();\n' > "$G/$1/src/main.ts"
+  printf '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800"><rect width="600" height="800" fill="url(#p)"/></svg>\n' > "$G/$1/box-art.svg"
+}
+game ok '{"three":"^0.180.0"}'
+expect "game-stack: a Three.js game with 3:4 box art passes" 0 '^PASS: game-stack folders=1$' -- node "$GS" "$G/ok"
+mkdir -p "$G/ok/node_modules/phaser" && printf 'import "phaser";\n' > "$G/ok/node_modules/phaser/index.js"
+expect "game-stack: an engine inside node_modules is not the game's own" 0 '^PASS: game-stack folders=1$' -- node "$GS" "$G/ok"
+game phaser '{"three":"^0.180.0","phaser":"^3.90.0"}'
+expect "game-stack: a Phaser dependency fails" 1 '^FAIL: game-stack folder=phaser reason=package.json depends on phaser; games are Three.js only$' -- node "$GS" "$G/phaser"
+game pixi '{"three":"^0.180.0"}'
+printf '{"name":"pixi","dependencies":{"three":"1"},"devDependencies":{"@pixi/sprite":"7"}}\n' > "$G/pixi/package.json"
+expect "game-stack: a scoped PixiJS dev dependency fails" 1 'reason=package.json depends on @pixi/sprite' -- node "$GS" "$G/pixi"
+game babylon '{"three":"^0.180.0"}'
+printf 'const engine = await import("@babylonjs/core");\n' > "$G/babylon/src/engine.ts"
+expect "game-stack: an import of Babylon.js in the source fails" 1 'reason=src/engine.ts imports @babylonjs/core' -- node "$GS" "$G/babylon"
+game cdn '{"three":"^0.180.0"}'
+printf '<script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>\n' > "$G/cdn/index.html"
+expect "game-stack: an engine loaded from a script tag fails" 1 'reason=index.html loads https://cdn.jsdelivr.net/npm/phaser' -- node "$GS" "$G/cdn"
+game nothree '{"lodash":"4"}'
+expect "game-stack: a game without three fails" 1 'reason=package.json does not depend on three$' -- node "$GS" "$G/nothree"
+game noart '{"three":"^0.180.0"}'
+rm "$G/noart/box-art.svg"
+expect "game-stack: a game without box art fails" 1 'reason=no box-art.svg$' -- node "$GS" "$G/noart"
+game square '{"three":"^0.180.0"}'
+printf '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800"></svg>\n' > "$G/square/box-art.svg"
+expect "game-stack: box art that is not 3:4 fails" 1 'reason=box-art.svg is not a 3:4 cover' -- node "$GS" "$G/square"
+game scripted '{"three":"^0.180.0"}'
+printf '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200"><script>alert(1)</script></svg>\n' > "$G/scripted/box-art.svg"
+expect "game-stack: box art with a script fails" 1 'reason=box-art.svg carries a script$' -- node "$GS" "$G/scripted"
+game remote '{"three":"^0.180.0"}'
+printf '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200"><image href="https://example.com/a.png"/></svg>\n' > "$G/remote/box-art.svg"
+expect "game-stack: box art that loads from outside fails" 1 'reason=box-art.svg loads something from outside the file$' -- node "$GS" "$G/remote"
+expect "game-stack: no folder is a usage error" 2 '^FAIL: game-stack usage: ' -- node "$GS"
+# The gate runs it in the scans phase for the game, and a Phaser game stops there.
+W_PHASER="$T/w-phaser"
+cp -R "$W" "$W_PHASER"
+sed -i.bak 's/"three"/"phaser"/' "$W_PHASER/seed-1/package.json" && rm -f "$W_PHASER/seed-1/package.json.bak"
+expect "ship: the game's scans run game-stack and pass" 0 '^GATE PASS folder=seed-1 lane=code phase=scans$' -- bash "$SHIP" --repo-root "$W" --folder seed-1 --phase scans --dry-run
+expect "ship: a game that depends on Phaser fails the scans at game-stack" 1 '^GATE FAIL step=game-stack detail=FAIL: game-stack folder=seed-1 reason=package.json depends on phaser' -- bash "$SHIP" --repo-root "$W_PHASER" --folder seed-1 --phase scans --dry-run
 
 # ---------------------------------------------------------------- payment-host-scan.mjs
 PAY="$GATE_DIR/payment-host-scan.mjs"

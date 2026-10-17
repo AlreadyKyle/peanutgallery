@@ -164,7 +164,7 @@ Where this file and the spec disagree, the spec wins and this file is corrected.
 | Z3 | The feed reads from append-only `community.events` | FS: Scale | In this series |
 | Z4 | Every list is keyset-paginated; every growing table has the index its reads use | FS: Scale | In this series |
 | Z5 | A card supply and capacity that grow with funding, behind a failure breaker | | Later: [A card supply that keeps pace with funding](../BACKLOG.md#a-card-supply-that-keeps-pace-with-funding) |
-| Z6 | Aggregate counters for every benchmark marked "Needs" | `benchmarks.md` | Later: [Aggregate counters for the benchmarks](../BACKLOG.md#aggregate-counters-for-the-benchmarks) |
+| Z6 | Aggregate counters for every benchmark marked "Needs" | `benchmarks.md` | In this series: the counters and `daily_metrics` (`docs/specs/operations.md`); later: the senders, [Aggregate counters for the benchmarks](../BACKLOG.md#aggregate-counters-for-the-benchmarks) |
 
 ## 13. The agent studio
 
@@ -174,7 +174,7 @@ Where this file and the spec disagree, the spec wins and this file is corrected.
 | T2 | The Curator role: read-only, no tools, structured triage of suggestions | FS: Suggestions; `studio-team.md` | In this series |
 | T3 | The Art Director role: box art and visual quality, a reviewer | `studio-team.md` | In this series |
 | T4 | The game pipeline from idea to box art to ship, with its gates | `studio-team.md` | In this series (design); stages run as cards |
-| T5 | The review team running on events against `benchmarks.md` | `operating-system.md` | Later: [The review team on events](../BACKLOG.md#the-review-team-on-events) |
+| T5 | The review team running on events against `benchmarks.md` | `operating-system.md` | In this series: the benchmark review (`docs/specs/operations.md`); later: the other members, [The review team on events](../BACKLOG.md#the-review-team-on-events) |
 | T6 | Scorecards per agent | | Later: [Scorecards for every agent](../BACKLOG.md#scorecards-for-every-agent) |
 
 ## 14. Strategy and documents
