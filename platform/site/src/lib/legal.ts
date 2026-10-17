@@ -526,6 +526,15 @@ export const legal = {
         ],
       },
       {
+        // docs/specs/card-follows.md
+        heading: 'Cards you follow',
+        paragraphs: [
+          'If you sign in and press Tell me when this ships on a card, the studio sends one email to the address you signed in with when that card goes live. The studio reads the address from Supabase Auth, its sign-in service, when it sends and does not copy it anywhere else. The email is sent through Resend.',
+          'If you also funded the card and Stripe has the same email address, the ship notice is the only email you get for it.',
+          'Every email has a link to stop them, which stops you following any card. You can also unfollow a card on your profile.',
+        ],
+      },
+      {
         // docs/specs/play-counts.md, docs/specs/counter-senders.md
         heading: 'Play and share counts',
         paragraphs: [
@@ -540,8 +549,10 @@ export const legal = {
         paragraphs: ['The site has no ads, no tracking and no cookies that follow you. The daily counts above are the only analytics.'],
       },
       {
-        heading: 'Board sign-in',
-        paragraphs: ['Only board members can sign in. Sign-in uses Supabase Auth.'],
+        heading: 'Sign-in',
+        paragraphs: [
+          'Board members, and players who keep a profile, sign in with a link sent to their email address. Sign-in uses Supabase Auth, which keeps that address so you can sign in again.',
+        ],
       },
       {
         heading: 'Hosting',

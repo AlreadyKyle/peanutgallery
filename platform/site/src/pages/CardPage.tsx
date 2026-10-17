@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import { plannedState } from '../components/Cards';
 import { CardFacts, FundAgreement, liveFundLink } from '../components/Funding';
+import { FollowCard } from '../components/Follow';
 import { Glyph } from '../components/Glyph';
 import { NotFound } from '../components/NotFound';
 import { PageHeader } from '../components/PageHeader';
@@ -21,8 +22,8 @@ import { useStudio } from '../lib/studio';
 // A card's own page, /card/:id (docs/specs/supporter-pages.md), in the card lane: its money shows only
 // through kernel components (CardFacts, Supporters, StoppedFacts), as home's does. The title on the
 // signal plate; then on paper, stacked at the reading measure at every width, the face with Play (or
-// a planned card's roadmap state), the facts, what changed, why it stopped, the supporters and what
-// the agents did. Stacked, because the face and the facts have heights that have nothing to do with
+// a planned card's roadmap state) and Tell me when this ships (docs/specs/card-follows.md), the facts,
+// what changed, why it stopped, the supporters and what the agents did. Stacked, because the face and the facts have heights that have nothing to do with
 // each other: side by side, one column always ended far above the other (DESIGN.md, No dead space).
 
 const words = copy.cardPage;
@@ -150,6 +151,7 @@ function Detail({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }
         </h2>
         {detail.stopped === null && isPlanned(detail.card) ? <Planned detail={detail} /> : <Replay detail={detail} snapshot={snapshot} />}
         {liveFundLink(detail.card, snapshot) ? <FundAgreement /> : null}
+        <FollowCard cardId={detail.card.id} stage={detail.card.stage} />
       </section>
       <Facts detail={detail} />
       <Changed detail={detail} />
