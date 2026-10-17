@@ -234,8 +234,13 @@ describe('a run against a local server that answers like the CDN', () => {
         // The first read of each document is a miss, the rest hits, as Netlify's durable cache.
         const first = !built.has(req.url);
         built.set(req.url, true);
-        res.writeHead(200, { 'content-type': 'application/json', 'cache-status': first ? '"Netlify Durable"; fwd=miss; stored, "Netlify Edge"; fwd=miss' : '"Netlify Edge"; hit' });
+        const png = req.url.endsWith('.png');
+        res.writeHead(200, { 'content-type': png ? 'image/png' : 'application/json', 'cache-status': first ? '"Netlify Durable"; fwd=miss; stored, "Netlify Edge"; fwd=miss' : '"Netlify Edge"; hit' });
         res.end('{}');
+        return;
+      }
+      if (req.url === '/feed.xml') {
+        res.writeHead(200, { 'content-type': 'application/atom+xml; charset=utf-8', 'cache-status': '"Netlify Edge"; hit' }).end('<feed/>');
         return;
       }
       res.writeHead(200, { 'content-type': 'text/html', 'cache-status': '"Netlify Edge"; hit' }).end('<html></html>');
@@ -302,5 +307,24 @@ describe('.github/workflows/load-test.yml', () => {
   test('hands the inputs to the tool through the environment, never into the script', () => {
     const scripts = text.split('\n').filter((line) => !/^\s*(#|[A-Z_]+: \$\{\{|if:|group:)/.test(line));
     for (const line of scripts) assert.doesNotMatch(line, /\$\{\{\s*inputs\./, line);
+  });
+});
+
+describe('a run against a server with no functions', () => {
+  test('a page served in place of a document counts as an error, as vite preview answers /api', async () => {
+    const server = createServer((req, res) => res.writeHead(200, { 'content-type': 'text/html' }).end('<html></html>'));
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const base = `http://127.0.0.1:${server.address().port}`;
+      const options = { ...parseArgs([base, '--steps', '40:1']), minSamples: 1000 };
+      const targets = targetsFor({ ...options, card: null, asset: null });
+      const outcome = await run(options, targets, { tickMs: 5 });
+      const { lines, ok } = report(options, targets, outcome);
+      assert.equal(ok, false);
+      assert.ok(lines.some((line) => /^error: \/api\/live 200 text\/html x\d+/.test(line)), lines.join('\n'));
+      assert.ok(!lines.some((line) => /^error: \/how-it-works/.test(line)));
+    } finally {
+      server.close();
+    }
   });
 });

@@ -93,28 +93,30 @@ export const GROUP_CAPS = { snapshot: 3, card: 3, community: 4, feed: 1 };
 
 /**
  * The paths the run reads. kind: static (a file the CDN serves), edge (an edge function in front of a
- * cached document) or function (a Netlify Function in front of Supabase). seconds: the document's
- * s-maxage; rpcs: Supabase calls per build. Only GET, only these.
+ * cached document) or function (a Netlify Function in front of Supabase). type: what the answer's
+ * Content-Type must hold, so a page served in place of a document (a missing function falls through
+ * to the page rewrite with a 200) counts as an error. seconds: the document's s-maxage; rpcs:
+ * Supabase calls per build. Only GET, only these.
  */
 export function targetsFor({ profile, base, play, card, asset }) {
   const site = [
-    { name: '/', url: `${base}/`, weight: 30, kind: 'static' },
-    { name: '/how-it-works', url: `${base}/how-it-works`, weight: 8, kind: 'static' },
+    { name: '/', url: `${base}/`, weight: 30, kind: 'static', type: 'text/html' },
+    { name: '/how-it-works', url: `${base}/how-it-works`, weight: 8, kind: 'static', type: 'text/html' },
   ];
-  if (asset) site.push({ name: '/assets/<home script>', url: `${base}${asset}`, weight: 15, kind: 'static' });
+  if (asset) site.push({ name: '/assets/<home script>', url: `${base}${asset}`, weight: 15, kind: 'static', type: 'javascript' });
   if (profile === 'static') {
-    site.push({ name: '/version.json', url: `${base}/version.json`, weight: 3, kind: 'static' });
-    site.push({ name: '/og.png', url: `${base}/og.png`, weight: 2, kind: 'static' });
+    site.push({ name: '/version.json', url: `${base}/version.json`, weight: 3, kind: 'static', type: 'application/json' });
+    site.push({ name: '/og.png', url: `${base}/og.png`, weight: 2, kind: 'static', type: 'image/png' });
   }
-  if (play) site.push({ name: 'play /', url: `${play}/`, weight: 17, kind: 'static' });
+  if (play) site.push({ name: 'play /', url: `${play}/`, weight: 17, kind: 'static', type: 'text/html' });
   if (profile === 'static') return site;
-  const doc = (name, weight, group, seconds, rpcs, kind = 'function') => ({ name, url: `${base}${name}`, weight, kind, group, seconds, rpcs });
+  const doc = (name, weight, group, seconds, rpcs, type = 'application/json', kind = 'function') => ({ name, url: `${base}${name}`, weight, kind, type, group, seconds, rpcs });
   const out = [
     ...site,
     doc('/api/live', 3, 'snapshot', 60, 1),
     doc('/api/cards', 2, 'snapshot', 300, 1),
     doc('/api/reports', 1, 'snapshot', 3600, 1),
-    doc('/feed.xml', 1, 'feed', 120, 2),
+    doc('/feed.xml', 1, 'feed', 120, 2, 'application/atom+xml'),
     doc('/api/community/feed', 2, 'community', 5, 1),
     doc('/api/community/goals', 1, 'community', 30, 1),
     doc('/api/community/studio', 1, 'community', 30, 1),
@@ -122,9 +124,9 @@ export function targetsFor({ profile, base, play, card, asset }) {
     doc('/api/community/suggestions?sort=top', 1, 'community', 15, 1),
   ];
   if (card) {
-    out.push({ ...doc(`/card/${card}`, 2, 'card', 60, 0, 'edge'), name: '/card/<id>' });
+    out.push({ ...doc(`/card/${card}`, 2, 'card', 60, 0, 'text/html', 'edge'), name: '/card/<id>' });
     out.push({ ...doc(`/api/card/${card}`, 1, 'card', 60, 1), name: '/api/card/<id>' });
-    out.push({ ...doc(`/api/card/${card}/preview.png`, 1, 'card', 600, 1), name: '/api/card/<id>/preview.png' });
+    out.push({ ...doc(`/api/card/${card}/preview.png`, 1, 'card', 600, 1, 'image/png'), name: '/api/card/<id>/preview.png' });
   }
   return out;
 }
@@ -402,7 +404,14 @@ async function once(target, timeoutMs) {
       signal: AbortSignal.timeout(timeoutMs),
     });
     await response.arrayBuffer();
-    return { ms: performance.now() - started, ok: response.status < 400, status: response.status, cache: cacheResult(response.headers.get('cache-status')) };
+    const cache = cacheResult(response.headers.get('cache-status'));
+    const ms = performance.now() - started;
+    if (response.status >= 400) return { ms, ok: false, status: response.status, cache };
+    // A 3xx is a wrong answer for every target here: each is the address a visitor's page reads.
+    if (response.status >= 300) return { ms, ok: false, status: response.status, cache };
+    const type = response.headers.get('content-type') ?? '';
+    if (target.type && !type.includes(target.type)) return { ms, ok: false, status: `${response.status} ${type.split(';')[0] || 'no type'}`, cache };
+    return { ms, ok: true, status: response.status, cache };
   } catch (error) {
     return { ms: performance.now() - started, ok: false, status: error?.name === 'TimeoutError' ? 'timeout' : 'network', cache: 'none' };
   }
