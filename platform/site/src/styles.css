@@ -1002,9 +1002,21 @@ button.link:hover:not(:disabled) {
     grid-row: 3;
   }
 
+  /* The bottom block fills its track and pins its button to the foot, so a card with an extra
+     line above its button (what is left to fund) still lines its button up with the row's. */
   .card-grid > .card > .card-bottom {
     grid-row: 4;
     margin-top: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card-grid > .card > .card-bottom > .button {
+    margin-top: auto;
+  }
+
+  .card-grid > .card > .card-bottom > :has(+ .button) {
+    margin-bottom: var(--space-2);
   }
 
 }
@@ -1363,12 +1375,24 @@ button.link:hover:not(:disabled) {
   --focus-colour: var(--primary-fg);
 }
 
-/* Beside the Machine card the tile takes the row's height, its lines kept at the top, so the extra
-   height never stretches its rows (or its Contribute button). */
+/* Beside the Machine card the tile takes the row's height: its lines stay at the top and its
+   Contribute button sits at the foot of the row, so no hollow pools under it. */
 .fund-empty,
 .fund-next {
   align-self: stretch;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.fund-empty > .button,
+.fund-next > .button {
+  margin-top: auto;
+}
+
+/* Paired with the Machine card, the tile's title is a card title, the same size as its neighbour's. */
+.fund-ways:has(> .machine-card) .fund-empty-title {
+  font-size: var(--size-lead);
 }
 
 .fund-empty > p,
@@ -1958,8 +1982,8 @@ main > .band:first-child .pipe .avatar {
 
 /* Footer -----------------------------------------------------------------
    A spec sheet (docs/specs/brand.md, Footer): the mark and the studio's line, then two labelled
-   columns of links, one link to a line, then the credit under a hairline. Four columns from 64rem
-   (the brand block takes two), two below, one under 30rem. */
+   columns of links, one link to a line, then the credit under a hairline. Five columns from 64rem
+   (the brand block takes two), the three link columns side by side from 30rem, one under it. */
 
 .site-footer {
   border-top: 1px solid var(--hairline);
@@ -1988,29 +2012,32 @@ main > .band:first-child .pipe .avatar {
   max-width: 22rem;
 }
 
+/* The footer's name is the wordmark again: uppercase and bold, like the top bar's. */
 .footer-name {
   display: flex;
   align-items: center;
   gap: var(--space-1);
   font-size: var(--size-body);
   font-weight: var(--weight-bold);
+  text-transform: uppercase;
   line-height: 1.1;
 }
 
-/* The name and its mark take the footer's text colour, not its muted tone. */
-.site-footer .footer-name {
+/* The name, its mark and the column labels take the footer's text colour, not its muted tone. */
+.site-footer .footer-name,
+.site-footer .footer-label {
   color: var(--paper);
 }
 
-.page:has(> main > .band:last-child:nth-child(odd)) > .site-footer .footer-name {
+.page:has(> main > .band:last-child:nth-child(odd)) > .site-footer .footer-name,
+.page:has(> main > .band:last-child:nth-child(odd)) > .site-footer .footer-label {
   color: var(--ink);
 }
 
+/* A column's label: the sans at 600, in the footer's text colour (above), over its muted links. */
 .footer-label {
   margin-bottom: var(--space-1);
-  font-family: var(--font-mono);
   font-weight: var(--weight-strong);
-  letter-spacing: var(--tracking-label);
 }
 
 .footer-links {
@@ -2033,7 +2060,7 @@ main > .band:first-child .pipe .avatar {
 
 @media (min-width: 30rem) {
   .footer-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .footer-row > .footer-brand,
@@ -2044,7 +2071,7 @@ main > .band:first-child .pipe .avatar {
 
 @media (min-width: 64rem) {
   .footer-row {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .footer-row > .footer-brand {
@@ -2501,8 +2528,8 @@ input[type='radio'] {
   --live-mark: var(--live);
 }
 
-/* The live studio's heading on the plate is a label over the screen, not a second headline: the lead
-   size, with its intro beside it from 64rem. */
+/* The live studio's heading on the plate is a label, not a second headline: the lead size, with a
+   small muted intro. */
 .home .live-studio > h2 {
   margin-bottom: 0.25rem;
   font-size: var(--size-lead);
@@ -2514,15 +2541,58 @@ input[type='radio'] {
   font-size: var(--size-small);
 }
 
-/* The plate opens closer under the top bar on home, so the room is in view on a phone. */
-.home > .band:first-child {
-  padding-top: var(--space-4);
+/* From 64rem the label and its intro head the ruled column beside the room, above the pipe, so the
+   room starts right under the pitch and is in view when the page opens. The room spans every row;
+   the column's parts share one rule down its left edge. */
+@media (min-width: 64rem) {
+  .home .live-studio {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 22rem;
+    grid-template-rows: auto auto auto 1fr;
+    column-gap: var(--space-4);
+  }
+
+  .home .live-studio > .live-studio-grid {
+    display: contents;
+  }
+
+  .home .live-studio > .live-studio-grid > .studio {
+    grid-column: 1;
+    grid-row: 1 / -1;
+  }
+
+  .home .live-studio > h2,
+  .home .live-studio > p,
+  .home .live-studio > .live-studio-grid > .pipe {
+    grid-column: 2;
+    margin-block: 0;
+    border-inline-start: 1px solid var(--hairline);
+    padding-inline-start: var(--space-3);
+  }
+
+  .home .live-studio > h2 {
+    grid-row: 1;
+    padding-bottom: 0.25rem;
+  }
+
+  .home .live-studio > p:not(.twitch) {
+    grid-row: 2;
+    padding-bottom: var(--space-3);
+  }
+
+  .home .live-studio > p.twitch {
+    grid-row: 3;
+    padding-bottom: var(--space-2);
+  }
+
+  .home .live-studio > .live-studio-grid > .pipe {
+    grid-row: 4;
+  }
 }
 
-@media (min-width: 64rem) {
-  .home > .band:first-child {
-    padding-top: var(--space-5);
-  }
+/* The plate opens closer under the top bar on home, so the room is in view when the page opens. */
+.home > .band:first-child {
+  padding-top: var(--space-4);
 }
 
 /* The first game and the explainer, side by side from 64rem (the video alone takes the row). */
@@ -3626,7 +3696,7 @@ ol.timeline {
 
 .machine-amounts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-1);
   max-width: 28rem;
 }

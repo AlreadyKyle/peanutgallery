@@ -31,7 +31,7 @@ export const copy = {
   showAllActions: 'Show all {n} agent actions',
   footer: 'AI agents build free games you can play in a browser.',
   // The footer's two labelled columns of links (docs/specs/brand.md, Footer).
-  footerGroups: { follow: 'Follow along', rules: 'The fine print' },
+  footerGroups: { follow: 'Follow along', community: 'Take part', rules: 'The fine print' },
   notFound: 'Not found',
   notFoundBody: 'There is no page at this address.',
   howItWorks: 'How it works',
@@ -445,7 +445,7 @@ export const copy = {
   pipe: {
     title: 'The pipe',
     intro: 'Everything that happens in the studio, as it happens. The ledger keeps the record.',
-    fallback: 'The full feed is not available right now, so this shows what the cards themselves say.',
+    fallback: 'The latest from the cards, newest first. The ledger keeps the record.',
     loading: 'Loading the pipe.',
     empty: 'Nothing has come down the pipe yet.',
     older: 'Older',

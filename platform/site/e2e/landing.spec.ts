@@ -100,11 +100,14 @@ for (const viewport of WIDTHS) {
       for (const [name, href] of [
         ['How it works', '/how-it-works'],
         ['Team', '/team'],
+        ['Suggest', '/suggest'],
+        ['FAQ', '/faq'],
         ['Ledger', '/ledger'],
-        ['Discord', DISCORD_INVITE],
       ] as const) {
         await expect(nav.getByRole('link', { name, exact: true })).toHaveAttribute('href', href);
       }
+      // Discord, goals and seeds are in the footer, not the top bar (docs/specs/brand.md).
+      await expect(nav.getByRole('link', { name: 'Discord' })).toHaveCount(0);
       await expect(nav.getByRole('link', { name: 'Home' })).toHaveCount(0);
       await expect(nav.getByRole('link', { name: 'Board' })).toHaveCount(0);
       expect(await overflowsHorizontally(page)).toBe(false);
