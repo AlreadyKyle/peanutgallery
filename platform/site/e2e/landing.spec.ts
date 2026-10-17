@@ -20,7 +20,8 @@ for (const viewport of WIDTHS) {
       await expect(main.locator('p.status-line')).toHaveText('2 cards are open for funding.');
       await expect(main.getByRole('button', { name: 'Pause updates' })).toHaveCount(0);
 
-      await expect(main.getByRole('heading', { level: 2 })).toHaveText(['Pick a card to fund', 'Play the first game', 'How the cards move', 'The team', 'Where the money goes']);
+      // The live studio opens the cards band (docs/specs/final-state.md).
+      await expect(main.getByRole('heading', { level: 2 })).toHaveText(['The studio, live', 'Pick a card to fund', 'Play the first game', 'How the cards move', 'The team', 'Where the money goes']);
       // The first game (docs/specs/home-game-tile.md): a still, its name, one line and Play.
       const game = page.getByRole('region', { name: 'Play the first game' });
       await expect(game.locator('.game-name')).toHaveText('Dust');

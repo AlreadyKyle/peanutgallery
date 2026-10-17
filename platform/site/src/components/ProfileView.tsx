@@ -92,14 +92,19 @@ export function ProfileView({ profile }: { profile: Profile }) {
         {bySuit.length === 0 ? (
           <p className="muted">{copy.profile.noCards}</p>
         ) : (
-          bySuit.map(([suit, cards]: readonly [Suit, typeof profile.collection]) => (
-            <div key={suit} className="collection-suit">
-              <h3>
-                <SuitTag suit={suit} />
-                <span className="muted small"> {cards.length}</span>
-              </h3>
-              <ul className="collection-grid">
-                {[...cards]
+          <>
+            <p className="collection-counts small">
+              {bySuit.map(([suit, cards]: readonly [Suit, typeof profile.collection]) => (
+                <span key={suit} className="collection-count">
+                  <SuitTag suit={suit} />
+                  <span className="muted">{cards.length}</span>
+                </span>
+              ))}
+            </p>
+            {/* One grid, by suit then rarity, so a small collection never stacks a row per suit. */}
+            <ul className="collection-grid">
+              {bySuit.flatMap(([, cards]) =>
+                [...cards]
                   .sort((a, b) => rank(b.rarity) - rank(a.rarity))
                   .map((card) => (
                     <li key={card.cardId} className="collected" data-rarity={card.rarity}>
@@ -110,10 +115,10 @@ export function ProfileView({ profile }: { profile: Profile }) {
                       </Link>
                       <span className="small muted">{SUITS[card.suit].label}</span>
                     </li>
-                  ))}
-              </ul>
-            </div>
-          ))
+                  )),
+              )}
+            </ul>
+          </>
         )}
       </section>
       <section className="section" aria-labelledby="profile-seeds">

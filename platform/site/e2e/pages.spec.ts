@@ -167,7 +167,10 @@ for (const path of ['/', '/contribute']) {
       for (const a of document.querySelectorAll(`main a[href^="${link}"]`)) {
         const grid = a.closest('ul.card-grid, ul.fund-grid');
         const underGrid = grid !== null && [grid.nextElementSibling, grid.nextElementSibling?.nextElementSibling].some((el) => el?.classList.contains('fund-agreement') === true && hasAgreement(el));
-        const inCard = underGrid;
+        // The Machine card (docs/specs/final-state.md) carries its own agreement line under its link.
+        const machine = a.closest('.machine-card');
+        const inMachine = machine !== null && hasAgreement(machine.querySelector('.fund-agreement'));
+        const inCard = underGrid || inMachine;
         const onContribute = location.pathname === '/contribute' && hasAgreement(firstAgreement) && firstAgreement?.tagName === 'P';
         if (!inCard && !onContribute) out.push(`${a.textContent?.trim()} -> ${a.getAttribute('href')}`);
       }

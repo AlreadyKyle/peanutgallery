@@ -61,7 +61,7 @@ export function Broadcast() {
   const top = snapshot === null ? [] : groupCards(snapshot.cards, fundingPlace(snapshot)).fund.slice(0, 3);
   const live = feed.state === 'ready';
   return (
-    <main className="broadcast" style={{ '--broadcast-scale': scale } as CSSProperties}>
+    <main className="broadcast wide" style={{ '--broadcast-scale': scale } as CSSProperties}>
       <div className="band broadcast-head">
         <p className="broadcast-brand">
           <MachineMark />
@@ -80,6 +80,18 @@ export function Broadcast() {
         <div className="broadcast-room">
           {snapshot === null ? <p className="muted">{studio.state === 'loading' ? copy.broadcast.loading : copy.broadcast.unavailable}</p> : <StudioRoom snapshot={snapshot} studio={doc} facts={false} />}
         </div>
+        <section className="broadcast-cards" aria-labelledby="broadcast-cards">
+          <h2 id="broadcast-cards">{copy.broadcast.cardsTitle}</h2>
+          {snapshot === null || top.length === 0 ? (
+            <p className="muted">{copy.broadcast.noCards}</p>
+          ) : (
+            <ul className="card-grid broadcast-grid">
+              {top.map((card) => (
+                <CardFace key={card.id} card={card} snapshot={snapshot} mode="example" compact />
+              ))}
+            </ul>
+          )}
+        </section>
         <div className="broadcast-side">
           <Pipe
             events={live ? feed.events : snapshot === null ? [] : feedFromSnapshot(snapshot)}
@@ -88,22 +100,10 @@ export function Broadcast() {
             hasOlder={false}
             loadingOlder={false}
             onOlder={() => undefined}
-            pageSize={5}
+            pageSize={6}
             headingLevel={2}
             paging={false}
           />
-          <section className="broadcast-cards" aria-labelledby="broadcast-cards">
-            <h2 id="broadcast-cards">{copy.broadcast.cardsTitle}</h2>
-            {snapshot === null || top.length === 0 ? (
-              <p className="muted">{copy.broadcast.noCards}</p>
-            ) : (
-              <ul className="card-grid broadcast-grid">
-                {top.map((card) => (
-                  <CardFace key={card.id} card={card} snapshot={snapshot} mode="example" compact />
-                ))}
-              </ul>
-            )}
-          </section>
         </div>
       </div>
     </main>

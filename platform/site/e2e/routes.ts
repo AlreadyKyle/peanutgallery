@@ -42,6 +42,13 @@ export const PAGE_ROUTES: readonly NamedRoute[] = [
 
 export const PAGE_PATHS: readonly string[] = PAGE_ROUTES.map(([, path]) => path);
 
+/**
+ * Pages drawn without the top bar and footer (docs/specs/final-state.md, Channels): /broadcast is a
+ * 1920 by 1080 overlay a streaming tool loads, so the band order, which counts the top bar and the
+ * footer, does not apply to it. Every other check still draws it.
+ */
+export const BARE_PATHS: readonly string[] = ['/broadcast'];
+
 /** The supporter pages (/card/:id for the fixture's cards, /thanks by session), drawn on SUPPORTER_STUDIO. */
 export { SUPPORTER_ROUTES };
 

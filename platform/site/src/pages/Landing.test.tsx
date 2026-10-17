@@ -428,8 +428,11 @@ describe('Landing', () => {
     expect(within(building).queryByRole('progressbar')).toBeNull();
     // No brief on a card; the agreement is said once, under the fund grid, and nowhere else.
     expect(document.querySelector('details.brief')).toBeNull();
-    expect(within(fund).getAllByText(/By funding you accept/)).toHaveLength(1);
-    expect(screen.getAllByText(/By funding you accept/)).toHaveLength(1);
+    // The Machine card (docs/specs/final-state.md) is its own checkout link and carries its own
+    // agreement line; outside it, the agreement is said once.
+    const outsideMachine = (els: HTMLElement[]) => els.filter((el) => el.closest('.machine-card') === null);
+    expect(outsideMachine(within(fund).getAllByText(/By funding you accept/))).toHaveLength(1);
+    expect(outsideMachine(screen.getAllByText(/By funding you accept/))).toHaveLength(1);
   });
 
   it('shows three cards to fund and links See all n open cards to /contribute', async () => {

@@ -1782,10 +1782,14 @@ main > .band:nth-child(2n + 3) .avatar {
   margin: 0;
 }
 
+/* The footer's links sit in equal columns at every width since the final state added Studio history
+   and Your profile (docs/specs/final-state.md): a wrapped row left Discord alone on a line at 768 and
+   1024px. One link to a cell, a part-empty last row when there are fewer (see below). */
 .footer-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  gap: 0 var(--space-2);
+  flex-basis: 100%;
 }
 
 .footer-row a {
@@ -2803,7 +2807,13 @@ ol.timeline {
 @media (min-width: 64rem) {
   .live-studio-grid {
     grid-template-columns: minmax(0, 1fr) 20rem;
-    align-items: start;
+  }
+
+  /* Beside the room the pipe is a ruled column as tall as the room and its facts, so the row never
+     leaves a hollow under a short feed (DESIGN.md, No dead space). */
+  .live-studio-grid > .pipe {
+    border-inline-start: 1px solid var(--hairline);
+    padding-inline-start: var(--space-3);
   }
 }
 
@@ -2920,8 +2930,10 @@ ol.timeline {
 /* The agents: the team's own avatars, drawn at the room's line weight. */
 .studio-agent {
   cursor: pointer;
-  outline: none;
 }
+
+/* Keyboard focus keeps the site's ring (3px, --focus-colour) around the agent's box; the drawn ring
+   below marks the agent whose card is open and the one under the pointer. */
 
 .studio-agent .avatar-body,
 .studio-agent .avatar-line,
@@ -2946,7 +2958,6 @@ ol.timeline {
   opacity: 0;
 }
 
-.studio-agent:focus-visible .agent-ring,
 .studio-agent[aria-expanded='true'] .agent-ring,
 .studio-agent:hover .agent-ring {
   opacity: 1;
@@ -3041,15 +3052,13 @@ ol.timeline {
 }
 
 .studio-facts li {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0 var(--space-1);
   padding-block: var(--space-1);
   border-top: 1px solid var(--hairline);
 }
 
 .studio-fact-name {
   font-weight: var(--weight-strong);
+  margin-inline-end: 0.5em;
 }
 
 .studio-fact-role {
@@ -3057,7 +3066,7 @@ ol.timeline {
 }
 
 .studio-fact-doing {
-  grid-column: 1 / -1;
+  display: block;
 }
 
 @media (min-width: 48rem) {
@@ -3251,13 +3260,15 @@ ol.timeline {
 }
 
 .machine-amounts {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-1);
+  max-width: 28rem;
 }
 
 .machine-amounts .amount {
-  min-width: 4.5rem;
+  min-width: 0;
+  padding-inline: 0.25em;
   justify-content: center;
 }
 
@@ -3305,6 +3316,23 @@ ol.timeline {
   width: 2px;
   height: 1.75rem;
   background: var(--ink);
+}
+
+.collection-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+.collection-count {
+  display: inline-flex;
+  gap: 0.5em;
+  align-items: center;
+}
+
+.goals-ticks li:last-child {
+  justify-items: end;
+  transform: translateX(-100%);
 }
 
 .goals-tick-label {
@@ -3856,9 +3884,9 @@ ol.timeline {
 
 /* The FAQ: the topics as links, then each question and its answer. */
 .faq-index ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-3);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0 var(--space-3);
 }
 
 .faq-index a {
@@ -3898,10 +3926,16 @@ main.broadcast {
 
 main.broadcast > .band {
   padding: var(--space-3) var(--space-5);
+  max-width: none;
 }
 
 main.broadcast > .band + .band {
   margin-top: 0;
+}
+
+/* Both bands are grids that place their own parts; the bands' stacking margin does not apply. */
+main.broadcast > .band > * {
+  margin: 0;
 }
 
 .broadcast-head {
@@ -3958,31 +3992,52 @@ main.broadcast > .band + .band {
   fill: var(--ink);
 }
 
+/* The overlay's body: the room large on the left with the three cards to fund under it, the pipe a
+   ruled column down the right, as tall as both, so a short feed leaves no hollow. */
 .broadcast-body {
   display: grid !important;
-  grid-template-columns: minmax(0, 1fr) 36rem;
-  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr) 34rem;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--space-3) var(--space-4);
   min-height: 0;
 }
 
 .broadcast-room {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.broadcast-room .studio {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   min-height: 0;
 }
 
 .broadcast-room .studio-stage {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .broadcast-room .room {
   height: 100%;
 }
 
+.broadcast-cards {
+  grid-column: 1;
+  grid-row: 2;
+}
+
 .broadcast-side {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  gap: var(--space-3);
+  grid-column: 2;
+  grid-row: 1 / span 2;
   min-height: 0;
   overflow: hidden;
+  border-inline-start: 1px solid var(--hairline);
+  padding-inline-start: var(--space-4);
 }
 
 .broadcast-cards h2 {
@@ -3990,7 +4045,7 @@ main.broadcast > .band + .band {
 }
 
 .broadcast-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   margin-top: var(--space-2);
 }
 

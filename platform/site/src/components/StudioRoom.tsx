@@ -485,7 +485,7 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
             {places.map((place) => (
               <li key={place.role.id} data-activity={place.activity}>
                 <span className="studio-fact-name">{place.role.name}</span>
-                <span className="studio-fact-role">{place.role.title}</span>
+                {place.role.title === place.role.name ? null : <span className="studio-fact-role">{place.role.title}</span>}
                 <span className="studio-fact-doing">
                   {place.doing}{' '}
                   {place.card === null ? null : (

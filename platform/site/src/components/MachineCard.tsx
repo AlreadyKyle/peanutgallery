@@ -3,7 +3,7 @@ import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { legal } from '../lib/legal';
 import { fundLink } from '../lib/payment';
-import { CoinMark } from './Funding';
+import { CoinMark, FundAgreement } from './Funding';
 import { Glyph, SuitTag } from './Glyph';
 
 // The Machine card (docs/specs/final-state.md, Card suits): general support for the whole studio,
@@ -47,6 +47,8 @@ export function MachineCard({ studioPct, headingLevel = 3 }: { studioPct?: numbe
       <p className="muted small" id={`${id}-note`}>
         {legal.pickForMeBody} {copy.machine.amountNote.replace('{amount}', `$${amount}`)}
       </p>
+      {/* The agreement sits with the link it binds, as under every fund grid (DESIGN.md, the card). */}
+      <FundAgreement />
     </div>
   );
 }

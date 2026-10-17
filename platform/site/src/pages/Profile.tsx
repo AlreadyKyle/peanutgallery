@@ -24,7 +24,9 @@ export function Profile() {
   }, []);
   const title = doc.state === 'ready' ? doc.data.displayName : copy.profile.title;
   return (
-    <main className="wide">
+    // The profile arrives after first paint and a missing one is short: the title stays where it
+    // first renders (main.title-stays).
+    <main className="wide title-stays">
       <div className="band">
         <PageHeader title={title} lede={doc.state === 'ready' ? `@${doc.data.handle}` : undefined} />
       </div>
