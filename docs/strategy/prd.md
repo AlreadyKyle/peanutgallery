@@ -124,7 +124,7 @@ Where this file and the spec disagree, the spec wins and this file is corrected.
 |---|---|---|---|
 | L1 | Home opens on an isometric studio in the thick-line style (SVG, 2 px ink, paper fills, creature fills on agents) | FS: The live studio | In this series |
 | L2 | Agents work at stations that match their live card and stage; idle agents rest, read or chat | FS: The live studio | In this series |
-| L3 | Hover, focus or tap on an agent shows its name, role, activity and card; the same facts are a list below the room | FS: The live studio | In this series |
+| L3 | Hover, focus or tap on an agent shows its name, role, activity and card; the same facts are a list below the room for screen readers and the keyboard | FS: The live studio | In this series |
 | L4 | Contributions drop as coins, suggestions arrive as paper planes, ships leave as boxes; all motion stops under reduced motion | FS: The live studio | In this series |
 | L5 | The feed ("The pipe") shows contributions, suggestions reviewed, cards opened with rarity, stages, ships, badges and milestones from `community.events` | FS: The live studio; FS: Scale | In this series |
 | L6 | The motion pass: one idea per screen, scroll-linked reveals, motion only for real changes | FS: Scope (site-studio); `research.md` | In this series |

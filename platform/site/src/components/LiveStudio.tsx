@@ -3,7 +3,6 @@ import { feedFromSnapshot, useCommunity, useFeed } from '../lib/community';
 import type { FeedEvent, StudioDoc } from '../lib/community-types';
 import { copy } from '../lib/copy';
 import type { Snapshot } from '../lib/source';
-import { roomRoles } from '../lib/studio-scene';
 import { twitchChannel, twitchUrl } from '../lib/twitch';
 import { Glyph } from './Glyph';
 import { Pipe } from './Pipe';
@@ -95,9 +94,8 @@ export function LiveStudio({ snapshot }: { snapshot: Snapshot }) {
           hasOlder={feed.hasOlder}
           loadingOlder={feed.loadingOlder}
           onOlder={feed.loadOlder}
-          // With no team in the room there are no written facts under it, so fewer rows sit beside it.
-          // On home the studio's label heads the same column, so five rows end level with the facts.
-          pageSize={roomRoles(snapshot).length === 0 ? 4 : 5}
+          // On home the studio's label heads the same column, so four rows end near the room's foot.
+          pageSize={4}
         />
       </div>
     </section>

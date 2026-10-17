@@ -14,8 +14,10 @@ import { RoomDrawing, TILE, viewBoxOf } from './RoomDrawing';
 // when the data moves them, bob while they work, type at the desks and chat in pairs with a small
 // speech mark (never words). A coin drops through the pipe when a card's funding rises, a paper plane
 // brings a suggestion, and a ship leaves the dock as a box. Hover, focus or a tap on an agent shows
-// its role card; the same facts are written in the list under the room. Under reduced motion the
-// room is drawn still, every agent at its station; an agent under the pointer or focus never moves.
+// its role card; the same facts are written in a list under the room for screen readers and the
+// keyboard, which shows only while focus is in it (the board, 17 October 2026: the visible list pushed
+// the page down and repeated the role cards). Under reduced motion the room is drawn still, every agent
+// at its station; an agent under the pointer or focus never moves.
 
 export type Pulse = { id: string; kind: 'coin' | 'plane' | 'box'; cardId?: string };
 
@@ -241,7 +243,7 @@ export type StudioRoomProps = {
   snapshot: Snapshot;
   studio: StudioDoc | null;
   pulses?: readonly Pulse[];
-  /** Draw the written list of facts under the room (the broadcast overlay leaves it out). */
+  /** Write the list of facts under the room, for screen readers and the keyboard (the broadcast overlay leaves it out). */
   facts?: boolean;
   label?: string;
 };
