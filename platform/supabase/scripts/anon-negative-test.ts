@@ -188,6 +188,15 @@ const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
   ["close_finding", { p_fingerprint: "anon-probe:no-such-finding" }],
   ["schema_fingerprint", {}],
   ["producer_signals", {}],
+  // card-follows (docs/specs/card-follows.md): the notices job's four functions, the service role's
+  // alone, and a player's follow, the signed-in player's alone. The claim names no follow and the
+  // settle refuses the status named, so even a wrong grant changes nothing; follow_card refuses a
+  // caller with no session; the other two only read.
+  ["follow_notices_due", { p_limit: 0 }],
+  ["follow_notice_claim", { p_user: NO_CARD, p_card: NO_CARD }],
+  ["follow_notice_settle", { p_user: NO_CARD, p_card: NO_CARD, p_status: "not-a-status" }],
+  ["follow_notices_stuck", { p_before: "2000-01-01T00:00:00Z" }],
+  ["follow_card", { card_id: NO_CARD }],
 ];
 
 // The one function anon runs on purpose: the cards policy calls it as the caller
