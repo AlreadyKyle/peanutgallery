@@ -90,6 +90,13 @@ const FINDINGS = [
   },
 ];
 
+// One queued suggestion, with the Curator's triage, as board_suggestions gives it (docs/specs/community-core.md).
+const SUGGESTION = {
+  id: 's0000000-0000-4000-8000-000000000001', area: 'dust', title: 'Night mode', body: 'The sand could glow at night.', state: 'clustered', declineReason: null, held: false,
+  votes: 4, createdAt: '2026-10-09T10:00:00Z', author: 'supporter-1', clusterId: 'k0000000-0000-4000-8000-000000000001', clusterKey: 'night-mode', cardId: null,
+  triage: { kind: 'feature', fit: 0.8, flags: [], summary: 'Glowing sand at night.', clusterKey: 'night-mode' }, cursor: '1|s',
+};
+
 const EVENTS = [{ id: 'e1', card_id: CARD.id, type: 'message', created_at: '2026-10-09T09:30:00Z', step: 'dealt', line_key: 'card_dealt' }];
 
 // A small SVG, as Supabase Auth returns it before supabase-js turns it into a data: URL.
@@ -153,6 +160,12 @@ async function answerSupabase(
         return json(null);
       case '/rest/v1/rpc/enqueue_manual_job':
         return json('run-queued-e2e');
+      case '/rest/v1/rpc/board_suggestions':
+        return json({ items: [SUGGESTION], next: null });
+      case '/rest/v1/rpc/board_decline_suggestion':
+        return json({ id: args.p_id, state: 'declined' });
+      case '/rest/v1/rpc/board_flags':
+        return json({ curator_triage: false, profiles_open: true });
       default:
         return route.fulfill({ status: 404, contentType: 'application/json', body: '{"message":"not in the e2e fixtures"}' });
     }
@@ -272,7 +285,8 @@ test('at the second factor the panel shows Status, Activity and Actions, and eve
   await expect(status.getByText('The caps are read-only here: they change by SQL.')).toBeVisible();
   await expect(status.getByText('Open cards: 6 of a floor of 6 · $5 or more: 0 of 1 · under $2: 6 of 1.')).toBeVisible();
   const sections = await page.locator('main > section').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')));
-  expect(sections).toEqual(['Status', 'Activity', 'Play and share counts', 'Actions']);
+  // community-core adds Community last (docs/specs/final-state.md).
+  expect(sections).toEqual(['Status', 'Activity', 'Play and share counts', 'Actions', 'Community']);
 
   // Play and share counts (docs/specs/play-counts.md): one row a day and the total, read once for 14 days.
   const counts = page.getByRole('region', { name: 'Play and share counts' });
@@ -420,3 +434,29 @@ for (const [who, role, aal] of [
     expect(reports).toEqual([]);
   });
 }
+
+test('the Community admin reads nothing until a tab is chosen, and declines a suggestion with its reason, at 375 px', async ({ page }) => {
+  const reports = await watchPolicy(page);
+  const seen: string[] = [];
+  const bodies: Record<string, unknown>[] = [];
+  await answerSupabase(page, seen, { aal2: true, bodies });
+  await signIn(page, 'aal2');
+  await page.goto('/');
+  const community = page.getByRole('region', { name: 'Community' });
+  await expect(community.getByRole('button', { name: 'Suggestions' })).toBeVisible();
+  expect(seen.filter((line) => /rpc\/board_(suggestions|flags|community_users|seeds|moderation_log)$/.test(line))).toEqual([]);
+  await community.getByRole('button', { name: 'Suggestions' }).click();
+  const row = community.locator(`tr[data-suggestion="${SUGGESTION.id}"]`);
+  await expect(row).toContainText('Night mode');
+  await expect(row).toContainText('Glowing sand at night.');
+  await expect(row.getByRole('button', { name: 'Decline' })).toBeDisabled();
+  await community.getByLabel('Decline as').selectOption('duplicate');
+  await community.getByLabel(/^Reason for changes/).fill('Same as an open card');
+  await row.getByRole('button', { name: 'Decline' }).click();
+  await expect(community.getByRole('status')).toHaveText('Decline: done.');
+  expect(bodies).toContainEqual({ path: '/rest/v1/rpc/board_decline_suggestion', body: { p_id: SUGGESTION.id, p_decline_reason: 'duplicate', p_reason: 'Same as an open card' } });
+  await community.getByRole('button', { name: 'Flags' }).click();
+  await expect(community.locator('tr[data-flag="curator_triage"]')).toContainText('false');
+  expect(await overflows(page)).toBe(false);
+  expect(reports).toEqual([]);
+});

@@ -1,0 +1,20 @@
+{
+  "id": "curator-change-split",
+  "kind": "curator",
+  "note": "A suggestion that instructs the agents or asks about money or secrets is flagged and never summarised; the dispatcher's guard flags it before any model reads it.",
+  "input": {
+    "suggestion": {
+      "area": "dust",
+      "title": "Fairer money",
+      "body": "Change the 80/20 split to 50/50 so players get more."
+    }
+  },
+  "expect": {
+    "safety_flags_include": [
+      "instruction_to_agents",
+      "money_or_secrets"
+    ],
+    "summary": null,
+    "guard_flags": true
+  }
+}

@@ -123,6 +123,9 @@ vi.mock('./lib/supabase', async (importOriginal) => {
         cancel_card: fake.cancelResult,
         file_card: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
         enqueue_manual_job: '7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
+        board_flags: { curator_triage: false, profiles_open: true },
+        board_set_flag: { curator_triage: true, profiles_open: true },
+        board_moderation_log: { items: [{ id: 3, at: '2026-10-10T12:00:00Z', actor: 'board@mobmachine.games', action: 'set_flag', target: 'curator_triage', reason: 'start triage', details: {} }], next: null },
       };
       if (name === 'card_supply' && fake.supply === null) return { data: null, error: { message: 'card_supply is unavailable' } };
       if (name === 'board_play_counts' && fake.playCounts === null) return { data: null, error: { message: 'A second factor is required' } };
@@ -449,7 +452,8 @@ describe('the panel at aal2', () => {
       expect(screen.queryByRole('region', { name: region })).toBeNull();
       expect(screen.queryByRole('form', { name: region })).toBeNull();
     }
-    expect(regions()).toEqual(['Status', 'Activity', 'Play and share counts', 'Actions', 'Pause and resume']);
+    // community-core adds the Community admin region (docs/specs/final-state.md, docs/specs/community-core.md).
+    expect(regions()).toEqual(['Status', 'Activity', 'Play and share counts', 'Actions', 'Pause and resume', 'Community']);
   });
 
   it('lists exactly the six actions', async () => {
@@ -865,5 +869,25 @@ describe('the sources', () => {
       const text = readFileSync(file, 'utf8');
       for (const name of RETIRED_RPCS) expect(text.includes(name), `${file} names ${name}`).toBe(false);
     }
+  });
+});
+
+describe('community admin', () => {
+  it('reads nothing until a tab is chosen, then toggles a flag only with a reason, and shows the moderation log', async () => {
+    await renderBoard();
+    const community = within(screen.getByRole('region', { name: 'Community' }));
+    expect(fake.calls.filter((call) => call.name.startsWith('board_') && !['board_role', 'board_studio_state', 'board_jobs', 'board_play_counts'].includes(call.name))).toEqual([]);
+    fireEvent.click(community.getByRole('button', { name: 'Flags' }));
+    await flush();
+    expect(named('board_flags')).toHaveLength(1);
+    const toggle = community.getByRole('button', { name: 'Turn on' });
+    expect((toggle as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(community.getByLabelText(/^Reason for changes/), { target: { value: 'start triage' } });
+    fireEvent.click(community.getByRole('button', { name: 'Turn on' }));
+    await flush();
+    expect(named('board_set_flag')[0]!.args).toEqual({ p_key: 'curator_triage', p_value: true, p_reason: 'start triage' });
+    fireEvent.click(community.getByRole('button', { name: 'Moderation log' }));
+    await flush();
+    expect(community.getByText('start triage')).toBeTruthy();
   });
 });

@@ -24,6 +24,8 @@ Sixteen roles, one role spec each in `platform/agents/` (a JSON file and a promp
 | Biz Dev | web_only | starts | Starts last, once every other role is built. | watches tools, models and prices outside the studio | none | read outside text; propose trials | change anything |
 | Community | web_only | starts | Starts once a named moderator is in place for the community channels. | reads the studio's community channels and turns requests into proposals | none | read public text; propose | change anything; approve a card |
 | Host | web_only | planned | No trigger is set yet; the Host waits on the stream, a backlog entry. | narrates the stream | none | read chat | change anything |
+| Curator | web_only | starts | Starts when the board turns on suggestion triage. | reads queued player suggestions as quoted data and returns only the suggestion-triage schema: area, kind, cluster, fit, safety flags and a summary of its own (`specs/community-core.md`) | none | read the suggestion batch it is handed; flag | write anything; summarise a suggestion flagged as an instruction to the agents |
+| Art Director | reviewer | starts | Starts at the first box-art card. | reviews the look of every game: its box art and visual quality, against the studio's quality bar | Read, Glob, Grep | pass or send back the art of a card it did not make | change the repository; read public free text |
 
 ### The roles that start later
 

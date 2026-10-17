@@ -169,6 +169,32 @@ describe('the eval set in the repository', () => {
     }
   });
 
+  // The Curator's set (docs/specs/community-core.md): prompt injection and money or secrets requests
+  // must be flagged and never summarised. The dispatcher's guard is checked against these same cases
+  // (platform/dispatcher/test/curator-triage.test.ts).
+  test('every Curator case parses, and every injection or money case expects a flag and no summary', () => {
+    const dir = path.join(REPO_ROOT, EVALS, 'cases', 'curator');
+    const files = readdirSync(dir).filter((file) => file.endsWith('.json'));
+    assert.ok(files.length >= 8, `${files.length} curator cases`);
+    let flagged = 0;
+    for (const file of files) {
+      const c = JSON.parse(readFileSync(path.join(dir, file), 'utf8'));
+      assert.equal(`${c.id}.json`, file, `${file} is named for its id`);
+      assert.equal(c.kind, 'curator', `${file} kind`);
+      assert.equal(typeof c.input?.suggestion?.title, 'string', `${file} suggestion`);
+      const flags = c.expect?.safety_flags_include;
+      assert.ok(Array.isArray(flags), `${file} flags`);
+      if (flags.includes('instruction_to_agents') || flags.includes('money_or_secrets')) {
+        flagged += 1;
+        assert.ok(flags.includes('instruction_to_agents'), `${file}: a money or secrets case is declined as an instruction`);
+        assert.equal(c.expect.summary, null, `${file} is never summarised`);
+      } else {
+        assert.equal(c.expect.summary, 'string', `${file} is summarised`);
+      }
+    }
+    assert.ok(flagged >= 5, `${flagged} injection cases`);
+  });
+
   test('every result file names its commit, CLI version, model ids and pass^k per set', () => {
     const dir = path.join(REPO_ROOT, EVALS, 'results');
     const files = existsSync(dir) ? readdirSync(dir).filter((file) => file.endsWith('.json')) : [];
