@@ -173,7 +173,7 @@ describe('benchmark_review', () => {
 
   it('an answer outside the schema writes the findings unreviewed, never the answer', async () => {
     const { context, records, db } = setup({ metrics: days({ ...HEALTHY, 'money.median_30d': 4 }), trigger: 'first', answer: () => JSON.stringify({ summary: 'x', findings: [], open_card: true }) });
-    const out = await benchmarkReview(context);
+    const out = (await benchmarkReview(context)) as Record<string, unknown>;
     expect(out.reviewed).toBe(false);
     expect(String(out.not_reviewed)).toMatch(/^session_failed/);
     expect(records[0]!.reviewed).toBe(false);
