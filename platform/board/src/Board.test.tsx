@@ -26,7 +26,8 @@ const RETIRED_RPCS = [
   rpcName('set', 'card', 'horizon'),
   rpcName('set', 'card', 'veto'),
   rpcName('set', 'cooling', 'window'),
-  rpcName('set', 'role', 'pause'),
+  // set_role_pause left this list: the final state's Agents admin turns a role on and off
+  // (docs/specs/final-state.md, Admin; Roster.tsx), at the second factor as the database requires.
   rpcName('set', 'caps'),
   rpcName('file', 'directive'),
   rpcName('file', 'note'),
@@ -124,6 +125,8 @@ vi.mock('./lib/supabase', async (importOriginal) => {
         file_card: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
         enqueue_manual_job: '7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
         board_flags: { curator_triage: false, profiles_open: true },
+        board_games: ROSTER_GAMES,
+        board_agent_roster: ROSTER_AGENTS,
         board_set_flag: { curator_triage: true, profiles_open: true },
         board_moderation_log: { items: [{ id: 3, at: '2026-10-10T12:00:00Z', actor: 'board@mobmachine.games', action: 'set_flag', target: 'curator_triage', reason: 'start triage', details: {} }], next: null },
       };
@@ -183,6 +186,35 @@ vi.mock('./lib/supabase', async (importOriginal) => {
 });
 
 const startedAt = new Date('2026-10-10T12:00:00Z');
+
+// board_games and board_agent_roster as 20261017210000_board_roster.sql answers them.
+const ROSTER_GAMES = [
+  {
+    folder: 'seed-1',
+    open_count: 2,
+    shipped_count: 1,
+    open_cards: [{ id: 'c-open', title: 'Carts leave dust trails', stage: 'building', horizon: 'now', updated_at: '2026-10-10T10:00:00Z' }],
+    shipped_cards: [{ id: 'c-live', title: 'Night sky', live_at: '2026-10-09T10:00:00Z', commit_sha: 'abc1234' }],
+    latest_deploy: { sha: 'def5678aaaa', is_green: false, smoke_result: 'smoke failed', created_at: '2026-10-10T11:00:00Z' },
+    latest_green_deploy: { sha: 'abc1234bbbb', created_at: '2026-10-09T11:00:00Z' },
+  },
+];
+const ROSTER_AGENTS = [
+  {
+    id: 'r-builder-a', name: 'Builder A', title: 'Builder A', model: 'claude-test', tools: ['Read', 'Edit', 'Bash'], write_access: true, agent_class: 'builder',
+    state: 'active', status: null, paused: false, paused_reason: null, paused_at: null, jobs: ['build_card'],
+    spend: { day_usd: 1.5, week_usd: 4, month_usd: 12.25, total_usd: 40 },
+    runs_day: { succeeded: 3, failed: 1, skipped: 0, queued: 0, running: 0 },
+    recent_runs: [{ id: 'run-1', job: 'build_card', status: 'failed', origin: 'schedule', card_id: null, reason: 'tests', created_at: '2026-10-10T11:00:00Z', started_at: null, finished_at: null }],
+  },
+  {
+    id: 'r-curator', name: 'Curator', title: 'Curator', model: 'claude-test-small', tools: [], write_access: false, agent_class: 'web_only',
+    state: 'active', status: null, paused: true, paused_reason: 'not yet', paused_at: '2026-10-10T09:00:00Z', jobs: ['curator_triage'],
+    spend: { day_usd: 0, week_usd: 0, month_usd: 0, total_usd: 0 },
+    runs_day: { succeeded: 0, failed: 0, skipped: 2, queued: 0, running: 0 },
+    recent_runs: [],
+  },
+];
 
 function card(id: string, title: string, stage: string, more: Row = {}): Row {
   return { id, title, stage, horizon: 'now', failing_check: null, updated_at: '2026-10-09T10:00:00Z', estimate_usd: '0.0000', ...more };
@@ -453,7 +485,8 @@ describe('the panel at aal2', () => {
       expect(screen.queryByRole('form', { name: region })).toBeNull();
     }
     // community-core adds the Community admin region (docs/specs/final-state.md, docs/specs/community-core.md).
-    expect(regions()).toEqual(['Status', 'Activity', 'Play and share counts', 'Actions', 'Pause and resume', 'Community']);
+    // board-live adds Games and agents (docs/specs/final-state.md, Admin).
+    expect(regions()).toEqual(['Status', 'Activity', 'Play and share counts', 'Actions', 'Pause and resume', 'Games and agents', 'Community']);
   });
 
   it('lists exactly the six actions', async () => {
@@ -889,5 +922,61 @@ describe('community admin', () => {
     fireEvent.click(community.getByRole('button', { name: 'Moderation log' }));
     await flush();
     expect(community.getByText('start triage')).toBeTruthy();
+  });
+});
+
+describe('games and agents', () => {
+  it('reads nothing until a tab is chosen, then shows each game with its art, address, deploys and cards', async () => {
+    await renderBoard();
+    const roster = within(screen.getByRole('region', { name: 'Games and agents' }));
+    expect(named('board_games')).toEqual([]);
+    expect(named('board_agent_roster')).toEqual([]);
+    fireEvent.click(roster.getByRole('button', { name: 'Games' }));
+    await flush();
+    expect(named('board_games')).toHaveLength(1);
+    expect(named('board_agent_roster')).toEqual([]);
+    const tile = screen.getByText('Dust').closest('li')!;
+    expect(tile.getAttribute('data-game')).toBe('seed-1');
+    expect(within(tile).getByRole('img', { name: 'Dust box art' }).getAttribute('src')).toBe('/games/dust-box-art.svg');
+    expect(within(tile).getByRole('link', { name: 'Play Dust' }).getAttribute('href')).toBe('https://play.mobmachine.games');
+    expect(tile.textContent).toContain('last deploy failed');
+    expect(tile.textContent).toContain('def5678');
+    expect(tile.textContent).toContain('Last green: abc1234');
+    expect(tile.textContent).toContain('2 open cards, 1 shipped.');
+    expect(tile.textContent).toContain('Carts leave dust trails');
+    expect(tile.textContent).toContain('Night sky');
+    expect(roster.getByText(/no switch for a single game/)).toBeTruthy();
+  });
+
+  it('shows every role with its model, tools, write access, runs and spend, and turns a role on or off only with a reason', async () => {
+    await renderBoard();
+    const roster = within(screen.getByRole('region', { name: 'Games and agents' }));
+    fireEvent.click(roster.getByRole('button', { name: 'Agents' }));
+    await flush();
+    expect(named('board_agent_roster')).toHaveLength(1);
+    const builder = screen.getByText('claude-test').closest('li')!;
+    expect(builder.getAttribute('data-role')).toBe('Builder A');
+    expect(builder.textContent).toContain('Read, Edit, Bash');
+    expect(builder.textContent).toContain('Write accessyes');
+    expect(builder.textContent).toContain('$1.50 today, $4.00 in 7 days, $12.25 in 30 days, $40.00 in all');
+    expect(builder.textContent).toContain('3 succeeded, 1 failed');
+    expect(builder.textContent).toContain('build_card failed (tests)');
+    const curator = roster.getByRole('button', { name: 'Turn Curator on' });
+    expect(curator.closest('li')!.textContent).toContain('off (not yet)');
+    expect(curator.closest('li')!.textContent).toContain('Write accessno');
+    // No reason, no call.
+    expect(curator.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(curator);
+    await flush();
+    expect(named('set_role_pause')).toEqual([]);
+    fireEvent.change(roster.getByLabelText('Reason for turning a role on or off'), { target: { value: 'start triage' } });
+    fireEvent.click(roster.getByRole('button', { name: 'Turn Curator on' }));
+    await flush();
+    expect(named('set_role_pause').map((call) => call.args)).toEqual([{ p_role: 'r-curator', p_paused: false, p_reason: 'start triage' }]);
+    expect(roster.getByRole('status').textContent).toBe('Curator turned on.');
+    expect(named('board_agent_roster')).toHaveLength(2);
+    fireEvent.click(roster.getByRole('button', { name: 'Turn Builder A off' }));
+    await flush();
+    expect(named('set_role_pause').at(-1)!.args).toEqual({ p_role: 'r-builder-a', p_paused: true, p_reason: 'start triage' });
   });
 });

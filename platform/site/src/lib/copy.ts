@@ -423,6 +423,9 @@ export const copy = {
     factsLabel: 'What each agent is doing',
     empty: 'The agents have not loaded yet.',
     meet: 'Meet the agent',
+    // Shown only when the build names a Twitch channel (VITE_TWITCH_CHANNEL): a link, never an embed.
+    twitch: 'Live on Twitch',
+    twitchLabel: 'Watch the studio live on Twitch (twitch.tv/{channel})',
     openCard: 'Open the card',
     openCardNamed: 'Open the card {title}',
     doing: {
@@ -595,6 +598,18 @@ export const copy = {
     howTitle: 'Save your own seed',
     how: 'In the game, open Share your run and choose Save as seed. Signed-in players can publish a seed here with a short title.',
     signIn: 'Sign in to upvote and publish',
+    // /seeds?save=<code>: a seed the game linked here, saved to the player's profile.
+    save: {
+      title: 'Save this seed',
+      bad: 'This link does not hold a seed code, so there is nothing to save.',
+      signedOut: 'Sign in to keep this seed on your profile. The link in your email brings you back, and the seed is saved then.',
+      saving: 'Saving the seed.',
+      saved: 'Saved to your profile.',
+      failed: 'The seed could not be saved right now. Try the link again later.',
+      game: 'Game: {game}, version {n}',
+      seeProfile: 'See your profile',
+      play: 'Play this seed',
+    },
   },
   profile: {
     title: 'Player',

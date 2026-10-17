@@ -4,6 +4,8 @@ import type { FeedEvent, StudioDoc } from '../lib/community-types';
 import { copy } from '../lib/copy';
 import type { Snapshot } from '../lib/source';
 import { roomRoles } from '../lib/studio-scene';
+import { twitchChannel, twitchUrl } from '../lib/twitch';
+import { Glyph } from './Glyph';
 import { Pipe } from './Pipe';
 import { StudioRoom, type Pulse } from './StudioRoom';
 
@@ -32,6 +34,22 @@ export function feedPulses(seen: ReadonlySet<string>, events: readonly FeedEvent
 export function useStudioDoc() {
   const doc = useCommunity<StudioDoc>('/studio', 0);
   return doc.state === 'ready' ? doc.data : null;
+}
+
+/**
+ * The stream, when the build names a channel (VITE_TWITCH_CHANNEL): a small Live badge that is a link
+ * to twitch.tv, never an embed (the policy allows no third-party frame). No channel, nothing.
+ */
+export function TwitchLink({ channel }: { channel: string | null }) {
+  if (channel === null) return null;
+  return (
+    <p className="twitch">
+      <a className="tag tag-stamp" data-state="live" href={twitchUrl(channel)} aria-label={copy.studioRoom.twitchLabel.replace('{channel}', channel.toLowerCase())}>
+        <Glyph name="play" />
+        {copy.studioRoom.twitch}
+      </a>
+    </p>
+  );
 }
 
 export function LiveStudio({ snapshot }: { snapshot: Snapshot }) {
@@ -66,6 +84,7 @@ export function LiveStudio({ snapshot }: { snapshot: Snapshot }) {
     <section className="section live-studio" aria-labelledby="studio" id="studio-live">
       <h2 id="studio">{copy.studioRoom.title}</h2>
       <p>{copy.studioRoom.intro}</p>
+      <TwitchLink channel={twitchChannel()} />
       {/* The room is wide and the pipe a column: the pipe shows as many rows as sit beside the room. */}
       <div className="live-studio-grid">
         <StudioRoom snapshot={snapshot} studio={studio} pulses={pulses} />

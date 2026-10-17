@@ -60,3 +60,4 @@ Run on 10 October 2026 on the pull request's branch (`board/minimal-panel`), mai
 - 2026-10-10: caps change by SQL (`BOARD-SETUP.md`, Pause when the board site is down) rather than by a form, so the panel holds no money setting beyond Pause.
 - 2026-10-10: no migration; the database functions the panel stops calling stay, so a later panel or a script can still call them.
 - 2026-10-10: the pull request merges after #139 and the PR4 supply refill. The panel sends no heartbeat, while main's dispatcher still waits on a board session for the visual reviews and the model-calling jobs until those land.
+- 2026-10-17: amended by `docs/specs/final-state.md` (Admin): the panel gains Games and agents, which reads `board_games` and `board_agent_roster` (`20261017210000_board_roster.sql`, board only at the second factor) and calls `set_role_pause` again for the per-role on and off. The other retired calls stay retired.
