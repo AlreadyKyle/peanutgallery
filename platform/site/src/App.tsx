@@ -240,47 +240,63 @@ function TopBar() {
 
 function SiteFooter() {
   const env = siteEnv();
+  // A spec sheet (docs/specs/brand.md, Footer): the mark and what the studio is, then the links in two
+  // labelled columns, then the credit under a rule.
   return (
     <footer className="site-footer">
       <div className="wrap footer-row">
-        <p>
-          {copy.footer} {legal.allAges}
-        </p>
-        <ul className="footer-links">
-          <li>
-            <Link to="/reports">{copy.reportsNav}</Link>
-          </li>
-          <li>
-            {/* A file the feed function serves, not a page of the app, so a plain link (docs/specs/ship-feed.md). */}
-            <a href="/feed.xml" type="application/atom+xml">
-              {copy.feedLink}
-            </a>
-          </li>
-          {footerNav
-            .filter((item) => PLAIN_PATH_DEEP.test(item.to))
-            .map((item) => (
-              <li key={item.to}>
-                <Link to={item.to}>{item.label}</Link>
-              </li>
-            ))}
-          <li>
-            <Link to="/terms">{legal.footerLinks.terms}</Link>
-          </li>
-          <li>
-            <Link to="/privacy">{legal.footerLinks.privacy}</Link>
-          </li>
-          <li>
-            <Link to="/refunds">{legal.footerLinks.refunds}</Link>
-          </li>
-          <li>
-            <Link to="/contact">{legal.footerLinks.contact}</Link>
-          </li>
-          {env.discordInvite === '' ? null : (
+        <div className="footer-brand">
+          <p className="footer-name" aria-hidden="true">
+            <MachineMark />
+            <span>{copy.studioName}</span>
+          </p>
+          <p>
+            {copy.footer} {legal.allAges}
+          </p>
+        </div>
+        <div className="footer-group">
+          <p className="footer-label">{copy.footerGroups.follow}</p>
+          <ul className="footer-links">
             <li>
-              <a href={env.discordInvite}>{copy.discord}</a>
+              <Link to="/reports">{copy.reportsNav}</Link>
             </li>
-          )}
-        </ul>
+            <li>
+              {/* A file the feed function serves, not a page of the app, so a plain link (docs/specs/ship-feed.md). */}
+              <a href="/feed.xml" type="application/atom+xml">
+                {copy.feedLink}
+              </a>
+            </li>
+            {footerNav
+              .filter((item) => PLAIN_PATH_DEEP.test(item.to))
+              .map((item) => (
+                <li key={item.to}>
+                  <Link to={item.to}>{item.label}</Link>
+                </li>
+              ))}
+            {env.discordInvite === '' ? null : (
+              <li>
+                <a href={env.discordInvite}>{copy.discord}</a>
+              </li>
+            )}
+          </ul>
+        </div>
+        <div className="footer-group">
+          <p className="footer-label">{copy.footerGroups.rules}</p>
+          <ul className="footer-links">
+            <li>
+              <Link to="/terms">{legal.footerLinks.terms}</Link>
+            </li>
+            <li>
+              <Link to="/privacy">{legal.footerLinks.privacy}</Link>
+            </li>
+            <li>
+              <Link to="/refunds">{legal.footerLinks.refunds}</Link>
+            </li>
+            <li>
+              <Link to="/contact">{legal.footerLinks.contact}</Link>
+            </li>
+          </ul>
+        </div>
         <p className="credit">
           {copy.createdBy}{' '}
           <a href={copy.createdByUrl}>{copy.createdByName}</a>

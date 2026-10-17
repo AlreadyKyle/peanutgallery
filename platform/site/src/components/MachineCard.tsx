@@ -22,6 +22,7 @@ export function MachineCard({ studioPct, headingLevel = 3 }: { studioPct?: numbe
   const Title = headingLevel === 2 ? 'h2' : 'h3';
   return (
     <div className="machine-card" data-suit="machine" aria-labelledby={`${id}-title`}>
+      <div className="machine-about">
       <p className="card-index">
         <SuitTag suit="machine" />
         <span className="tag">
@@ -31,6 +32,8 @@ export function MachineCard({ studioPct, headingLevel = 3 }: { studioPct?: numbe
       </p>
       <Title id={`${id}-title`}>{copy.machine.title}</Title>
       <p className="machine-body">{copy.machine.body}</p>
+      </div>
+      <div className="machine-fund">
       <div className="machine-amounts" role="group" aria-label={copy.machine.amountsLabel}>
         {MACHINE_AMOUNTS.map((usd) => (
           <button key={usd} type="button" className="filter amount" aria-pressed={amount === usd} onClick={() => setAmount(usd)}>
@@ -49,6 +52,7 @@ export function MachineCard({ studioPct, headingLevel = 3 }: { studioPct?: numbe
       </p>
       {/* The agreement sits with the link it binds, as under every fund grid (DESIGN.md, the card). */}
       <FundAgreement />
+      </div>
     </div>
   );
 }

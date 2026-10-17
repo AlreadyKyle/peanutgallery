@@ -55,7 +55,7 @@ main {
 
 /* A text page (ledger, contribute, the legal pages, not found) keeps every block to the reading
    measure. */
-main:not(.wide) > * {
+main:not(.wide, .sheet) > * {
   max-width: var(--measure);
 }
 
@@ -74,10 +74,12 @@ h4 {
 h1 {
   font-size: var(--size-h1);
   line-height: var(--leading-display);
+  letter-spacing: var(--tracking-display);
 }
 
 h2 {
   font-size: var(--size-h2);
+  letter-spacing: var(--tracking-heading);
   margin-bottom: var(--space-3);
 }
 
@@ -285,8 +287,9 @@ main.title-stays > .band:last-child {
   flex-grow: 1;
 }
 
-/* A page that is not wide keeps each band's blocks to the reading measure. */
-main:not(.wide) > .band > * {
+/* A page that is not wide keeps each band's blocks to the reading measure; a sheet lays them out on
+   the index's two columns instead (The sheet, below). */
+main:not(.wide, .sheet, .card-page) > .band > * {
   max-width: var(--measure);
 }
 
@@ -498,6 +501,91 @@ nav a.active {
   max-width: var(--measure-text);
 }
 
+/* The index: every section after the first band opens on a 2px rule in the text colour, with its
+   number over the heading in the mono face (01, 02, ...), counted down the page. It is the brand's
+   spec-sheet line: it gives each section an edge, so a wide band reads as ruled, never as empty
+   ground. The number is decoration: its alternative text is empty, so it is never read out. */
+main:has(> .band) {
+  counter-reset: section;
+}
+
+main > .band:not(:first-child) .section:has(> h2:first-child) {
+  padding-top: var(--space-2);
+  border-top: 2px solid currentColor;
+}
+
+main > .band:not(:first-child) .section > h2:first-child {
+  counter-increment: section;
+}
+
+main > .band:not(:first-child) .section > h2:first-child::before {
+  content: counter(section, decimal-leading-zero) / '';
+  display: block;
+  margin-bottom: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-label);
+  line-height: var(--leading-title);
+}
+
+/* The sheet (main.sheet: the text pages, the ledger, the FAQ, goals): from 64rem every section after
+   the first band sets its heading in a left column a third wide, held in view while its text scrolls,
+   and its text in the two thirds beside it, so the text keeps its reading measure and the page still
+   fills the screen. Blocks that are not a section take the full width. */
+@media (min-width: 64rem) {
+  main.sheet > .band:not(:first-child) > .section {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    column-gap: var(--space-5);
+    align-items: start;
+  }
+
+  main.sheet > .band:not(:first-child) > .section > * {
+    grid-column: 2;
+  }
+
+  main.sheet > .band:not(:first-child) > .section > h2:first-child {
+    grid-column: 1;
+    grid-row: 1 / span 60;
+    position: sticky;
+    top: var(--space-3);
+    margin: 0;
+  }
+
+  /* The text column is the measure itself (about 80 characters at 1440px), so its paragraphs fill it. */
+  main.sheet > .band:not(:first-child) > .section p,
+  main.sheet > .band:not(:first-child) > .section .faq-item {
+    max-width: none;
+  }
+}
+
+/* A card's own page from 64rem: the face in the left five twelfths, held in view, and the facts, the
+   supporters and the agents' log in the seven beside it. */
+@media (min-width: 64rem) {
+  main.card-page > .band:last-child:has(> .card-face-column) {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    column-gap: var(--space-5);
+    align-items: start;
+  }
+
+  main.card-page > .band:last-child > * {
+    grid-column: 2;
+  }
+
+  main.card-page > .band:last-child > .card-face-column {
+    grid-column: 1;
+    grid-row: 1 / span 12;
+    position: sticky;
+    top: var(--space-3);
+  }
+
+  main.card-page > .band:last-child > .card-face-column + * {
+    margin-top: 0;
+  }
+}
+
 /* A link on its own line: a 44px target that takes one line of layout. */
 .more a,
 a.target {
@@ -513,6 +601,33 @@ a.target {
 
 .hero h1 {
   margin-bottom: var(--space-3);
+}
+
+/* A page's plate from 64rem: the heading in the left seven twelfths and the lede, with any line under
+   it, in the right five, set to the heading's foot. The plate reads as one row, never a heading
+   beside an empty half. */
+@media (min-width: 64rem) {
+  .hero:not(.hero-home) {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    column-gap: var(--space-5);
+    align-items: end;
+  }
+
+  .hero:not(.hero-home) > * {
+    grid-column: 2;
+  }
+
+  .hero:not(.hero-home) > h1 {
+    grid-column: 1;
+    grid-row: 1 / span 6;
+    align-self: end;
+    margin-bottom: 0;
+  }
+
+  .hero:not(.hero-home) > h1 + * {
+    margin-top: 0;
+  }
 }
 
 .lede {
@@ -853,10 +968,6 @@ button.link:hover:not(:disabled) {
     margin-top: 0;
   }
 
-  /* The next card in line (decision 73) spans the same four rows as the faces beside it. */
-  .card-grid > .fund-next {
-    grid-row: span 4;
-  }
 }
 
 .card-bottom > .button {
@@ -991,6 +1102,41 @@ button.link:hover:not(:disabled) {
 .contribute > p,
 .contribute > h2 {
   max-width: var(--measure);
+}
+
+/* From 64rem the split and the next card in line share the first row, the split on the left and the
+   panel, with its agreement under it, on the right; the cards and the Machine card take the width. */
+@media (min-width: 64rem) {
+  .contribute {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: var(--space-5);
+    align-items: start;
+  }
+
+  .contribute > * {
+    grid-column: 1 / -1;
+  }
+
+  .contribute > .split-slider {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    margin-bottom: 0;
+  }
+
+  .contribute > .choice-primary {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .contribute > .choice-primary + p {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .contribute > .choice-primary + p + h2 {
+    margin-top: var(--space-5);
+  }
 }
 
 /* The split slider (docs/specs/split-slider.md): a native range input at full touch height, the
@@ -1554,19 +1700,19 @@ button.link:hover:not(:disabled) {
   }
 }
 
-/* The pill keeps one size while the home hero's frame shrinks: from 64rem the hero has two columns
-   and the frame is 460px wide at 1024px, reaching 544px at 1200px, and below 72rem the labelled pill
-   reaches the poster's own lines ("Watch AI agents build it."). There it becomes the 44px play mark
-   alone, and the label stays for a screen reader. e2e/explainer-poster.spec.ts reads the poster's
+/* The pill keeps one size while home's frame shrinks: from 64rem the showcase shares its row with the
+   first game, the frame is under 720px wide, and the labelled pill reaches the poster's own lines
+   ("Watch AI agents build it."). There it becomes the 44px play mark alone, and the label stays for a
+   screen reader. e2e/explainer-poster.spec.ts reads the poster's
    pixels under the pill at every width, on both pages that draw the video. */
-@media (min-width: 64rem) and (max-width: 71.99rem) {
-  .hero-with-video .explainer-play {
+@media (min-width: 64rem) {
+  .showcase .explainer-play {
     justify-content: center;
     width: var(--target);
     padding: 0;
   }
 
-  .hero-with-video .explainer-play-label {
+  .showcase .explainer-play-label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -1574,15 +1720,6 @@ button.link:hover:not(:disabled) {
     overflow: hidden;
     clip: rect(0 0 0 0);
     white-space: nowrap;
-  }
-}
-
-/* From 72rem the hero's frame stops growing at 544px and the labelled pill came back within a few
-   pixels of the poster's lines. Tucked a step further into its corner, it keeps a clear gap. */
-@media (min-width: 72rem) {
-  .hero-with-video .explainer-play {
-    left: var(--space-2);
-    bottom: var(--space-2);
   }
 }
 
@@ -1764,18 +1901,20 @@ main > .band:nth-child(2n + 3) .avatar {
   fill: var(--line);
 }
 
-/* Footer ----------------------------------------------------------------- */
+/* Footer -----------------------------------------------------------------
+   A spec sheet (docs/specs/brand.md, Footer): the mark and the studio's line, then two labelled
+   columns of links, one link to a line, then the credit under a hairline. Four columns from 64rem
+   (the brand block takes two), two below, one under 30rem. */
 
 .site-footer {
   border-top: 1px solid var(--hairline);
 }
 
 .footer-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-3);
-  padding-block: var(--space-3);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4) var(--space-3);
+  padding-block: var(--space-5) var(--space-3);
   color: var(--text-muted);
   font-size: var(--size-small);
 }
@@ -1784,14 +1923,46 @@ main > .band:nth-child(2n + 3) .avatar {
   margin: 0;
 }
 
-/* The footer's links sit in equal columns at every width since the final state added Studio history
-   and Your profile (docs/specs/final-state.md): a wrapped row left Discord alone on a line at 768 and
-   1024px. One link to a cell, a part-empty last row when there are fewer (see below). */
+.footer-brand {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+}
+
+.footer-brand > p:last-child {
+  max-width: 22rem;
+}
+
+.footer-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--size-body);
+  font-weight: var(--weight-bold);
+  line-height: 1.1;
+}
+
+/* The name and its mark take the footer's text colour, not its muted tone. */
+.site-footer .footer-name {
+  color: var(--paper);
+}
+
+.page:has(> main > .band:last-child:nth-child(odd)) > .site-footer .footer-name {
+  color: var(--ink);
+}
+
+.footer-label {
+  margin-bottom: var(--space-1);
+  font-family: var(--font-mono);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-label);
+}
+
 .footer-links {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
-  gap: 0 var(--space-2);
-  flex-basis: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .footer-row a {
@@ -1800,18 +1971,29 @@ main > .band:nth-child(2n + 3) .avatar {
   min-height: var(--target);
 }
 
-/* Below 30rem the footer's links no longer fit on one line, and a wrapped row left the last one alone
-   on a line of its own (Discord at 375px, 26 Sep 2026). They sit in equal columns instead, one link to
-   a cell, as wide as the footer: three from 344px of footer (two full rows of the six), two below
-   (three full rows at 320px), and a part-empty last row when there are fewer. A column is at least
-   6.5rem, wider than the longest link at any text size, so no label breaks and 200% text stacks them
-   in one column rather than scrolling sideways. */
-@media (max-width: 29.99rem) {
-  .footer-links {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
-    gap: var(--space-1);
-    flex-basis: 100%;
+.footer-row > .credit {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--hairline);
+}
+
+@media (min-width: 30rem) {
+  .footer-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .footer-row > .footer-brand,
+  .footer-row > .credit {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 64rem) {
+  .footer-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .footer-row > .footer-brand {
+    grid-column: span 2;
   }
 }
 
@@ -2208,38 +2390,101 @@ input[type='radio'] {
 
 /* Play free and the How it works link, side by side, clear of the lede above and the status line
    below. */
-/* Home's hero holds the pitch, the studio's state and the explainer video. Below 64rem they stack in
-   that order. From 64rem the pitch and the video sit side by side, where the pitch alone left the
-   plate's right half empty, and the state runs under both, so the two columns balance. */
-.hero-with-video {
+/* Home's hero (docs/specs/brand.md, Home): the pitch, set at the hero size, and beside it from 64rem
+   the lede, the two actions and the studio's state, bottom-aligned with the pitch; stacked below
+   64rem. Under it, on the same plate, the live studio, so the room is in view when the page opens. */
+.hero-home {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
-.hero.hero-with-video .status-line {
-  margin-top: 0;
+.hero-home h1 {
+  margin: 0;
+  font-size: var(--size-hero);
+}
+
+.hero-home .hero-actions {
+  margin-top: var(--space-3);
+}
+
+.hero-home .hero-status .status-line {
+  margin-top: var(--space-3);
 }
 
 @media (min-width: 64rem) {
-  .hero-with-video {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas:
-      'text video'
-      'status status';
-    align-items: center;
+  .hero-home {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
     column-gap: var(--space-5);
+    align-items: end;
+  }
+}
+
+/* The live studio on the plate: a paper screen in the dark band, its ground and roles paper's, so the
+   room, its era label and the role cards draw exactly as they do on paper. */
+.home > .band:first-child > .live-studio {
+  margin-top: var(--space-4);
+}
+
+/* Selected through the hero, not the band's position, so the plate's own rules keep their one amber. */
+.hero-home ~ .live-studio .studio-stage {
+  border-color: var(--paper);
+  color: var(--ink);
+  --text-muted: var(--muted);
+  --hairline: var(--line);
+  --focus-colour: var(--signal);
+  --primary-bg: var(--signal);
+  --primary-fg: var(--paper);
+  --primary-hover: var(--signal-deep);
+  --primary-press: var(--signal-press);
+  --outline-bg: var(--paper);
+  --outline-fg: var(--ink);
+  --outline-hover: var(--paper-hover);
+  --outline-press: var(--line);
+  --coin-hover: var(--coin-down);
+  --suit-tile-game: var(--suit-game);
+  --suit-tile-studio: var(--suit-studio);
+  --live-mark: var(--live);
+}
+
+/* The live studio's heading on the plate is a label over the screen, not a second headline: the lead
+   size, with its intro beside it from 64rem. */
+.home .live-studio > h2 {
+  margin-bottom: 0.25rem;
+  font-size: var(--size-lead);
+  letter-spacing: 0;
+}
+
+.home .live-studio > p:not(.twitch) {
+  color: var(--text-muted);
+  font-size: var(--size-small);
+}
+
+/* The plate opens closer under the top bar on home, so the room is in view on a phone. */
+.home > .band:first-child {
+  padding-top: var(--space-4);
+}
+
+@media (min-width: 64rem) {
+  .home > .band:first-child {
+    padding-top: var(--space-5);
+  }
+}
+
+/* The first game and the explainer, side by side from 64rem (the video alone takes the row). */
+.showcase {
+  display: grid;
+  gap: var(--band-pad) var(--space-5);
+  align-items: center;
+}
+
+@media (min-width: 64rem) {
+  .showcase:has(> .game-tile) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
-  .hero-with-video > .hero-text {
-    grid-area: text;
-  }
-
-  .hero-with-video > .explainer {
-    grid-area: video;
-  }
-
-  .hero-with-video > .hero-status {
-    grid-area: status;
+  .showcase > .game-tile {
+    grid-template-columns: minmax(0, 13rem) minmax(0, 1fr);
+    column-gap: var(--space-4);
   }
 }
 
@@ -2262,8 +2507,44 @@ input[type='radio'] {
 }
 
 .money-split {
-  max-width: var(--measure);
+  max-width: var(--measure-text);
   margin-top: var(--space-2);
+}
+
+/* Where the money goes: the pool and the split, and beside them from 64rem the latest actions. */
+.money-grid {
+  display: grid;
+  gap: var(--space-4) var(--space-5);
+  align-items: start;
+}
+
+.money-actions > .rows-heading:first-child {
+  margin-top: 0;
+}
+
+@media (min-width: 64rem) {
+  .money-grid {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+}
+
+/* The other ways to fund, under the open cards: the next card in line and the Machine card, two
+   equal halves from 48rem, so the row is filled however many cards are open. */
+.fund-ways {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.fund-ways > .machine-card {
+  max-width: none;
+  margin-top: 0;
+}
+
+@media (min-width: 48rem) {
+  .fund-ways:has(> :nth-child(2)) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
 }
 
 /* Two blocks side by side from 64rem (home's Shipped and Planned next). One alone takes the row, so
@@ -3107,6 +3388,14 @@ ol.timeline {
   list-style: none;
 }
 
+/* Below 64rem the pipe sits under the room, not beside it: its three newest rows, so the cards to
+   fund stay near the top of a phone's page. Older still reads the rest. */
+@media (max-width: 63.99rem) {
+  .home .pipe-rows > li:nth-child(n + 4) {
+    display: none;
+  }
+}
+
 .pipe-row {
   padding-block: 0.75em;
   border-top: 1px solid var(--hairline);
@@ -3281,14 +3570,55 @@ ol.timeline {
   max-width: 28rem;
 }
 
-.machine-amounts .amount {
+/* The presets are choices, not actions: outlined like the filter chips, so the coin Fund button is
+   the one filled control. Pressed takes the 3px edge inside the same box, so no chip changes size. */
+.machine-amounts .amount,
+.machine-amounts .amount:hover:not(:disabled) {
   min-width: 0;
-  padding-inline: 0.25em;
+  min-height: var(--target);
+  padding: 0 0.25em;
   justify-content: center;
+  border: 1px solid var(--field);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.machine-amounts .amount:hover:not(:disabled) {
+  background: var(--paper-hover);
+}
+
+.machine-amounts .amount[aria-pressed='true'],
+.machine-amounts .amount[aria-pressed='true']:hover:not(:disabled) {
+  padding: 0 calc(0.25em - 2px);
+  border: 3px solid currentColor;
+}
+
+/* On /contribute the notes under the Machine card keep their distance from its edge. */
+.contribute > .machine-card {
+  margin-bottom: var(--space-3);
 }
 
 .machine-action {
   margin: var(--space-2) 0 var(--space-1);
+}
+
+/* Given room (/contribute, the full width), the card sets what it is on the left and how to fund it
+   on the right, so a wide card is never a short block with an empty half. */
+.machine-card {
+  container-type: inline-size;
+}
+
+@container (min-width: 44rem) {
+  .machine-card > .machine-about,
+  .machine-card > .machine-fund {
+    width: calc(50% - var(--space-3));
+  }
+
+  .machine-card {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
 }
 
 /* Goals: one long track of lifetime funding, the milestones as ticks on it and rows under it. */
@@ -3903,16 +4233,27 @@ ol.timeline {
 }
 
 /* The FAQ: the topics as links, then each question and its answer. */
+/* Six topics: two to a row on a phone, three from 48rem, so every row is full. Links stay underlined. */
 .faq-index ul {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(13rem, 100%), 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0 var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 48rem) {
+  .faq-index ul {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .faq-index a {
   display: inline-flex;
   min-height: var(--target);
   align-items: center;
+  text-decoration: underline;
 }
 
 .faq-item {

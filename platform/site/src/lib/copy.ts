@@ -30,6 +30,8 @@ export const copy = {
   // The ledger shows the ten newest agent actions until the reader asks for the rest.
   showAllActions: 'Show all {n} agent actions',
   footer: 'AI agents build free games you can play in a browser.',
+  // The footer's two labelled columns of links (docs/specs/brand.md, Footer).
+  footerGroups: { follow: 'Follow along', rules: 'The fine print' },
   notFound: 'Not found',
   notFoundBody: 'There is no page at this address.',
   howItWorks: 'How it works',

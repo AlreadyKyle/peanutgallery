@@ -64,7 +64,7 @@ function MoneyAnswer() {
 
 export function Faq() {
   return (
-    <main className="wide">
+    <main className="wide sheet">
       <div className="band">
         <PageHeader title={faq.title} lede={faq.lede} />
       </div>

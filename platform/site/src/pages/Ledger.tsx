@@ -20,7 +20,7 @@ export function Ledger() {
   const stoppedMissing = snapshot !== null && snapshot.missing.includes('stopped');
   const showStopped = snapshot !== null && (stoppedMissing || (snapshot.stopped ?? []).length > 0);
   return (
-    <main>
+    <main className="sheet">
       <div className="band">
         <PageHeader title={legal.ledger} lede={legal.ledgerLede}>
           <StaleNotice studio={studio} />
