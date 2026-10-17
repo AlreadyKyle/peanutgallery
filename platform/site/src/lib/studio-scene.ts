@@ -52,6 +52,14 @@ export function eraKey(era: Pick<StudioEra, 'name' | 'index'> | null | undefined
   return ERA_KEYS[Math.max(0, Math.min(ERA_KEYS.length - 1, era.index))]!;
 }
 
+// Around the coffee table: two pairs that face each other across its ends, one between it and the
+// sofa's seat and one behind it, and a spot past its far end; never on it.
+const loungePairs = (table: Box, sofa: Box): [Spot, Spot][] => [
+  [{ x: table.x - 0.3, y: sofa.y - 0.35 }, { x: table.x + 1.2, y: sofa.y - 0.35 }],
+  [{ x: table.x - 0.3, y: table.y - 0.45 }, { x: table.x + 1.2, y: table.y - 0.45 }],
+];
+const loungeSolo = (table: Box): Spot[] => [{ x: table.x + 1.9, y: table.y + 0.3 }];
+
 export function roomPlan(era: EraKey, decor?: readonly string[]): RoomPlan {
   const size = SIZES[era];
   const { w, d } = size;
@@ -66,12 +74,13 @@ export function roomPlan(era: EraKey, decor?: readonly string[]): RoomPlan {
   const whiteboard: Box = { x: 0, y: 1.4, w: 0.15, d: 2.4, h: 1.9, z: 0.5 };
   const bench: Box = { x: w - 4.4, y: 0.15, w: 2.6, d: 0.9, h: 0.8 };
   const dock: Box = { x: w - 2.6, y: d - 2.4, w: 2.6, d: 2.4, h: 0.25 };
-  // The gate stands clear of the dock: in the garage its second post would stand in the dock's edge.
-  const gate: Box = { x: w - 1.4, y: Math.min(Math.round(d * 0.42 * 2) / 2, dock.y - 2.2), w: 0.3, d: 1.8, h: 2 };
+  // The gate stands clear of the dock (in the garage its second post would stand in the dock's edge),
+  // and near the right-hand wall, low enough that its lintel clears the desks and the bench behind it.
+  const gate: Box = { x: w - 1.1, y: Math.min(Math.round(d * 0.42 * 2) / 2, dock.y - 2.2), w: 0.3, d: 1.8, h: 1.7 };
   const sofa: Box = { x: 0.35, y: d - 1.5, w: 2.6, d: 0.95, h: 0.45 };
   const table: Box = { x: sofa.x + 0.9, y: sofa.y - 1.4, w: 0.9, d: 0.6, h: 0.35 };
   const hopper: Box = { x: 1.3, y: 0.15, w: 0.9, d: 0.8, h: 1 };
-  // A window never sits behind the legendary wall's frames, which hang left of the bench.
+  // A window never sits behind the legendary wall's frames, which hang left of the bench (RoomDrawing).
   const legendary = (decor ?? size.decor).includes('legendary_wall');
   const spread = (x: number, y: number, n: number, dx: number, dy = 0): Spot[] => Array.from({ length: n }, (_, i) => ({ x: x + i * dx, y: y + i * dy }));
   return {
@@ -88,7 +97,7 @@ export function roomPlan(era: EraKey, decor?: readonly string[]): RoomPlan {
     table,
     hopper,
     pipeX: 1.75,
-    windows: size.windows.filter((x) => x < w - 1 && !(legendary && x + 1.5 > bench.x - 2.5 && x < bench.x - 0.4)),
+    windows: size.windows.filter((x) => x < w - 1 && !(legendary && x + 1.5 > bench.x - 3.2 && x < bench.x - 0.2)),
     decor: decor ?? size.decor,
     spots: {
       whiteboard: spread(1.1, 2.0, 3, 0.5, 0.7),
@@ -97,18 +106,10 @@ export function roomPlan(era: EraKey, decor?: readonly string[]): RoomPlan {
       // The reviewer stands in the gate, between its posts; a second one just in front of it, never behind a post.
       gate: [
         { x: gate.x + 0.15, y: gate.y + gate.d / 2 },
-        { x: gate.x + 0.85, y: gate.y + gate.d / 2 + 0.2 },
+        { x: gate.x + 0.75, y: gate.y + gate.d / 2 + 0.3 },
       ],
       dock: spread(dock.x + 0.8, dock.y + 1.1, 2, 0.9),
-      // Around the coffee table: between it and the sofa's seat, behind it, and at its end; never on it.
-      lounge: [
-        { x: table.x - 0.15, y: sofa.y - 0.35 },
-        { x: table.x + 0.75, y: sofa.y - 0.35 },
-        { x: table.x - 0.15, y: table.y - 0.45 },
-        { x: table.x + 0.75, y: table.y - 0.45 },
-        { x: table.x + 1.55, y: sofa.y - 0.35 },
-        { x: table.x + 1.55, y: table.y - 0.2 },
-      ],
+      lounge: loungePairs(table, sofa).flat().concat(loungeSolo(table)),
     },
   };
 }
@@ -126,6 +127,8 @@ export type AgentPlace = {
   asleep: boolean;
   /** Chatting partner, for the speech marks between two idle agents. */
   partner: string | null;
+  /** Where an agent with no card is in the room (idleHaunts); null at a station. */
+  haunt: HauntKey | null;
 };
 
 const SHIP_SHOWN_MS = 6 * 60 * 60 * 1000;
@@ -154,7 +157,7 @@ export function placeAgents(snapshot: Snapshot, plan: RoomPlan, now: number = Da
   for (const role of roomRoles(snapshot)) {
     const status = teamStatus(role, snapshot);
     if (status.kind === 'paused') {
-      out.push({ role, station: 'lounge', spot: take('lounge'), activity: 'paused', card: null, doing: copy.studioRoom.doing.paused, asleep: true, partner: null });
+      out.push({ role, station: 'lounge', spot: take('lounge'), activity: 'paused', card: null, doing: copy.studioRoom.doing.paused, asleep: true, partner: null, haunt: 'lounge' });
       continue;
     }
     const own = working.find((card) => card.executor_role_id === role.id);
@@ -169,45 +172,79 @@ export function placeAgents(snapshot: Snapshot, plan: RoomPlan, now: number = Da
         doing: say(building ? copy.studioRoom.doing.building : copy.studioRoom.doing.checks, own),
         asleep: false,
         partner: null,
+        haunt: null,
       });
       continue;
     }
     if (role.title === 'QA' && gated.length > 0) {
       const card = gated[0]!;
-      out.push({ role, station: 'bench', spot: take('bench'), activity: 'checks', card, doing: say(copy.studioRoom.doing.checks, card), asleep: false, partner: null });
+      out.push({ role, station: 'bench', spot: take('bench'), activity: 'checks', card, doing: say(copy.studioRoom.doing.checks, card), asleep: false, partner: null, haunt: null });
       continue;
     }
     if (/director/i.test(role.title) && working.length > 0) {
       const card = gated[0] ?? working[0]!;
-      out.push({ role, station: 'gate', spot: take('gate'), activity: 'review', card, doing: say(copy.studioRoom.doing.review, card), asleep: false, partner: null });
+      out.push({ role, station: 'gate', spot: take('gate'), activity: 'review', card, doing: say(copy.studioRoom.doing.review, card), asleep: false, partner: null, haunt: null });
       continue;
     }
     if (/designer/i.test(role.title) && snapshot.supply?.drafting === true) {
-      out.push({ role, station: 'whiteboard', spot: take('whiteboard'), activity: 'drafting', card: null, doing: copy.studioRoom.doing.drafting, asleep: false, partner: null });
+      out.push({ role, station: 'whiteboard', spot: take('whiteboard'), activity: 'drafting', card: null, doing: copy.studioRoom.doing.drafting, asleep: false, partner: null, haunt: null });
       continue;
     }
     const shipped = snapshot.cards.find(
       (card) => card.stage === 'live' && card.executor_role_id === role.id && card.live_at !== null && now - Date.parse(card.live_at) < SHIP_SHOWN_MS,
     );
     if (shipped !== undefined) {
-      out.push({ role, station: 'dock', spot: take('dock'), activity: 'shipping', card: shipped, doing: say(copy.studioRoom.doing.shipping, shipped), asleep: false, partner: null });
+      out.push({ role, station: 'dock', spot: take('dock'), activity: 'shipping', card: shipped, doing: say(copy.studioRoom.doing.shipping, shipped), asleep: false, partner: null, haunt: null });
       continue;
     }
     idle.push(role);
   }
-  // Idle agents chat in pairs; one left over reads.
+  // Idle agents chat in pairs, one left over reads, and they start spread over the room: each pair at
+  // its own haunt (the lounge, the whiteboard, the dock, the hopper, then the lounge's second pair), a
+  // lone one in the lounge or at a quiet spot, nobody standing over anybody.
+  const haunts = idleHaunts(plan);
+  const taken: Spot[] = out.map((place) => place.spot);
+  const clear = (spot: Spot) => taken.every((other) => !crowded(other, spot));
+  const deepest = Math.max(0, ...haunts.map((haunt) => haunt.pairs.length));
+  const seats: { haunt: HauntKey; pair: [Spot, Spot] }[] = [];
+  for (let i = 0; i < deepest; i += 1) for (const haunt of haunts) if (haunt.pairs[i] !== undefined) seats.push({ haunt: haunt.key, pair: haunt.pairs[i]! });
+  const lone = haunts.flatMap((haunt) => haunt.spots.map((spot) => ({ haunt: haunt.key, spot })));
+  const kept = new Map<string, { haunt: HauntKey; spot: Spot }>();
+  const alone = () => {
+    const free = lone.find((one) => clear(one.spot));
+    if (free !== undefined) taken.push(free.spot);
+    return free ?? null;
+  };
   idle.forEach((role, i) => {
     const pair = i % 2 === 0 ? idle[i + 1] : idle[i - 1];
     const chatting = pair !== undefined;
+    let at: { haunt: HauntKey; spot: Spot } | null;
+    if (chatting && i % 2 === 0) {
+      const seat = seats.find((one) => clear(one.pair[0]) && clear(one.pair[1]));
+      if (seat !== undefined) {
+        taken.push(seat.pair[0], seat.pair[1]);
+        at = { haunt: seat.haunt, spot: seat.pair[0] };
+        kept.set(pair!.id, { haunt: seat.haunt, spot: seat.pair[1] });
+      } else {
+        // No pair of spots left: each stands alone until their stroll brings them together.
+        at = alone();
+      }
+    } else {
+      // The second of a pair stands at the spot its partner kept for it.
+      at = (chatting ? kept.get(role.id) : undefined) ?? alone();
+    }
+    const spot = at?.spot ?? null;
+    const haunt = at?.haunt ?? 'lounge';
     out.push({
       role,
       station: 'lounge',
-      spot: take('lounge'),
+      spot: spot ?? take('lounge'),
       activity: chatting ? 'chatting' : i === 0 ? 'resting' : 'reading',
       card: null,
       doing: chatting ? copy.studioRoom.doing.chatting.replace('{name}', pair!.name) : i === 0 ? copy.studioRoom.doing.resting : copy.studioRoom.doing.reading,
       asleep: false,
       partner: chatting ? pair!.id : null,
+      haunt: spot === null ? 'lounge' : haunt,
     });
   });
   return out;
@@ -220,6 +257,11 @@ export function iso(x: number, y: number, z = 0, t = 32): { sx: number; sy: numb
 
 // Walking and idling (DESIGN.md, The live studio): agents walk around the furniture, not through it,
 // and an agent with no card wanders between the room's idle spots instead of standing still.
+
+/** The floor lamp's footprint: against the left-hand wall, a step back from the sofa's end. */
+export function lampBox(plan: RoomPlan): Box {
+  return { x: 0.35, y: plan.sofa.y - 1.45, w: 0.2, d: 0.2, h: 2 };
+}
 
 /** What stands on the floor, as footprints: what an agent walks around and what it can stand behind. */
 export function floorBoxes(plan: RoomPlan): Box[] {
@@ -238,7 +280,7 @@ export function floorBoxes(plan: RoomPlan): Box[] {
     out.push({ x: plan.bench.x - 1.2, y: 0.2, w: 0.5, d: 0.5, h: 1 });
     if (plan.w > 11) out.push({ x: plan.w - 3.6, y: plan.d - 0.8, w: 0.5, d: 0.5, h: 1 });
   }
-  if (plan.decor.includes('lamp')) out.push({ x: 0.4, y: plan.d - 2.5, w: 0.2, d: 0.2, h: 2 });
+  if (plan.decor.includes('lamp')) out.push(lampBox(plan));
   return out;
 }
 
@@ -407,24 +449,38 @@ export function pathLength(path: readonly Spot[]): number {
 
 export type HauntKey = 'lounge' | 'whiteboard' | 'hopper' | 'bench' | 'plant' | 'window' | 'dock';
 
-/** A place an idle agent goes, with its spots: two or more spots means a pair can go there together. */
-export type Haunt = { key: HauntKey; spots: Spot[] };
+/**
+ * A place an idle agent goes: the spots one agent can take there, and the pairs of spots a chatting
+ * pair stands at, a body apart and side by side as the room is seen, never one on top of the other.
+ */
+export type Haunt = { key: HauntKey; spots: Spot[]; pairs: [Spot, Spot][] };
 
-/** Where an agent with no card wanders: the lounge, the whiteboard, the hopper, the bench, the windows. */
+/** True when two agents at these spots would overlap as the room is drawn. */
+export function crowded(a: Spot, b: Spot): boolean {
+  return Math.abs(a.x - a.y - (b.x - b.y)) < 1.2 && Math.abs((a.x + a.y - b.x - b.y) / 2) < 0.9;
+}
+
+/** Where an agent with no card wanders: the lounge, the whiteboard, the hopper, the dock, the bench, a window, the plant. */
 export function idleHaunts(plan: RoomPlan): Haunt[] {
-  const { hopper, bench, dock } = plan;
-  const haunts: Haunt[] = [
-    { key: 'lounge', spots: plan.spots.lounge },
-    { key: 'whiteboard', spots: [{ x: 1.15, y: plan.whiteboard.y + 0.6 }, { x: 1.15, y: plan.whiteboard.y + 1.6 }] },
-    { key: 'hopper', spots: [{ x: hopper.x + 0.45, y: hopper.y + hopper.d + 0.55 }, { x: hopper.x + 1.3, y: hopper.y + hopper.d + 0.55 }] },
-    { key: 'bench', spots: [{ x: bench.x + 1.9, y: bench.y + bench.d + 0.7 }] },
-    { key: 'dock', spots: [{ x: dock.x + 0.55, y: dock.y + 1.35 }, { x: dock.x + 0.55, y: dock.y + 2.0 }] },
+  const { hopper, bench, dock, whiteboard } = plan;
+  const raw: { key: HauntKey; pairs: [Spot, Spot][]; solo: Spot[] }[] = [
+    { key: 'lounge', pairs: loungePairs(plan.table, plan.sofa), solo: loungeSolo(plan.table) },
+    { key: 'whiteboard', pairs: [[{ x: 1.15, y: whiteboard.y + 0.5 }, { x: 1.15, y: whiteboard.y + 1.9 }]], solo: [] },
+    { key: 'dock', pairs: [[{ x: dock.x + 0.35, y: dock.y + 1.65 }, { x: dock.x + 1.0, y: dock.y + 1.0 }]], solo: [] },
+    { key: 'hopper', pairs: [[{ x: hopper.x + 0.7, y: hopper.y + hopper.d + 0.55 }, { x: hopper.x + 2.1, y: hopper.y + hopper.d + 0.55 }]], solo: [] },
+    { key: 'bench', pairs: [], solo: [{ x: bench.x + 1.9, y: bench.y + bench.d + 0.7 }] },
   ];
-  if (plan.decor.includes('plant')) haunts.push({ key: 'plant', spots: [{ x: bench.x - 0.95, y: 1.15 }] });
+  if (plan.decor.includes('plant')) raw.push({ key: 'plant', pairs: [], solo: [{ x: bench.x - 0.95, y: 1.15 }] });
   // A window over open floor, not over the bench.
   const window = plan.windows.find((x) => x + 1.5 < bench.x - 0.2 || x > bench.x + bench.w + 0.2);
-  if (window !== undefined) haunts.push({ key: 'window', spots: [{ x: window + 0.75, y: 0.75 }] });
-  return haunts.map((haunt) => ({ ...haunt, spots: haunt.spots.filter((spot) => standable(plan, spot)) })).filter((haunt) => haunt.spots.length > 0);
+  if (window !== undefined) raw.push({ key: 'window', pairs: [], solo: [{ x: window + 0.75, y: 0.75 }] });
+  const ok = (spot: Spot) => standable(plan, spot);
+  return raw
+    .map(({ key, pairs, solo }) => {
+      const kept = pairs.filter(([a, b]) => ok(a) && ok(b));
+      return { key, pairs: kept, spots: [...kept.flat(), ...solo.filter(ok)] };
+    })
+    .filter((haunt) => haunt.spots.length > 0);
 }
 
 /** A small, repeatable random number from a seed, so each agent's wandering has its own rhythm. */

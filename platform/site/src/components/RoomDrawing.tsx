@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { iso, paintOrder, type Box, type RoomPlan } from '../lib/studio-scene';
+import { iso, lampBox, paintOrder, type Box, type RoomPlan } from '../lib/studio-scene';
 
 // The studio's room as a line drawing (docs/specs/final-state.md, The live studio and Studio
 // evolution): an isometric room in the site's thick-line style, 2px ink strokes on paper fills, the
@@ -165,7 +165,7 @@ function Bench({ plan }: { plan: RoomPlan }) {
       {line([[b.x + 0.25, b.y + 0.2, b.h + 0.35], [b.x + 0.45, b.y + 0.2, b.h + 0.5], [b.x + 0.65, b.y + 0.2, b.h + 0.2], [b.x + 0.85, b.y + 0.2, b.h + 0.45], [b.x + 1.05, b.y + 0.2, b.h + 0.35]], 'room-thin')}
       {box({ x: b.x + 1.4, y: b.y + 0.3, w: 0.35, d: 0.35, z: b.h, h: 0.45 }, 'flask')}
       {box({ x: b.x + 1.95, y: b.y + 0.25, w: 0.45, d: 0.45, z: b.h, h: 0.2 }, 'probe')}
-      {[0.6, 1.2, 1.8].map((dx) => {
+      {[0.45, 0.95, 1.45].map((dx) => {
         const { sx, sy } = iso(b.x + dx, b.y + b.d, b.h * 0.55, TILE);
         return <ellipse key={dx} className="room-fill room-strong" cx={sx} cy={sy} rx={5} ry={5} />;
       })}
@@ -198,9 +198,6 @@ function Dock({ plan }: { plan: RoomPlan }) {
   return (
     <g data-station="dock">
       {box(k, 'dock')}
-      {[0.2, 0.55, 0.9].map((f) => (
-        <g key={f}>{line([[k.x + k.w, k.y + k.d * f, 0.02], [k.x + k.w, k.y + k.d * f + 0.25, k.h - 0.02]], 'room-thin')}</g>
-      ))}
     </g>
   );
 }
@@ -219,7 +216,13 @@ function Crates({ plan }: { plan: RoomPlan }) {
 
 function Rug({ plan }: { plan: RoomPlan }) {
   const s = plan.sofa;
-  return <polygon className="room-hatch" points={pts([[0.6, s.y - 2.9, 0], [3.6, s.y - 2.9, 0], [3.6, s.y - 0.2, 0], [0.6, s.y - 0.2, 0]])} />;
+  // A plain rug with a woven border: dashes on this floor mean a zone, like the gate's.
+  return (
+    <g data-decor="rug">
+      <polygon className="room-rug" points={pts([[0.9, s.y - 2.9, 0], [3.6, s.y - 2.9, 0], [3.6, s.y - 0.2, 0], [0.9, s.y - 0.2, 0]])} />
+      <polygon className="room-rug-border" points={pts([[1.1, s.y - 2.7, 0], [3.4, s.y - 2.7, 0], [3.4, s.y - 0.4, 0], [1.1, s.y - 0.4, 0]])} />
+    </g>
+  );
 }
 
 function Sofa({ plan }: { plan: RoomPlan }) {
@@ -273,15 +276,17 @@ function Shelf({ plan, items, trophies }: { plan: RoomPlan; items: number; troph
 }
 
 function LegendaryWall({ plan, count }: { plan: RoomPlan; count: number }) {
-  const x0 = plan.bench.x - 2.4;
+  // Framed box art, a frame for each legendary card shipped (up to three), left of the bench.
+  const x0 = plan.bench.x - 3.1;
   return (
     <g data-decor="legendary_wall">
       {Array.from({ length: Math.max(1, Math.min(count, 3)) }, (_, i) => {
-        const x = x0 + i * 0.7;
+        const x = x0 + i * 1.0;
         return (
           <g key={i}>
-            <polygon className="room-fill room-strong" points={pts([[x, 0.03, 1.45], [x + 0.5, 0.03, 1.45], [x + 0.5, 0.03, 2.15], [x, 0.03, 2.15]])} />
-            <polygon className="room-hatch" points={pts([[x + 0.08, 0.03, 1.55], [x + 0.42, 0.03, 1.55], [x + 0.42, 0.03, 2.05], [x + 0.08, 0.03, 2.05]])} />
+            <polygon className="room-fill room-strong" points={pts([[x, 0.03, 1.5], [x + 0.8, 0.03, 1.5], [x + 0.8, 0.03, 2.5], [x, 0.03, 2.5]])} />
+            <polygon className="room-shade" points={pts([[x + 0.12, 0.03, 1.62], [x + 0.68, 0.03, 1.62], [x + 0.68, 0.03, 2.38], [x + 0.12, 0.03, 2.38]])} />
+            {line([[x + 0.2, 0.03, 1.8], [x + 0.4, 0.03, 2.1], [x + 0.6, 0.03, 1.9]], 'room-thin')}
           </g>
         );
       })}
@@ -333,7 +338,7 @@ export function roomLayers(plan: RoomPlan, shipped = 0, legendary = 0): { back: 
   ];
   if (decor.includes('plant')) pieces.push({ key: 'plant-a', foot: { x: plan.bench.x - 1.2, y: 0.2, w: 0.5, d: 0.5, h: 1 }, node: <Plant x={plan.bench.x - 1.2} y={0.2} /> });
   if (decor.includes('plant') && plan.w > 11) pieces.push({ key: 'plant-b', foot: { x: plan.w - 3.6, y: plan.d - 0.8, w: 0.5, d: 0.5, h: 1 }, node: <Plant x={plan.w - 3.6} y={plan.d - 0.8} /> });
-  if (decor.includes('lamp')) pieces.push({ key: 'lamp', foot: { x: 0.4, y: plan.d - 2.5, w: 0.2, d: 0.2, h: 2 }, node: <Lamp x={0.5} y={plan.d - 2.4} /> });
+  if (decor.includes('lamp')) pieces.push({ key: 'lamp', foot: lampBox(plan), node: <Lamp x={lampBox(plan).x + 0.1} y={lampBox(plan).y + 0.1} /> });
   return { back, pieces };
 }
 

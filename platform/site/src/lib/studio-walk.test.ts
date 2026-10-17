@@ -1,8 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import { ERA_KEYS, findPath, floorBoxes, idleHaunts, paintOrder, pathLength, roomPlan, standable, type Box, type Spot } from './studio-scene';
+import type { Role, Snapshot } from './source';
+import { crowded, ERA_KEYS, findPath, floorBoxes, idleHaunts, paintOrder, pathLength, placeAgents, roomPlan, standable, type Box, type Spot } from './studio-scene';
 
 // The live studio's walking (DESIGN.md, The live studio): agents go round the furniture, the idle
 // spots are on open floor, and the painter's order puts what is in front over what is behind.
+
+function idleRoom(count: number): Snapshot {
+  const roles: Role[] = Array.from({ length: count }, (_, i) => ({
+    id: `agent-${i}`,
+    name: `Agent ${i}`,
+    title: `Helper ${i}`,
+    description: null,
+    species_note: 'A small blue creature.',
+    model: 'claude-opus-5-5',
+    write_access: false,
+    state: 'active',
+    hired_at: '2026-09-14T00:00:00Z',
+    status: 'running',
+    trigger: null,
+    paused: false,
+    paused_reason: null,
+  }));
+  return {
+    pool: null,
+    cards: [],
+    funding: {},
+    launchedAt: null,
+    paused: false,
+    totals: { usd_total: 0, input_tokens: 0, cached_tokens: 0, output_tokens: 0, row_count: 0 },
+    events: [],
+    deploys: [],
+    roles,
+    cardTitles: {},
+    missing: [],
+  };
+}
 
 const inside = (b: Box, p: Spot) => p.x > b.x + 0.01 && p.x < b.x + b.w - 0.01 && p.y > b.y + 0.01 && p.y < b.y + b.d - 0.01;
 
@@ -29,6 +61,20 @@ describe('the studio floor', () => {
       for (const spot of [...stations, ...haunts]) for (const b of boxes) expect(inside(b, spot), `${JSON.stringify(spot)} in ${JSON.stringify(b)}`).toBe(false);
       for (const spot of haunts) expect(standable(plan, spot)).toBe(true);
       expect(idleHaunts(plan).length).toBeGreaterThanOrEqual(4);
+    });
+
+    it(`stands a chatting pair a body apart, and spreads a room of idle agents out, in the ${era}`, () => {
+      for (const haunt of idleHaunts(plan)) for (const [a, b] of haunt.pairs) expect(crowded(a, b), `${haunt.key} ${JSON.stringify([a, b])}`).toBe(false);
+      for (const count of [2, 5, 8]) {
+        const places = placeAgents(idleRoom(count), plan);
+        expect(places.filter((place) => place.activity === 'chatting')).toHaveLength(count - (count % 2));
+        for (let i = 0; i < places.length; i += 1) {
+          for (let j = i + 1; j < places.length; j += 1) expect(crowded(places[i]!.spot, places[j]!.spot), `${places[i]!.role.id} and ${places[j]!.role.id}`).toBe(false);
+        }
+        // Pairs start at different haunts before any shares one.
+        const haunts = places.filter((place) => place.activity === 'chatting').map((place) => place.haunt);
+        expect(new Set(haunts).size).toBe(Math.min(Math.floor(count / 2), 4));
+      }
     });
 
     it(`keeps the gate clear of the dock in the ${era}`, () => {

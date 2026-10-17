@@ -5,7 +5,7 @@ import type { StudioDoc } from '../lib/community-types';
 import { motionAllowed } from '../lib/motion';
 import { rarityOf } from '../lib/suits';
 import type { Snapshot } from '../lib/source';
-import { eraKey, findPath, idleHaunts, iso, paintOrder, pathLength, placeAgents, roomPlan, seeded, type AgentPlace, type Box, type HauntKey, type RoomPlan, type Spot } from '../lib/studio-scene';
+import { crowded, eraKey, findPath, idleHaunts, iso, paintOrder, pathLength, placeAgents, roomPlan, seeded, type AgentPlace, type Box, type HauntKey, type RoomPlan, type Spot } from '../lib/studio-scene';
 import { Avatar, avatarFeatures, avatarParts } from './Avatar';
 import { roomLayers, TILE, viewBoxOf } from './RoomDrawing';
 
@@ -337,7 +337,7 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
         hopAt: -1e9,
         phase: seeded(id, 0) * Math.PI * 2,
         wander: idle,
-        haunt: 'lounge',
+        haunt: place.haunt ?? 'lounge',
         // The first stroll starts at a different moment for each agent, so they never set off together.
         restUntil: t + 1200 + seeded(id, 1) * 5000,
         leg: 0,
@@ -352,7 +352,7 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
       // Given a card, or back from one: straight to the new place. Already wandering: carry on.
       if (!idle || joined || !motionAllowed()) {
         walkTo(was, plan, place.spot, t, 900);
-        was.haunt = 'lounge';
+        was.haunt = place.haunt ?? 'lounge';
         was.restUntil = t + was.dur + REST_MS[0];
       }
     }
@@ -374,12 +374,13 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
 
   /**
    * The next stroll for an idle agent that has rested long enough: another of the room's idle spots,
-   * one nobody else is at or heading for. The leader of a chatting pair takes a place with room for
-   * two and keeps the second spot for its partner, who follows.
+   * clear of everyone else's, where they are or where they are going. The leader of a chatting pair
+   * takes a pair of spots and keeps the second for its partner, who follows.
    */
   const wander = (t: number) => {
-    const ends = [...anims.current.values()].map((anim) => target(anim));
-    const free = (spot: Spot, self: Anim) => ends.every((end, i) => [...anims.current.values()][i] === self || Math.abs(end.x - spot.x) + Math.abs(end.y - spot.y) > 0.6);
+    const all = [...anims.current.values()];
+    const ends = all.map((anim) => ({ anim, spot: target(anim) }));
+    const free = (spot: Spot, self: Anim, partner?: Anim) => ends.every((end) => end.anim === self || end.anim === partner || !crowded(end.spot, spot));
     for (const place of places) {
       const anim = anims.current.get(place.role.id);
       if (anim === undefined || !anim.wander || anim.frozen !== null) continue;
@@ -397,25 +398,33 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
       }
       if (walking(anim, t) || t < anim.restUntil) continue;
       if (partner !== undefined && (partner.frozen !== null || walking(partner, t))) continue;
-      const need = partner === undefined ? 1 : 2;
-      const options = haunts.filter((haunt) => haunt.key !== anim.haunt && haunt.spots.filter((spot) => free(spot, anim)).length >= need);
-      if (options.length === 0) {
+      // Where each haunt has room: a clear pair of spots for a pair, a clear spot for one alone.
+      const choices = haunts
+        .filter((haunt) => haunt.key !== anim.haunt)
+        .map((haunt) => ({
+          haunt,
+          spots: partner === undefined ? haunt.spots.filter((spot) => free(spot, anim)) : [],
+          pairs: partner === undefined ? [] : haunt.pairs.filter(([a, b]) => free(a, anim, partner) && free(b, anim, partner)),
+        }))
+        .filter((choice) => choice.spots.length > 0 || choice.pairs.length > 0);
+      if (choices.length === 0) {
         anim.restUntil = t + REST_MS[0];
         continue;
       }
       // The lounge counts twice: between cards the agents come back to it most.
-      const weighted = options.flatMap((haunt) => (haunt.key === 'lounge' ? [haunt, haunt] : [haunt]));
-      const haunt = weighted[Math.floor(seeded(place.role.id, 10 + anim.leg) * weighted.length)]!;
-      const spots = haunt.spots.filter((spot) => free(spot, anim));
-      const first = Math.floor(seeded(place.role.id, 100 + anim.leg) * spots.length);
-      const spot = spots[first]!;
+      const weighted = choices.flatMap((choice) => (choice.haunt.key === 'lounge' ? [choice, choice] : [choice]));
+      const choice = weighted[Math.floor(seeded(place.role.id, 10 + anim.leg) * weighted.length)]!;
+      const pick = seeded(place.role.id, 100 + anim.leg);
+      const pair = choice.pairs[Math.floor(pick * choice.pairs.length)];
+      const flip = seeded(place.role.id, 200 + anim.leg) < 0.5;
+      const spot = pair === undefined ? choice.spots[Math.floor(pick * choice.spots.length)]! : flip ? pair[1] : pair[0];
       walkTo(anim, plan, spot, t);
-      ends.push(spot);
-      anim.haunt = haunt.key;
+      ends.push({ anim, spot });
+      anim.haunt = choice.haunt.key;
       anim.leg += 1;
       anim.restUntil = t + anim.dur + REST_MS[0] + seeded(place.role.id, 1000 + anim.leg) * (REST_MS[1] - REST_MS[0]);
-      anim.pairSpot = need === 2 ? (spots[(first + 1) % spots.length] ?? null) : null;
-      if (anim.pairSpot !== null) ends.push(anim.pairSpot);
+      anim.pairSpot = pair === undefined ? null : flip ? pair[0] : pair[1];
+      if (anim.pairSpot !== null && partner !== undefined) ends.push({ anim: partner, spot: anim.pairSpot });
     }
   };
 
@@ -469,7 +478,11 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
           if (hop >= 0 && hop <= 1) lift -= Math.sin(Math.PI * hop) * 9;
         }
         body.setAttribute('transform', `translate(0 ${lift.toFixed(2)})`);
-        if (still) continue;
+        // Drawn still, one of a chatting pair holds the speech mark: never two over one conversation.
+        if (still) {
+          body.querySelector<SVGElement>('.agent-chat')?.setAttribute('opacity', anim.chatFlip === true ? '0' : '1');
+          continue;
+        }
         // Typing: the three dots light one after another. Chatting: the two bubbles take turns, once
         // both are standing together.
         const dots = body.querySelectorAll<SVGElement>('.mark-dot');
