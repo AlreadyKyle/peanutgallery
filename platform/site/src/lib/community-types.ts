@@ -111,7 +111,7 @@ export interface SuggestionSummary {
   readonly summary: string | null;
   readonly state: SuggestionState;
   readonly declineReason: DeclineReason | null;
-  readonly votes: number;
+  readonly upvotes: number;
   readonly clusterId: string | null;
   readonly cardId: string | null;
   readonly author: PublicPerson | null;
