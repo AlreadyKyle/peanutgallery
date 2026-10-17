@@ -56,7 +56,7 @@
             "name": "Iron broom",
             "effect": {
               "type": "strike",
-              "value": 2
+              "value": 1.5
             }
           },
           {
@@ -145,7 +145,7 @@
             "name": "Quick hands",
             "effect": {
               "type": "strike",
-              "value": 2
+              "value": 1.5
             }
           }
         ]
@@ -270,7 +270,7 @@
             "name": "Golden broom",
             "effect": {
               "type": "strike",
-              "value": 2
+              "value": 1.5
             }
           },
           {
@@ -374,11 +374,11 @@
   },
   "orders": {
     "opensAt": "cart",
-    "rewardSeconds": 30,
-    "bonusPerOrder": 0.02,
-    "bonusCap": 25,
+    "rewardSeconds": 15,
+    "bonusPerOrder": 0.01,
+    "bonusCap": 10,
     "budget": 90,
-    "rest": 30,
+    "rest": 45,
     "kinds": [
       {
         "type": "own",
@@ -406,9 +406,9 @@
     "gapMin": 90,
     "gapMax": 180,
     "lasts": 25,
-    "rewardSeconds": 30,
+    "rewardSeconds": 15,
     "whirlSeconds": 8,
-    "whirlStrike": 3
+    "whirlStrike": 2
   },
   "gems": {
     "dustPerGem": 125000,
