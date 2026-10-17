@@ -561,6 +561,15 @@ main > .band:not(:first-child) .section > h2:first-child::before {
     margin: 0;
   }
 
+  /* The section's 2px rule is its first line: a list that opens the text column drops its own top
+     hairline, so the two never stack. */
+  main.sheet > .band:not(:first-child) > .section > h2:first-child + .rows > li:first-child,
+  main.sheet > .band:not(:first-child) > .section > h2:first-child + .spec-rows > div:first-child,
+  main.sheet > .band:not(:first-child) > .section > h2:first-child + .facts > div:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+
   /* The text column is the measure itself (about 80 characters at 1440px), so its paragraphs fill it. */
   main.sheet > .band:not(:first-child) > .section p,
   main.sheet > .band:not(:first-child) > .section .faq-item {
@@ -897,17 +906,17 @@ button.link:hover:not(:disabled) {
   border-style: dashed;
 }
 
-/* Picked: a 6px signal ribbon inside the top edge. Paused: a 6px ink hatch in the same slot (the two
-   never meet). Both are backgrounds, so forced colours drop them; the word and glyph carry the state. */
+/* Picked: a 6px signal tab under the top edge, straight between the corners' curves, so it never
+   bulges with the edge. Paused: a 6px ink hatch in the same slot (the two never meet). Both are backgrounds, so forced colours drop them; the word and glyph carry the state. */
 .card[data-face='picked']::before,
 .card[data-face='paused']::before {
   content: '';
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
+  left: var(--radius-card);
+  right: var(--radius-card);
   height: 6px;
-  border-radius: calc(var(--radius-card) - 2px) calc(var(--radius-card) - 2px) 0 0;
+  border-radius: 0 0 3px 3px;
 }
 
 .card[data-face='picked']::before {
@@ -1045,7 +1054,7 @@ button.link:hover:not(:disabled) {
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 0 var(--space-2);
-  padding: 0.375rem var(--space-1);
+  padding: 0.375rem 0;
   border-bottom: 1px solid var(--hairline);
 }
 
@@ -1407,7 +1416,7 @@ button.link:hover:not(:disabled) {
   display: flex;
   flex-wrap: wrap;
   gap: 0 var(--space-2);
-  padding: var(--space-2) var(--space-1);
+  padding: var(--space-2) 0;
   border-top: 1px solid var(--hairline);
   font-size: var(--size-body);
 }
@@ -2996,7 +3005,7 @@ input[type='radio'] {
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 0 var(--space-2);
-  padding: 0.375rem var(--space-1);
+  padding: 0.375rem 0;
   border-bottom: 1px solid var(--hairline);
 }
 
