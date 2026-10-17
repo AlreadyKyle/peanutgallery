@@ -42,6 +42,7 @@ $$;
 -- 20260925100000_reports_supply.sql: the last ended New York week's report is published hourly.
 -- 20260925300000_agent_upkeep.sql: the Janitor's daily check and hourly patch merge are queued.
 -- 20261010200000_supply_refill.sql, 20261011200000_supply_every_minute.sql: a draft is queued, at most once a minute, while the card supply is short.
+-- 20261017100200_community_admin.sql: the Curator's triage is queued every 15 minutes.
 create extension if not exists pg_cron with schema pg_catalog;
 select cron.schedule('credit-held-contributions', '17 * * * *', 'select public.credit_held_contributions()');
 select cron.schedule('waterfall-sweep', '*/5 * * * *', 'select public.waterfall_sweep()');
@@ -49,3 +50,4 @@ select cron.schedule('weekly-report', '7 * * * *', 'select public.publish_weekly
 select cron.schedule('janitor', '0 8 * * *', $c$select public.enqueue_job_run('janitor', 'schedule')$c$);
 select cron.schedule('upkeep_merge', '15 * * * *', $c$select public.enqueue_job_run('upkeep_merge', 'schedule')$c$);
 select cron.schedule('supply-draft', '* * * * *', $c$select public.enqueue_supply_draft()$c$);
+select cron.schedule('curator-triage', '*/15 * * * *', $c$select public.enqueue_curator_triage()$c$);
