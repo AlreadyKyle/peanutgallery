@@ -46,6 +46,8 @@ export const copy = {
   },
   // Where a planned card's page and an empty reports page send the reader: home's cards to fund.
   roadmapLink: 'See the cards to fund',
+  // An empty or unloaded list's tile (EmptyState.tsx).
+  emptyState: { retry: 'The rest of the page works. Try again in a minute.' },
   // The explainer video's labels for a queued and a shipped card (platform/explainer/src/data.ts).
   queued: 'Queued',
   shipped: 'Shipped',

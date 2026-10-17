@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { EmptyState } from '../components/EmptyState';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Glyph } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
@@ -221,22 +222,25 @@ export function Seeds() {
         {saveCode === null ? null : <SaveFromLink raw={saveCode} />}
         <section className="section" aria-labelledby="seeds-gallery">
           <h2 id="seeds-gallery">{copy.seeds.galleryTitle}</h2>
-          <div role="group" aria-label={copy.seeds.sortLabel} className="filters">
-            {SORTS.map((key) => (
-              <button key={key} type="button" className="filter" aria-pressed={sort === key} onClick={() => setSort(key)}>
-                {sort === key ? <Glyph name="check" /> : null}
-                {copy.seeds.sorts[key]}
-              </button>
-            ))}
-          </div>
+          {/* The sorts show only while there is a list to sort. */}
+          {list.state === 'unavailable' ? null : (
+            <div role="group" aria-label={copy.seeds.sortLabel} className="filters">
+              {SORTS.map((key) => (
+                <button key={key} type="button" className="filter" aria-pressed={sort === key} onClick={() => setSort(key)}>
+                  {sort === key ? <Glyph name="check" /> : null}
+                  {copy.seeds.sorts[key]}
+                </button>
+              ))}
+            </div>
+          )}
           {list.state === 'loading' ? (
             <p className="muted" aria-busy="true">
               {copy.seeds.loading}
             </p>
           ) : list.state === 'unavailable' ? (
-            <p className="muted">{legal.partUnavailable}</p>
+            <EmptyState line={legal.partUnavailable} unavailable />
           ) : list.data.items.length === 0 ? (
-            <p className="muted">{copy.seeds.empty}</p>
+            <EmptyState line={copy.seeds.empty} />
           ) : (
             <ul className="seed-grid">
               {list.data.items.map((seed) => (

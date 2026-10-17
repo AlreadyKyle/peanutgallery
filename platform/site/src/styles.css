@@ -517,16 +517,33 @@ main:has(> .band) {
   counter-reset: section;
 }
 
-main > .band:not(:first-child) .section:has(> h2:first-child) {
+/* Blocks whose heading is not a section's first child join the same count: how it works' video and
+   steps, home's first game and /contribute's two headings, so a page's numbers never skip a block. */
+main > .band:not(:first-child) .section:has(> h2:first-child:not(.sr-only)),
+main > .band:not(:first-child) .how-watch,
+main > .band:not(:first-child) .how-step,
+main > .band:not(:first-child) .game-tile,
+main > .band:not(:first-child) .split-slider,
+main > .band:not(:first-child) .contribute > h2 {
   padding-top: var(--space-2);
   border-top: 2px solid currentColor;
 }
 
-main > .band:not(:first-child) .section > h2:first-child {
+main > .band:not(:first-child) .section > h2:first-child:not(.sr-only),
+main > .band:not(:first-child) .how-watch > h2:first-child,
+main > .band:not(:first-child) .how-text > h2:first-child,
+main > .band:not(:first-child) .game-text > h2:first-child,
+main > .band:not(:first-child) .split-slider > h2:first-child,
+main > .band:not(:first-child) .contribute > h2 {
   counter-increment: section;
 }
 
-main > .band:not(:first-child) .section > h2:first-child::before {
+main > .band:not(:first-child) .section > h2:first-child:not(.sr-only)::before,
+main > .band:not(:first-child) .how-watch > h2:first-child::before,
+main > .band:not(:first-child) .how-text > h2:first-child::before,
+main > .band:not(:first-child) .game-text > h2:first-child::before,
+main > .band:not(:first-child) .split-slider > h2:first-child::before,
+main > .band:not(:first-child) .contribute > h2::before {
   content: counter(section, decimal-leading-zero) / '';
   display: block;
   margin-bottom: var(--space-2);
@@ -667,6 +684,20 @@ a.target {
   main.card-page .hero > h1 {
     margin-bottom: var(--space-3);
   }
+}
+
+/* A card's plate is short: its title at the section size (a card title runs long) and the plate's
+   foot closer, so the face and its Fund this card are in view when the page opens. */
+main.card-page .hero > h1 {
+  font-size: var(--size-h2);
+}
+
+main.card-page > .band:first-child {
+  padding-block: var(--space-5) var(--space-4);
+}
+
+main.card-page > .band:nth-child(2) {
+  padding-top: var(--space-5);
 }
 
 .lede {
@@ -1150,8 +1181,7 @@ button.link:hover:not(:disabled) {
   max-width: none;
 }
 
-.contribute > p,
-.contribute > h2 {
+.contribute > p {
   max-width: var(--measure);
 }
 
@@ -1278,20 +1308,26 @@ button.link:hover:not(:disabled) {
   text-wrap: balance;
 }
 
-/* The panel is one link, so it shows the press it offers: a paper disc with an arrow under its
-   words. The arrow's alternative text is empty, so the link's name stays its title and line. */
+/* The panel is one link, so it shows the press it offers: a paper button under its words, a label
+   and an arrow, never a bare disc a reader might take for a carousel control. It is drawn, not
+   written: its alternative text is empty, so the link's name and text stay its title and line. */
 .choice-primary::after {
-  content: '\2192' / '';
-  display: grid;
-  place-items: center;
-  width: var(--target);
-  height: var(--target);
-  margin-top: var(--space-2);
-  border-radius: 50%;
+  content: 'Choose an amount \2192' / '';
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  min-height: var(--target);
+  margin-top: var(--space-3);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius);
   background: var(--paper);
   color: var(--ink);
-  font-size: var(--size-lead);
-  font-weight: var(--weight-bold);
+  font-size: var(--size-body);
+  font-weight: var(--weight-strong);
+}
+
+.choice-primary:hover::after {
+  background: var(--paper-hover);
 }
 
 .choice-primary .choice-body {
@@ -1619,17 +1655,11 @@ button.link:hover:not(:disabled) {
   max-width: var(--measure);
   margin: 0;
   padding: 0;
-  counter-reset: how-step;
 }
 
 .how-step {
   display: grid;
   gap: var(--space-2);
-  counter-increment: how-step;
-}
-
-.how-text h2::before {
-  content: counter(how-step) '. ';
 }
 
 .how-text p {
@@ -2390,18 +2420,14 @@ input[type='radio'] {
 }
 
 .who-duties li::before {
-  content: counter(duty);
+  content: counter(duty, decimal-leading-zero);
   position: absolute;
   top: 0;
   left: 0;
-  display: grid;
-  place-items: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border: 1px solid currentColor;
-  border-radius: 50%;
+  font-family: var(--font-mono);
   font-size: var(--size-small);
   font-weight: var(--weight-bold);
+  line-height: inherit;
 }
 
 .who-outro {
@@ -2732,6 +2758,8 @@ input[type='radio'] {
   border: 2px solid var(--ink);
   border-radius: 50%;
   background: var(--paper);
+  /* The index's numerals: the mono face, two digits (01, 02, ...), on every numbered thing. */
+  font-family: var(--font-mono);
   font-size: var(--size-small);
   font-weight: var(--weight-bold);
   font-variant-numeric: tabular-nums;
@@ -2809,6 +2837,26 @@ input[type='radio'] {
 
 .card[data-compact] .card-watch {
   margin: var(--space-1) 0 0;
+}
+
+/* What an empty or unloaded list says instead (EmptyState.tsx): the empty lane's dashed tile, the
+   reason at the body size, then what to do next. */
+.empty-state {
+  padding: var(--space-3);
+  border: 2px dashed currentColor;
+  border-radius: var(--radius-card);
+}
+
+.empty-state > p {
+  margin: 0;
+}
+
+.empty-state > p + p {
+  margin-top: var(--space-1);
+}
+
+.empty-state-line {
+  font-weight: var(--weight-strong);
 }
 
 /* What an empty lane says instead: a dashed tile, never a card (it carries no card's data). */
@@ -3155,7 +3203,46 @@ ol.timeline {
 }
 
 /* /thanks's reward (docs/specs/supporter-loop.md): the card the money went to first, at the reading
-   measure, with the supporter's number on its face; its Share button drawn as a primary button. */
+   measure, with the supporter's number on its face; its Share button drawn as a primary button. Its
+   heading is for screen readers only, so the block opens the band without a rule or a number. From
+   64rem the face, its share line and Share take the sheet's left column and what happens next the
+   right, so the left never stands empty beside it. */
+@media (min-width: 64rem) {
+  /* The face sits level with the steps, under What happens next, and its share line with the ship
+     note, so the two columns read across. */
+  main.sheet > .band:not(:first-child) > .thanks-reward > .thanks-face {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  main.sheet > .band:not(:first-child) > .thanks-reward > .thanks-face + p {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  main.sheet > .band:not(:first-child) > .thanks-reward > .share-card {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+  main.sheet > .band:not(:first-child) > .thanks-reward > #next {
+    grid-row: 1;
+    margin-top: 0;
+  }
+
+  main.sheet > .band:not(:first-child) > .thanks-reward > .thanks-next {
+    grid-row: 2;
+  }
+
+  main.sheet > .band:not(:first-child) > .thanks-reward > [data-note='ship-email'] {
+    grid-row: 3;
+  }
+}
+
+.thanks-face + p {
+  margin-top: var(--space-2);
+}
+
 .thanks-face {
   max-width: 24rem;
   gap: var(--space-1);
@@ -3193,7 +3280,14 @@ ol.timeline {
   margin-top: var(--space-1);
 }
 
+/* The step the card is on: a small stamp after its line, not a loose word. */
 .thanks-now {
+  display: inline-block;
+  margin-left: var(--space-1);
+  padding: 0 0.375rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius);
+  font-size: var(--size-small);
   font-weight: var(--weight-bold);
 }
 

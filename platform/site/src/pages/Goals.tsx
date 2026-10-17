@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { EmptyState } from '../components/EmptyState';
 import { Link } from 'react-router-dom';
 import { Glyph, type GlyphName } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
@@ -89,7 +90,7 @@ export function Goals() {
               {copy.goals.loading}
             </p>
           ) : doc.state === 'unavailable' ? (
-            <p className="muted">{legal.partUnavailable}</p>
+            <EmptyState line={legal.partUnavailable} unavailable />
           ) : (
             <>
               <p className="goals-lifetime">

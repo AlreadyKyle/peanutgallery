@@ -38,7 +38,7 @@ function LaneHead({ lane, step, count }: { lane: FlowLane; step: number; count: 
   return (
     <>
       <p className="flow-step" aria-hidden="true">
-        <span className="flow-step-number">{step}</span>
+        <span className="flow-step-number">{String(step).padStart(2, '0')}</span>
       </p>
       <h3 id={`lane-${lane}`} className="flow-title">
         {copy.flow.lanes[lane].title} <span className="flow-count">{countLine(count)}</span>
