@@ -18,7 +18,7 @@ describe("readRoleSpecs against platform/agents", () => {
     expect(new Set(specs.map((s) => s.name)).size).toBe(ROLE_COUNT);
     expect(specs.reduce((sum, s) => sum + s.budget_share, 0)).toBeCloseTo(1, 6);
     expect(specs.filter((s) => s.budget_share === 0).map((s) => s.name).sort()).toEqual(
-      ["Game Designer", "HR", "Head of Finance", "Head of Product", "Janitor", "Platform Director", "Tech Artist"],
+      ["Art Director", "Curator", "Game Designer", "HR", "Head of Finance", "Head of Product", "Janitor", "Platform Director", "Tech Artist"],
     );
   });
 
@@ -27,7 +27,7 @@ describe("readRoleSpecs against platform/agents", () => {
     const byStatus = (status: string) => specs.filter((s) => s.status === status).map((s) => s.name).sort();
     // The Janitor runs, as code only (docs/specs/agent-upkeep.md).
     expect(byStatus("running")).toEqual(["Builder A", "Builder B", "Game Designer", "Game Director", "Janitor", "Platform Builder", "Platform Director", "QA"]);
-    expect(byStatus("starts")).toEqual(["Biz Dev", "Community", "HR", "Head of Finance", "Head of Product", "Tech Artist"]);
+    expect(byStatus("starts")).toEqual(["Art Director", "Biz Dev", "Community", "Curator", "HR", "Head of Finance", "Head of Product", "Tech Artist"]);
     expect(byStatus("planned")).toEqual(["Host", "Studio Head"]);
     for (const spec of specs) expect(spec.trigger === null, spec.name).toBe(spec.status === "running");
     expect(specs.find((s) => s.name === "Head of Finance")?.trigger).toMatch(/first Stripe payout/);
