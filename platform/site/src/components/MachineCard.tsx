@@ -23,23 +23,23 @@ export function MachineCard({ studioPct, headingLevel = 3 }: { studioPct?: numbe
   return (
     <div className="machine-card" data-suit="machine" aria-labelledby={`${id}-title`}>
       <div className="machine-about">
-      <p className="card-index">
-        <SuitTag suit="machine" />
-        <span className="tag">
-          <Glyph name="coin-outline" />
-          {copy.machine.always}
-        </span>
-      </p>
-      <Title id={`${id}-title`}>{copy.machine.title}</Title>
-      <p className="machine-body">{copy.machine.body}</p>
+        <p className="card-index">
+          <SuitTag suit="machine" />
+          <span className="tag">
+            <Glyph name="coin-outline" />
+            {copy.machine.always}
+          </span>
+        </p>
+        <Title id={`${id}-title`}>{copy.machine.title}</Title>
+        <p className="machine-body">{copy.machine.body}</p>
       </div>
       <div className="machine-fund">
-      <div className="machine-amounts" role="group" aria-label={copy.machine.amountsLabel}>
-        {MACHINE_AMOUNTS.map((usd) => (
-          <button key={usd} type="button" className="filter amount" aria-pressed={amount === usd} onClick={() => setAmount(usd)}>
-            {amount === usd ? <Glyph name="check" /> : null}${usd}
-          </button>
-        ))}
+        <div className="machine-amounts" role="group" aria-label={copy.machine.amountsLabel}>
+          {MACHINE_AMOUNTS.map((usd) => (
+            <button key={usd} type="button" className="filter amount" aria-pressed={amount === usd} onClick={() => setAmount(usd)}>
+              {amount === usd ? <Glyph name="check" /> : null}${usd}
+            </button>
+          ))}
       </div>
       <p className="machine-action">
         <a className="button btn-coin" href={fundLink(env.stripePaymentLinkUrl, null, studioPct)} aria-describedby={`${id}-note`}>

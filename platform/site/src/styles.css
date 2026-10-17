@@ -604,14 +604,14 @@ a.target {
 }
 
 /* A page's plate from 64rem: the heading in the left seven twelfths and the lede, with any line under
-   it, in the right five, set to the heading's foot. The plate reads as one row, never a heading
-   beside an empty half. */
+   it, in the right five, both from the plate's top, so a line that arrives with the data never moves
+   the heading. The plate reads as one row, never a heading beside an empty half. */
 @media (min-width: 64rem) {
   .hero:not(.hero-home) {
     display: grid;
     grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
     column-gap: var(--space-5);
-    align-items: end;
+    align-items: start;
   }
 
   .hero:not(.hero-home) > * {
@@ -621,12 +621,26 @@ a.target {
   .hero:not(.hero-home) > h1 {
     grid-column: 1;
     grid-row: 1 / span 6;
-    align-self: end;
     margin-bottom: 0;
+  }
+
+  /* The lede's first line sits on the heading's cap height, not above it. */
+  .hero:not(.hero-home) > h1 + * {
+    padding-top: var(--space-1);
   }
 
   .hero:not(.hero-home) > h1 + * {
     margin-top: 0;
+  }
+
+  /* A card's title runs long and its face sits under it in two columns, so its plate stays one
+     column: the title, then its lines. */
+  main.card-page .hero {
+    display: block;
+  }
+
+  main.card-page .hero > h1 {
+    margin-bottom: var(--space-3);
   }
 }
 
@@ -1120,21 +1134,16 @@ button.link:hover:not(:disabled) {
 
   .contribute > .split-slider {
     grid-column: 1;
-    grid-row: 1 / span 2;
+    grid-row: 1;
     margin-bottom: 0;
   }
 
-  .contribute > .choice-primary {
+  .contribute > .contribute-next {
     grid-column: 2;
     grid-row: 1;
   }
 
-  .contribute > .choice-primary + p {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
-  .contribute > .choice-primary + p + h2 {
+  .contribute > .contribute-next + h2 {
     margin-top: var(--space-5);
   }
 }
@@ -1229,6 +1238,23 @@ button.link:hover:not(:disabled) {
 
 .choice-primary .choice-title {
   font-size: var(--size-h2);
+  text-wrap: balance;
+}
+
+/* The panel is one link, so it shows the press it offers: a paper disc with an arrow under its
+   words. The arrow's alternative text is empty, so the link's name stays its title and line. */
+.choice-primary::after {
+  content: '\2192' / '';
+  display: grid;
+  place-items: center;
+  width: var(--target);
+  height: var(--target);
+  margin-top: var(--space-2);
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--size-lead);
+  font-weight: var(--weight-bold);
 }
 
 .choice-primary .choice-body {
@@ -1859,7 +1885,8 @@ button.link:hover:not(:disabled) {
 }
 
 /* On an ink band an avatar sits on a paper disc and draws unchanged. */
-main > .band:nth-child(2n + 3) .avatar {
+main > .band:nth-child(2n + 3) .avatar,
+main > .band:first-child .pipe .avatar {
   border-radius: 50%;
   background: var(--paper);
 }
@@ -2522,9 +2549,15 @@ input[type='radio'] {
   margin-top: 0;
 }
 
+/* The pool and the split stay in view beside the actions, like the sheet's heading. */
 @media (min-width: 64rem) {
   .money-grid {
     grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+
+  .money-summary {
+    position: sticky;
+    top: var(--space-3);
   }
 }
 
@@ -3593,8 +3626,9 @@ ol.timeline {
   border: 3px solid currentColor;
 }
 
-/* On /contribute the notes under the Machine card keep their distance from its edge. */
+/* On /contribute the card takes the band's width and the notes under it keep their distance. */
 .contribute > .machine-card {
+  max-width: none;
   margin-bottom: var(--space-3);
 }
 
@@ -3604,20 +3638,25 @@ ol.timeline {
 
 /* Given room (/contribute, the full width), the card sets what it is on the left and how to fund it
    on the right, so a wide card is never a short block with an empty half. */
+/* A container query reads the card's own width only from inside it, so the card is always a
+   wrapping row and its halves take the full line until the card is wide enough to share it. */
 .machine-card {
   container-type: inline-size;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-4);
+}
+
+.machine-card > .machine-about,
+.machine-card > .machine-fund {
+  flex: 1 1 100%;
+  min-width: 0;
 }
 
 @container (min-width: 44rem) {
   .machine-card > .machine-about,
   .machine-card > .machine-fund {
-    width: calc(50% - var(--space-3));
-  }
-
-  .machine-card {
-    display: flex;
-    justify-content: space-between;
-    gap: var(--space-4);
+    flex-basis: 0;
   }
 }
 
@@ -3748,6 +3787,7 @@ ol.timeline {
 }
 
 .plain-list {
+  margin-bottom: var(--space-2);
   padding-left: 1.25em;
   list-style: disc;
 }
@@ -3926,12 +3966,13 @@ ol.timeline {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-2);
 }
 
 .inline-select {
   display: flex;
+  flex-direction: row;
   gap: var(--space-1);
   align-items: center;
   font-weight: var(--weight-strong);
