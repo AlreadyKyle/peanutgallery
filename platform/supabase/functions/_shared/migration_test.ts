@@ -2070,7 +2070,7 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "anon holds select on three public tables, the eight views and the public columns of cards, and nothing else",
+      "anon holds select on three public tables, the views and the public columns of cards, and nothing else",
       async () => {
         const expected = [
           "deploys",
@@ -2081,6 +2081,8 @@ Deno.test("migrations on PGlite", {
           "public_card_funding",
           "public_card_spend",
           "public_card_supporters",
+          // board-games-admin (docs/specs/board-games-admin.md): each game's public name, status, blurb, address and art.
+          "public_games",
           "public_ledger_totals",
           "public_money",
           "public_role_stats",
