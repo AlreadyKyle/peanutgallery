@@ -72,6 +72,52 @@ test('starting from a seed loads its run and keeps the old save as a backup', as
   await expect(page.getByRole('dialog')).toBeHidden();
 });
 
+// The benchmarks' counters (docs/specs/counter-senders.md): a seed link that opens counts
+// dust_seed_open, Save as seed counts dust_seed_save, each once in the page load, each the event's
+// name alone to this origin's /api/count.
+test('a seed link and Save as seed are each counted once, by name alone', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => undefined);
+  const events: string[] = [];
+  await page.route('**/api/count', async (route) => {
+    const request = route.request();
+    expect(request.method()).toBe('POST');
+    expect(new URL(request.url()).search).toBe('');
+    expect(await request.headerValue('cookie')).toBeNull();
+    events.push(String((JSON.parse(request.postData() ?? '{}') as { event?: unknown }).event));
+    await route.fulfill({ status: 204 });
+  });
+  await page.goto(`/?seed=${seedCode(SHARED)}`);
+  const dialog = page.getByRole('dialog', { name: 'Someone shared a Dust run' });
+  await dialog.getByRole('button', { name: 'Keep my game' }).click();
+  await expect.poll(() => events.filter((event) => event === 'dust_seed_open')).toHaveLength(1);
+  const save = page.getByRole('button', { name: 'Save as seed' });
+  await save.click();
+  await save.click();
+  await expect.poll(() => events.filter((event) => event === 'dust_seed_save')).toHaveLength(1);
+  expect(events.filter((event) => event === 'dust_seed_save')).toHaveLength(1);
+  expect(events).toContain('dust_load');
+  expect(events.filter((event) => event.startsWith('dust_return'))).toEqual([]);
+});
+
+test('a load from a save a day old counts dust_return_1d, read from the save it already holds', async ({ page }) => {
+  const events: string[] = [];
+  await page.route('**/api/count', async (route) => {
+    events.push(String((JSON.parse(route.request().postData() ?? '{}') as { event?: unknown }).event));
+    await route.fulfill({ status: 204 });
+  });
+  await page.addInitScript(([key, value]) => {
+    const save = JSON.parse(value) as { savedAt: number };
+    save.savedAt = Date.now() - 30 * 60 * 60 * 1000;
+    window.localStorage.setItem(key, JSON.stringify(save));
+  }, [SAVE_KEY, JSON.stringify(OWN)] as const);
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Strike' })).toBeAttached();
+  await expect.poll(() => events).toContain('dust_return_1d');
+  expect(events.filter((event) => event.startsWith('dust_return'))).toEqual(['dust_return_1d']);
+  // Counting stores nothing: the keys are the game's own save and its last visit (render/whats-new.ts).
+  for (const key of await page.evaluate(() => Object.keys(window.localStorage))) expect(['dust.save', 'dust.lastVisit']).toContain(key);
+});
+
 test('a broken seed link opens the player own game and says so', async ({ page }) => {
   await page.goto('/?seed=dust:v1:not-a-real-seed');
   await expect(page.getByRole('button', { name: 'Strike' })).toBeAttached();

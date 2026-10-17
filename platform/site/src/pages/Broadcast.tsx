@@ -6,6 +6,7 @@ import { MachineMark } from '../components/Mark';
 import { Pipe } from '../components/Pipe';
 import { StudioRoom } from '../components/StudioRoom';
 import { copy } from '../lib/copy';
+import { withQrSource } from '../lib/count';
 import { groupCards, fundingPlace } from '../lib/cards';
 import { qrModules, qrPath } from '../lib/qr';
 import { useStudio } from '../lib/studio';
@@ -17,7 +18,9 @@ import { useStudio } from '../lib/studio';
 // smaller window, so a preview shows the whole of it.
 
 export const BROADCAST_PATH = '/broadcast';
-export const FUND_URL = 'https://mobmachine.games/contribute';
+// The QR code's address carries a source tag, so a landing from it counts as broadcast_qr (lib/count.ts,
+// docs/specs/counter-senders.md); the frame drops the tag on arrival.
+export const FUND_URL = withQrSource('https://mobmachine.games/contribute');
 
 function useScale(): number {
   const [scale, setScale] = useState(1);
