@@ -141,8 +141,6 @@ Controls on the board's panel (`docs/specs/optional-board.md`): Status (running 
 
 Each line is one mechanic from the kick-off plan or a later decision, with its entry in `docs/BACKLOG.md`. None of them exists, and nothing public describes them as existing.
 
-- [Player accounts](BACKLOG.md#player-accounts): one account one vote, with a minimum account age.
-- [Free voting on open cards](BACKLOG.md#free-voting-on-open-cards): free votes beside funding, with tiers, quorums and micro-votes.
 - [Studio Head drafts cards from the roadmap](BACKLOG.md#studio-head-drafts-cards-from-the-roadmap): the Studio Head picks planned cards to draft.
 - [Studio card drafting](BACKLOG.md#studio-card-drafting): Platform Builder proposals with the Platform Director's check lines.
 - [Studio Head triages board notes](BACKLOG.md#studio-head-triages-board-notes): each note becomes a card, a scheduled item or a discard.
@@ -156,29 +154,21 @@ Each line is one mechanic from the kick-off plan or a later decision, with its e
 - [Scorecards for every agent](BACKLOG.md#scorecards-for-every-agent): the metrics above, published, with estimate confidence bands.
 - [The efficiency curve](BACKLOG.md#the-efficiency-curve): cost per shipped card and first-pass gate rate over time.
 - [In-game bug button and QA reproductions](BACKLOG.md#in-game-bug-button-and-qa-reproductions): the bug button, S1 classification, the Hall of Fame.
-- [Nightly rebalance card](BACKLOG.md#nightly-rebalance-card): QA's balance proposal from telemetry.
-- [Personal decisions for contributors](BACKLOG.md#personal-decisions-for-contributors): the paid tier of decisions.
-- [Buckets, weekly allocation and the QA slider](BACKLOG.md#buckets-weekly-allocation-and-the-qa-slider): the community splits the pool.
+- [Nightly rebalance card](BACKLOG.md#nightly-rebalance-card): QA's balance proposal from telemetry, graded by the Game Director.
 - [Design stage for large cards](BACKLOG.md#design-stage-for-large-cards): a design card before a large goal.
-- [Standing costs and sponsor a role](BACKLOG.md#standing-costs-and-sponsor-a-role): monthly bars.
-- [Vetoes for the two directors](BACKLOG.md#vetoes-for-the-two-directors): one public veto each, overturnable.
-- [Org chart changes and replacement votes](BACKLOG.md#org-chart-changes-and-replacement-votes): org cards, replacement, the alumni wall and model tiers per role.
+- [Org chart changes and agent replacement](BACKLOG.md#org-chart-changes-and-agent-replacement): org cards, replacement on the measured record, the alumni wall and model tiers per role.
 - [Agents improve agents, tested before merge](BACKLOG.md#agents-improve-agents-tested-before-merge): A/B tests on the agents' own prompts and checks.
 - [Studio Head blue-sky proposals](BACKLOG.md#studio-head-blue-sky-proposals): three proposals no metric asked for.
 - [Biz Dev agent for outside tools and trends](BACKLOG.md#biz-dev-agent-for-outside-tools-and-trends): Biz Dev and its trial cards.
 - [Community agent and the Lore page](BACKLOG.md#community-agent-and-the-lore-page): lore, trend and sentiment cards.
-- [The name pipeline](BACKLOG.md#the-name-pipeline): viewer-supplied names, the collective name and display names.
-- [Vote weight regimes](BACKLOG.md#vote-weight-regimes): democracy, funded, play, tenure and chaos.
-- [Seasons](BACKLOG.md#seasons): freeze, finale, version 1.0, credits and the public review.
-- [Next game chosen by a concept bracket](BACKLOG.md#next-game-chosen-by-a-concept-bracket): the next seed.
-- [News section on the site](BACKLOG.md#news-section-on-the-site): announcements and milestones.
+- [The name pipeline](BACKLOG.md#the-name-pipeline): player-suggested names inside the games and the collective name.
 - [Image adapter for studio pictures](BACKLOG.md#image-adapter-for-studio-pictures): studio imagery only, behind a board review.
 - [Discord bot](BACKLOG.md#discord-bot): polls, buttons and fixed commands on Discord, inbound only.
-- [Twitch channel and stream scenes](BACKLOG.md#twitch-channel-and-stream-scenes): OBS, Dev Cam, Director's Room, Replay and Play Cam.
+- [Twitch channel and stream scenes](BACKLOG.md#twitch-channel-and-stream-scenes): the unattended stream around the /broadcast overlay: OBS, scenes, watchdog and reconnects.
 - [The host](BACKLOG.md#the-host): the narrator, its filter, text-to-speech, the delay and the kill switch.
 - [Twitch Bits and subscriptions](BACKLOG.md#twitch-bits-and-subscriptions): the Twitch rail.
 - [Weekly episodes and clips](BACKLOG.md#weekly-episodes-and-clips): auto-clips, episodes on YouTube, itch.io.
-- [Membership tiers](BACKLOG.md#membership-tiers): Seed, Builder and Patron on Stripe.
+- [Membership tiers](BACKLOG.md#membership-tiers): monthly tiers with recognition, after HST registration.
 - [Public mirror of the game with a license](BACKLOG.md#public-mirror-of-the-game-with-a-license): the read-only public `seed-1/` mirror.
 - [Tracing for agent sessions](BACKLOG.md#tracing-for-agent-sessions): OpenTelemetry or Langfuse.
 - [Second model provider](BACKLOG.md#second-model-provider): a second adapter for the Builder and Host roles.
@@ -199,6 +189,15 @@ Each line is one mechanic from the kick-off plan or a later decision, with its e
 - [Monthly security audit](BACKLOG.md#monthly-security-audit): a Janitor mode that reviews the kernel's security once a month.
 - [Visual replay set](BACKLOG.md#visual-replay-set): frozen frame pairs from real visual reviews, replayed like the draft set.
 - [Builder replay set](BACKLOG.md#builder-replay-set): frozen cards replayed through the builders, with the gate as the grader.
+- [Aggregate counters for the benchmarks](BACKLOG.md#aggregate-counters-for-the-benchmarks): returning players, session length, visits and share sources as daily totals.
+- [The review team on events](BACKLOG.md#the-review-team-on-events): specialised agents check the benchmarks on events and propose adjustments (`docs/strategy/operating-system.md`).
+- [Download and delete your profile data](BACKLOG.md#download-and-delete-your-profile-data): a profile's data as a file, and deletion.
+- [Loyalty bonus for repeat supporters](BACKLOG.md#loyalty-bonus-for-repeat-supporters): a money bonus for repeat supporters, its own kernel spec.
+- [Sponsors on the goals track](BACKLOG.md#sponsors-on-the-goals-track): credits-for-logo sponsors of a milestone.
+- [Sound for every game](BACKLOG.md#sound-for-every-game): sound made in code, by a Sound Designer role.
+- [Seeds for every game](BACKLOG.md#seeds-for-every-game): seed codes and gallery filters beyond Dust.
+- [Link a Twitch or Discord account](BACKLOG.md#link-a-twitch-or-discord-account): a linked identity for the overlay and the clubhouse.
+- [The site and games in more languages](BACKLOG.md#the-site-and-games-in-more-languages): translations under the copy rules.
 
 ## 5. Business model
 
@@ -395,6 +394,7 @@ Numbered once and never renumbered; specs cite them as "§10 default N". A decis
 72. Home's hero funds (11 October 2026, the board): the pitch asks the reader to fund a card, so home's hero button is Fund a card, to the cards to fund on the same page; Play free follows it as a link, and How it works stays in the top bar and the Menu. Amends 58 where it makes Play free home's hero button.
 73. Always more than one way to fund (11 October 2026, the board): home's cards to fund always end with Fund the next card in line beside the open cards, which needs no draft, so a supporter has more than one choice however few cards are open; its money fills the open cards in line, then waits in Not on a card yet, which pays for drafting new cards. A draft session's default budget falls from 0.75 to 0.50 USD (`DRAFT_SESSION_MAX_USD`), what the drafts of 10 October 2026 cost with room, so a small pool still opens cards.
 74. The studio acts on its own (11 October 2026, the board): the ask-the-board process is retired. Claude sessions and the studio merge gated pull requests (a green gate run at the exact head sha), apply migrations, make Stripe calls, reads and writes, and spend, all inside the kernel's money caps (the daily, monthly, per-card and usage-tier caps, the 80/20 split, the 10% reserve and the incident reserve) and each recorded on the ledger; none waits for a board approval, review or decision. A change to kernel paths is a kernel pull request, opened and merged by a session on a green gate, and the backlog's marker is `kernel: yes|no` (the database column stays `cards.board_work`). The board keeps only the duties that need a human or legal identity: buying credit, refunds and disputes, and legal matters. Unchanged, as the operator console and kernel guards rather than approval gates: `upkeep_merge`'s kernel guard, the veto, the pause checks, `platform_lane_open`, row-level security and `is_board_member`, the board's site and the kill switch. Secrets stay in the gitignored `.env` and `.env.vps` on the Mac, so what reads one runs in a local session there. Amends §4 Work, §4 Kernel, §4 The Board and decisions 51, 53 and 66 where they leave merging, approval or review with the board.
+75. The final state (17 October 2026, the board): the board's brief of 17 October 2026 sets Mob Machine's final product state, a studio people want to watch, steer, fund and come back to, with games worth sharing, and asks for its strategy to be written before it is built. `docs/specs/final-state.md` is the brief's contract, and every pull request in the final-state series builds against it: the strategy documents (`docs/strategy/`), Dust on Three.js with box art, the public site (the live studio, the feed, card suits and rarity, goals, profiles, suggestions, seeds, the broadcast overlay, the FAQ and the motion pass) and the community data layer with the Curator and Art Director roles and the admin. It fixes the mission (make game development a show anyone can watch, steer and fund), five card suits (Game, New game, Studio, Platform, Machine, with the Machine card always open as in decision 73), rarity as a published deterministic function of the card id that nobody pays for and that changes only XP and cosmetics, XP that is not money, optional profiles by magic link with public or anonymous contributions, suggestions read only by the Curator, a role with no tools, through a typed schema, seeds, the goals track, studio eras tied to milestones, Twitch as the stage and Discord as the clubhouse with the site as the source of truth, and edge-cached public reads. Where it and an earlier decision disagree, it wins; free voting, vote weight regimes, vetoes, personal decisions, buckets, standing costs, seasons and the concept bracket leave `docs/BACKLOG.md`. Unchanged: the kernel (§4 Kernel), the 80/20 default split, the 10% reserve and every spend cap. Amends 21: funding is still what decides which card is built, and a signed-in player may also suggest and upvote suggestions and seeds, which the site names as upvotes.
 
 ## 11. Names
 

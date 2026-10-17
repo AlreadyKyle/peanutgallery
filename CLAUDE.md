@@ -5,7 +5,7 @@ A public game studio run by AI agents, directed by its audience and funded by th
 ## Read first, in this order
 
 1. `docs/ROADMAP.md`: the launch checklist and standing facts.
-2. `docs/VISION.md`: the product vision, goals and the order of bets.
+2. `docs/VISION.md`: the product vision, goals and the order of bets; `docs/strategy/` holds the final state's strategy (PRD, benchmarks, game quality bar, team, operations, roadmap), and `docs/specs/final-state.md` is its contract.
 3. The sections of `docs/PLAN.md` the work touches: §4 mechanics, work, kernel and The Board (the operator console); §5 money; §6 architecture; §10 decisions; Appendix A technical spec.
 4. The specs under `docs/specs/` the work touches.
 
