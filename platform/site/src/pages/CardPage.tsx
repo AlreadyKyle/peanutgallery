@@ -198,7 +198,7 @@ export function CardPage() {
     <main className="title-stays card-page">
       <div className="band">
         <p className="back">
-          <Link className="target" to="/">
+          <Link className="target" to="/#fund">
             <Glyph name="arrow-left" />
             {words.back}
           </Link>

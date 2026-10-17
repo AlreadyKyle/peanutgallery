@@ -42,7 +42,7 @@ export const faq = {
         },
         {
           q: 'Where does the money go?',
-          a: ['The kernel sets the split and the fixed rules below, and the ledger shows every figure.'],
+          a: ['Every contribution follows the same split and fixed rules, and the ledger shows every figure.'],
           link: { to: '/ledger', label: 'Read the ledger' },
         },
         {
@@ -127,7 +127,7 @@ export const faq = {
         },
         {
           q: 'Can I stay anonymous?',
-          a: ['Yes, without an account every contribution shows as Anonymous. With one, you choose for each contribution.'],
+          a: ['Yes. Without an account your name never shows: the pipe says Anonymous and the card lists you by supporter number. With one, you choose for each contribution.'],
         },
         {
           q: 'What does the studio keep about me?',
