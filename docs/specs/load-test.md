@@ -94,7 +94,7 @@ What breaks first, and at what level. Inferred means reasoned from the code and 
 - [x] Production hosts are refused without `--i-mean-production`, and a production run is refused above 100 requests a second, 300 seconds or 10,000 requests (`load.test.mjs`, the command line).
 - [x] The report gives p50, p95, p99, the error rate, the throughput and the cache hit ratio per step and per path, and fails on the thresholds above (`load.test.mjs`, the stats math and the verdict).
 - [x] The workflow reads contents only, persists no credential, names no secret, hands its inputs to the tool through the environment, and runs production once after a push to main that changes the tool, and by hand (`load.test.mjs`, the workflow).
-- [ ] The production run after merge passes, and its first line is quoted in Evidence. The first run (below) aborted at the 50-a-second step on the per-address protection; the workflow's production peak is now 30 a second, and the run on the commit that made that change is the one this box waits on.
+- [x] The production run after merge passes, and its first line is quoted in Evidence (run 39069065198, at the 30-a-second peak).
 
 ## Verification
 
@@ -127,6 +127,18 @@ What it measured:
 - Up to 30 requests a second from one address the site answered every request: 0 errors, p95 32 ms and a 98.9% cache hit ratio in that step. The first step's slower p95 and p99 are the cold edge and preview image filling the cache.
 - Four seconds into the 50-a-second step, static pages (`/`, `/how-it-works`) began answering 403 to the runner. No rule in this repository limits the static pages (the code-based rules sit on the documents and answer 429), so the 403 comes from Netlify's own per-address protection in front of the site (inferred from the status and the paths). It refused one address sending about 17 home page loads a second; it is not the site running out of capacity, and visitors at other addresses are not refused by it.
 - The stop condition worked as designed: the run aborted at once, with 1,693 requests sent and at most 31 RPC calls reaching Supabase.
+
+Second production run, `load-test` run 39069065198 on eab933d (#200), 2026-10-17 21:00 UTC, peak 30 a second:
+
+```
+PASS load-test https://mobmachine.games requests=1791 rps=14.9 p50=6ms p95=178ms p99=580ms error_rate=0.0% cache_hit=88.8%
+step                                   reqs    rps    p50    p95    p99  errors   cache
+1: 3 req/s x 30s                         88    2.9     10   1107   2094    0.0%   81.8%
+2: 9 req/s x 30s                        269    9.0      7    549    626    0.0%   97.0%
+3: 18 req/s x 30s                       536   17.9      6    257    429    0.0%   97.6%
+4: 30 req/s x 30s                       898   29.9      6     21    107    0.0%   98.9%
+supabase: 34 function answers were built or revalidated (miss 34, stale 0), so at most 35 RPC calls
+```
 
 So a single runner measures the site up to about 30 requests a second and the per-address protection above that. Capacity above that needs load from many addresses, which this test does not do (Decisions).
 
