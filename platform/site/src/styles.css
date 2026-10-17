@@ -3476,8 +3476,23 @@ ol.timeline {
   vector-effect: non-scaling-stroke;
 }
 
+/* The rug: a plain paper fill with a woven border, solid (a dashed line on this floor marks a zone). */
+.room-rug {
+  fill: var(--paper-hover);
+  stroke: var(--ink);
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
+}
+
+.room-rug-border {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
+}
+
 /* The blueprint (/studio/history): paper lines on the blueprint ground, nothing filled. */
-.room[data-variant='blueprint'] :is(.room-fill, .room-side, .room-shade, .room-wall, .room-wall-lit, .room-window, .room-leaf, .room-hatch) {
+.room[data-variant='blueprint'] :is(.room-fill, .room-side, .room-shade, .room-wall, .room-wall-lit, .room-window, .room-leaf, .room-hatch, .room-rug) {
   fill: var(--blueprint);
   stroke: var(--paper);
 }
@@ -3491,7 +3506,7 @@ ol.timeline {
   stroke: var(--paper);
 }
 
-.room[data-variant='blueprint'] .room-grid {
+.room[data-variant='blueprint'] :is(.room-grid, .room-rug-border) {
   stroke: var(--blueprint-line);
 }
 
@@ -3558,6 +3573,13 @@ ol.timeline {
   stroke-width: 1.5;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
+}
+
+/* An agent's mark says what it is doing where it does it: none on a walk, and the book only in the
+   lounge. The pose comes from the frame loop (StudioRoom.tsx); still, every agent rests. */
+.studio-agent[data-pose='walk'] .agent-mark,
+.studio-agent[data-pose='away'][data-activity='reading'] .agent-mark {
+  opacity: 0;
 }
 
 /* The role card an agent shows on hover, focus or tap: written facts first, the card an addition. */
