@@ -104,9 +104,9 @@ describe('resolveRoleModel', () => {
   });
 
   it("runs the Game Designer on MODEL_DESIGNER when it is set, and on MODEL_DIRECTOR until then", () => {
-    expect(resolveRoleModel({ name: 'Game Designer', model: '' }, config())).toEqual({ model: 'director-class', source: 'env', token: 'MODEL_DESIGNER' });
-    expect(resolveRoleModel({ name: 'Game Designer', model: '' }, config({ modelDesigner: 'designer-class' }))).toEqual({ model: 'designer-class', source: 'env', token: 'MODEL_DESIGNER' });
-    expect(resolveRoleModel({ name: 'Game Director', model: '' }, config({ modelDesigner: 'designer-class' }))).toEqual({ model: 'director-class', source: 'env', token: 'MODEL_DIRECTOR' });
+    expect(resolveRoleModel({ name: 'Game Designer', model: '' }, config({ codeRoot: CODE_ROOT }))).toEqual({ model: 'director-class', source: 'env', token: 'MODEL_DESIGNER' });
+    expect(resolveRoleModel({ name: 'Game Designer', model: '' }, config({ codeRoot: CODE_ROOT, modelDesigner: 'designer-class' }))).toEqual({ model: 'designer-class', source: 'env', token: 'MODEL_DESIGNER' });
+    expect(resolveRoleModel({ name: 'Game Director', model: '' }, config({ codeRoot: CODE_ROOT, modelDesigner: 'designer-class' }))).toEqual({ model: 'director-class', source: 'env', token: 'MODEL_DIRECTOR' });
   });
 
   it('resolves a roles.model that is itself a token', () => {
