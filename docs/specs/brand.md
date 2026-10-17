@@ -26,10 +26,12 @@ Out: colour values, the card face, the funding bar, the money rules and their wo
 - **/card/:id.** From 64rem the face (with Play and the agreement) stays in view in the left five twelfths and the facts, What changed, Supporters, the agents' log and the brief run in the right seven.
 - **/contribute.** From 64rem the split and the next card in line share the first row. The next card's panel shows a labelled paper button under its words ("Choose an amount →"), so the one-link panel looks pressable and never like a carousel control. The Machine card, given 44rem or more, sets what it is beside how to fund it.
 - **Machine presets** are five outlined chips on one row at every width; pressed adds the 3px edge inside the same box. Beside the Machine card, Fund the next card in line takes the same card-title size and keeps its button at its foot.
+- **Picked** is a short signal tab at the card's top left, clear of the rarity tab.
+- **/reports** is a sheet: each week's heading on the left, its facts and rows on the right.
 - **Cards in a row** line their buttons up: a card's bottom block fills its track and pins its button to the foot, so a line above one button (what is left to fund) never pushes it out of line.
 - **Top bar.** How it works, Team, Suggest, FAQ and Ledger, then Play and Contribute: the pages a first visit needs. From 64rem to 80rem the links sit closer, so the bar stays one row at 1024px.
 - **Footer.** The uppercase wordmark and the studio's line, then three labelled columns of links (Follow along; Take part, with Suggest, Seeds, Goals and Your profile; The fine print), labels in the sans, then the credit under a hairline.
-- **Empty lists.** On goals, seeds and suggest a list that did not load or is empty is a dashed tile with the reason and a next step; the sorts and filters are not drawn while the list is unavailable.
+- **Empty lists.** On goals, seeds and suggest a list that did not load or is empty is a dashed tile with the reason and the page's own next step; the sorts and filters are not drawn while the list is unavailable.
 - **/thanks.** The reward block opens the paper band without a number; from 64rem the face, its share line and Share sit level with What happens next, and the current step carries a small Now stamp.
 
 ## Acceptance criteria

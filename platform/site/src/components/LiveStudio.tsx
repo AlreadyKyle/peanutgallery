@@ -96,7 +96,8 @@ export function LiveStudio({ snapshot }: { snapshot: Snapshot }) {
           loadingOlder={feed.loadingOlder}
           onOlder={feed.loadOlder}
           // With no team in the room there are no written facts under it, so fewer rows sit beside it.
-          pageSize={roomRoles(snapshot).length === 0 ? 4 : 7}
+          // On home the studio's label heads the same column, so five rows end level with the facts.
+          pageSize={roomRoles(snapshot).length === 0 ? 4 : 5}
         />
       </div>
     </section>

@@ -47,7 +47,7 @@ export const copy = {
   // Where a planned card's page and an empty reports page send the reader: home's cards to fund.
   roadmapLink: 'See the cards to fund',
   // An empty or unloaded list's tile (EmptyState.tsx).
-  emptyState: { retry: 'The rest of the page works. Try again in a minute.' },
+  emptyState: { retry: 'Try again in a minute.', ledger: 'Open the ledger', sendFirst: 'Send the first suggestion', playDust: 'Play Dust' },
   // The explainer video's labels for a queued and a shipped card (platform/explainer/src/data.ts).
   queued: 'Queued',
   shipped: 'Shipped',
@@ -464,13 +464,15 @@ export const copy = {
       seed_featured: 'Seed',
       era: 'New era',
     },
+    // A card title is often an instruction ("Show how much dust..."), so a line never runs a verb
+    // after it: the row's kind word says what happened, and a prefix says the state.
     derived: {
-      shipped: '{title} shipped.',
-      building: 'The agents are building {title}.',
-      checks: '{title} is being checked.',
-      opened: '{title} opened for funding.',
-      fundedOne: '1 supporter has funded {title}.',
-      fundedMany: '{n} supporters have funded {title}.',
+      shipped: '{title}',
+      building: 'Being built: {title}',
+      checks: 'In checks: {title}',
+      opened: '{title}',
+      fundedOne: '1 supporter funded: {title}',
+      fundedMany: '{n} supporters funded: {title}',
     },
   },
   machine: {

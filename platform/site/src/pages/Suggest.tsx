@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from 'react';
-import { EmptyState } from '../components/EmptyState';
 import { Link } from 'react-router-dom';
+import { EmptyState } from '../components/EmptyState';
 import { Glyph, type GlyphName } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
 import { PersonLink } from '../components/Person';
@@ -223,9 +223,9 @@ export function Suggest() {
               {copy.suggest.loading}
             </p>
           ) : list.state === 'unavailable' ? (
-            <EmptyState line={legal.partUnavailable} unavailable />
+            <EmptyState line={legal.partUnavailable} next={{ to: '/', label: copy.roadmapLink }} unavailable />
           ) : list.data.items.length === 0 ? (
-            <EmptyState line={copy.suggest.empty} />
+            <EmptyState line={copy.suggest.empty} next={{ to: '#suggest-send', label: copy.emptyState.sendFirst }} />
           ) : (
             <ol className="suggestions">
               {list.data.items.map((item) => (

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
-import { EmptyState } from '../components/EmptyState';
 import { Link, useSearchParams } from 'react-router-dom';
+import { EmptyState, type EmptyNext } from '../components/EmptyState';
 import { Glyph } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
 import { PersonLink } from '../components/Person';
@@ -8,6 +8,7 @@ import { adoptSessionFromLocation, rpc, sendMagicLink, useSignedIn } from '../li
 import { CommunityError, relativeTime, useCommunity } from '../lib/community';
 import type { PageDoc, SeedSummary } from '../lib/community-types';
 import { copy } from '../lib/copy';
+import { siteEnv } from '../lib/env';
 import { legal } from '../lib/legal';
 import { clearPendingSeed, parseSeedCode, rememberPendingSeed } from '../lib/seed-link';
 
@@ -196,6 +197,12 @@ export function SaveFromLink({ raw }: { raw: string }) {
   );
 }
 
+/** An empty gallery's next step: play the game and save a run, or the cards to fund without a play address. */
+function playNext(): EmptyNext {
+  const play = siteEnv().playUrl;
+  return play === '' ? { to: '/', label: copy.roadmapLink } : { to: play, label: copy.emptyState.playDust };
+}
+
 export function Seeds() {
   const signedIn = useSignedIn();
   const [params, setParams] = useSearchParams();
@@ -238,9 +245,9 @@ export function Seeds() {
               {copy.seeds.loading}
             </p>
           ) : list.state === 'unavailable' ? (
-            <EmptyState line={legal.partUnavailable} unavailable />
+            <EmptyState line={legal.partUnavailable} next={playNext()} unavailable />
           ) : list.data.items.length === 0 ? (
-            <EmptyState line={copy.seeds.empty} />
+            <EmptyState line={copy.seeds.empty} next={playNext()} />
           ) : (
             <ul className="seed-grid">
               {list.data.items.map((seed) => (
