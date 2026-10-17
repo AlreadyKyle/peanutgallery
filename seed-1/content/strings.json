@@ -14,7 +14,14 @@
     "allUnlocked": "Every unlock is open.",
     "unlocksEarned": "{count} unlocks earned",
     "welcomeBack": "While you were away: +{amount} dust in {time}",
-    "unlockBanner": "Unlocked {name}"
+    "unlockBanner": "Unlocked {name}",
+    "nextGoal": "Next unlock",
+    "toGo": "{amount} to go",
+    "unlockedTitle": "Unlocked",
+    "welcomeTitle": "Welcome back",
+    "streak": "Streak",
+    "newUnit": "New",
+    "tapHint": "or tap the pile"
   },
   "strikeDescription": "Each strike adds one to two seconds of dust.",
   "unitDescriptions": {
@@ -42,5 +49,17 @@
     "failed": "Sharing is not available in this browser.",
     "imageDust": "dust",
     "imageUnlocks": "{unlocked} of {total} unlocks"
+  },
+  "seed": {
+    "button": "Save as seed",
+    "text": "Start from my Dust run: {dust} dust and {unlocked} of {total} unlocks.",
+    "copied": "Copied a seed link to the clipboard.",
+    "failed": "Copying is not available in this browser.",
+    "offerTitle": "Someone shared a Dust run",
+    "offerBody": "{dust} dust and {unlocked} of {total} unlocks.",
+    "offerReplace": "Starting from it replaces your game in this browser ({dust} dust).",
+    "start": "Start from this seed",
+    "keep": "Keep my game",
+    "invalid": "That seed link did not open, so here is your own game."
   }
 }

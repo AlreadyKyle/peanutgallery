@@ -15,6 +15,13 @@ export interface Strings {
     unlocksEarned: string;
     welcomeBack: string;
     unlockBanner: string;
+    nextGoal: string;
+    toGo: string;
+    unlockedTitle: string;
+    welcomeTitle: string;
+    streak: string;
+    newUnit: string;
+    tapHint: string;
   };
   strikeDescription: string;
   unitDescriptions: Record<string, string>;
@@ -30,6 +37,19 @@ export interface Strings {
     failed: string;
     imageDust: string;
     imageUnlocks: string;
+  };
+  // Save as seed, beside Share your run, and the offer a seed link opens with (render/seed-ui.ts).
+  seed: {
+    button: string;
+    text: string;
+    copied: string;
+    failed: string;
+    offerTitle: string;
+    offerBody: string;
+    offerReplace: string;
+    start: string;
+    keep: string;
+    invalid: string;
   };
   // The accessible DOM layer's text (render/controls.ts): the canvas is hidden from assistive technology.
   a11y: {
@@ -57,9 +77,18 @@ const LABEL_KEYS = [
   'unlocksEarned',
   'welcomeBack',
   'unlockBanner',
+  'nextGoal',
+  'toGo',
+  'unlockedTitle',
+  'welcomeTitle',
+  'streak',
+  'newUnit',
+  'tapHint',
 ] as const;
 
 const SHARE_KEYS = ['button', 'text', 'copied', 'failed', 'imageDust', 'imageUnlocks'] as const;
+
+const SEED_KEYS = ['button', 'text', 'copied', 'failed', 'offerTitle', 'offerBody', 'offerReplace', 'start', 'keep', 'invalid'] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -98,6 +127,10 @@ export function parseStrings(raw: unknown): Strings {
   if (!isRecord(shareRaw)) throw new Error('strings: "share" must be an object');
   const share = {} as Strings['share'];
   for (const key of SHARE_KEYS) share[key] = requireText(shareRaw, key, 'strings.share');
+  const seedRaw = raw['seed'];
+  if (!isRecord(seedRaw)) throw new Error('strings: "seed" must be an object');
+  const seed = {} as Strings['seed'];
+  for (const key of SEED_KEYS) seed[key] = requireText(seedRaw, key, 'strings.seed');
   return {
     title: requireText(raw, 'title', 'strings'),
     tabTitle: requireText(raw, 'tabTitle', 'strings'),
@@ -109,6 +142,7 @@ export function parseStrings(raw: unknown): Strings {
       multiplier: requireText(effectsRaw, 'multiplier', 'strings.effects'),
     },
     share,
+    seed,
     a11y,
   };
 }

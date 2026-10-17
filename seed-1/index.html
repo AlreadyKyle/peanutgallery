@@ -13,200 +13,28 @@
     <meta property="og:image" content="https://play.mobmachine.games/og-dust.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="Dust, a free idle game: the word Dust in gold block letters beside a gold pile of dust on a dark background." />
+    <meta property="og:image:alt" content="Dust, a free idle game: the word Dust in thick ink block letters beside a little quarry island with a dust pile and a magenta flag, on white paper." />
     <meta property="og:image:type" content="image/png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="https://play.mobmachine.games/og-dust.png" />
-    <meta name="twitter:image:alt" content="Dust, a free idle game: the word Dust in gold block letters beside a gold pile of dust on a dark background." />
+    <meta name="twitter:image:alt" content="Dust, a free idle game: the word Dust in thick ink block letters beside a little quarry island with a dust pile and a magenta flag, on white paper." />
     <link rel="icon" type="image/svg+xml" href="./render/favicon.svg" />
     <title>Dust · Mob Machine</title>
+    <!-- First paint before the game's stylesheet (render/style.css) arrives: the paper ground and ink text. -->
     <style>
       html,
       body {
         margin: 0;
         height: 100%;
-        background: #12161c;
-        color: #e8e6df;
-        font-family: sans-serif;
+        background: #fdfcf8;
+        color: #151515;
+        font-family: 'Atkinson Hyperlegible Next', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
         overflow-x: hidden;
-      }
-      body {
-        display: flex;
-        flex-direction: column;
-      }
-      main {
-        flex: 1 1 auto;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-      }
-      #game {
-        flex: 1 1 auto;
-        min-height: 0;
-        width: 100%;
-      }
-      #status {
-        position: absolute;
-        top: 50%;
-        left: 0;
-        right: 0;
-        margin: 0 16px;
-        text-align: center;
-        transform: translateY(-50%);
-      }
-      #studio-line {
-        flex: 0 0 auto;
-        margin: 0;
-        padding: 0 16px;
-        text-align: center;
-        font-size: 12px;
-        color: #9aa3ad;
-      }
-      /* Each link is a 44px touch target on a phone (seed-1/CLAUDE.md Pillars), centred on its text. */
-      #studio-line a {
-        display: inline-flex;
-        align-items: center;
-        min-height: 44px;
-        color: #9aa3ad;
-      }
-      #share {
-        min-height: 44px;
-        margin: 4px auto 0;
-        padding: 8px 18px;
-        border: 1px solid #d9a441;
-        border-radius: 22px;
-        background: transparent;
-        color: #d9a441;
-        font: inherit;
-        font-weight: bold;
-        cursor: pointer;
-      }
-      #share:hover {
-        background: #d9a441;
-        color: #12161c;
-      }
-      #share:focus-visible {
-        outline: 3px solid #e8e6df;
-        outline-offset: 2px;
-      }
-      .share-row {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 2px;
-      }
-      #share-status {
-        min-height: 1em;
-        margin: 0;
-        font-size: 12px;
-        color: #9aa3ad;
-      }
-      /* What shipped for Dust since the last visit (render/whats-new.ts): hidden unless a returning player has news. */
-      #whats-new {
-        margin: 0;
-        padding: 0 16px;
-        text-align: center;
-        font-size: 12px;
-      }
-      #whats-new a {
-        display: inline-flex;
-        align-items: center;
-        min-height: 44px;
-        max-width: 100%;
-        box-sizing: border-box;
-        overflow-wrap: anywhere;
-        color: #d9a441;
-      }
-      /* The next Dust card to fund (render/next-card.ts): hidden until a card loads, a 44px link with its bar. */
-      #next-card {
-        margin: 0;
-        padding: 0 16px;
-        text-align: center;
-        font-size: 12px;
-      }
-      #next-card a {
-        display: inline-flex;
-        flex-direction: column;
-        justify-content: center;
-        gap: 3px;
-        min-height: 44px;
-        max-width: 100%;
-        box-sizing: border-box;
-        color: #d9a441;
-      }
-      #next-card-title {
-        overflow-wrap: anywhere;
-      }
-      .next-card-bar {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: #9aa3ad;
-      }
-      .next-card-track {
-        width: 120px;
-        height: 6px;
-        border-radius: 3px;
-        background: #2b3440;
-        overflow: hidden;
-      }
-      #next-card-fill {
-        width: 0;
-        height: 100%;
-        background: #d9a441;
-      }
-      /* The accessible DOM layer (render/controls.ts): hidden until focus enters it, then a panel over the
-         bottom of the canvas, so the one-screen layout is unchanged for pointer play. */
-      .visually-hidden,
-      .controls:not(:focus-within) {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        margin: -1px;
-        padding: 0;
-        overflow: hidden;
-        clip: rect(0 0 0 0);
-        white-space: nowrap;
-        border: 0;
-      }
-      .controls:focus-within {
-        position: fixed;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        padding: 12px 16px;
-        background: #1c222b;
-        border-top: 1px solid #2b3440;
-      }
-      .controls-status {
-        flex: 1 0 100%;
-        margin: 0;
-      }
-      .controls button {
-        min-height: 44px;
-        padding: 8px 12px;
-        border: 0;
-        border-radius: 4px;
-        background: #d9a441;
-        color: #12161c;
-        font: inherit;
-        font-weight: bold;
-      }
-      .controls button[aria-disabled="true"] {
-        background: #3a4352;
-        color: #e8e6df;
-      }
-      .controls button:focus-visible {
-        outline: 3px solid #e8e6df;
-        outline-offset: 2px;
       }
     </style>
   </head>
   <body>
-    <main>
+    <main id="stage">
       <h1 class="visually-hidden">Dust</h1>
       <!-- The canvas is drawn for sight and pointer; the controls below are the same game as text and buttons. -->
       <div id="game" aria-hidden="true"></div>
@@ -216,8 +44,9 @@
     <footer>
       <div class="share-row">
         <button id="share" type="button" style="visibility: hidden">Share your run</button>
-        <p id="share-status" role="status"></p>
+        <button id="seed-save" type="button" style="visibility: hidden">Save as seed</button>
       </div>
+      <p id="share-status" role="status"></p>
       <p id="studio-line">
         <a href="https://mobmachine.games">Made by AI agents at Mob Machine</a> · All ages ·
         <a href="https://mobmachine.games/contribute">See what players are funding next</a>
@@ -235,6 +64,17 @@
         </a>
       </p>
     </footer>
+    <!-- The offer a ?seed= link opens with (render/seed-ui.ts): it never replaces a save without asking. -->
+    <dialog id="seed-offer" aria-labelledby="seed-offer-title">
+      <p class="seed-offer-kicker" aria-hidden="true">Seed</p>
+      <h2 id="seed-offer-title"></h2>
+      <p id="seed-offer-body"></p>
+      <p id="seed-offer-replace" hidden></p>
+      <div class="seed-offer-actions">
+        <button id="seed-start" class="primary" type="button"></button>
+        <button id="seed-keep" type="button"></button>
+      </div>
+    </dialog>
     <script type="module" src="/render/main.ts"></script>
   </body>
 </html>

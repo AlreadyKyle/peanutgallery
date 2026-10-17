@@ -7,7 +7,7 @@ import type { SimState, UnlockEvent } from './types';
 // The wrapper also carries savedAt, the wall-clock millisecond the save was written, so the game can
 // credit the time the player was away. It is optional: a save written before it existed still loads.
 
-const SAVE_VERSION = 1;
+export const SAVE_VERSION = 1;
 
 /** The most time away the game credits in one go: 8 hours. */
 export const MAX_AWAY_SECONDS = 8 * 60 * 60;
