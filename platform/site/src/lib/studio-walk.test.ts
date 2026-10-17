@@ -77,6 +77,12 @@ describe('the studio floor', () => {
       }
     });
 
+    it(`stands two reviewers at the gate, and a builder at each desk, a body apart in the ${era}`, () => {
+      expect(crowded(plan.spots.gate[0]!, plan.spots.gate[1]!)).toBe(false);
+      const first = plan.spots.desks.slice(0, plan.desks.length);
+      for (let i = 0; i < first.length; i += 1) for (let j = i + 1; j < first.length; j += 1) expect(crowded(first[i]!, first[j]!)).toBe(false);
+    });
+
     it(`keeps the gate clear of the dock in the ${era}`, () => {
       expect(plan.gate.y + plan.gate.d).toBeLessThanOrEqual(plan.dock.y);
     });

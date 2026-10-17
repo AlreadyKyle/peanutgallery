@@ -53,13 +53,11 @@ export function eraKey(era: Pick<StudioEra, 'name' | 'index'> | null | undefined
 }
 
 // Around the coffee table: two pairs that face each other across its ends, one between it and the
-// sofa's seat and one behind it, and a spot past its far end; never on it.
+// sofa's seat and one behind it; never on it.
 const loungePairs = (table: Box, sofa: Box): [Spot, Spot][] => [
   [{ x: table.x - 0.3, y: sofa.y - 0.35 }, { x: table.x + 1.2, y: sofa.y - 0.35 }],
   [{ x: table.x - 0.3, y: table.y - 0.45 }, { x: table.x + 1.2, y: table.y - 0.45 }],
 ];
-const loungeSolo = (table: Box): Spot[] => [{ x: table.x + 1.9, y: table.y + 0.3 }];
-
 export function roomPlan(era: EraKey, decor?: readonly string[]): RoomPlan {
   const size = SIZES[era];
   const { w, d } = size;
@@ -101,15 +99,16 @@ export function roomPlan(era: EraKey, decor?: readonly string[]): RoomPlan {
     decor: decor ?? size.decor,
     spots: {
       whiteboard: spread(1.1, 2.0, 3, 0.5, 0.7),
-      desks: desks.flatMap((desk) => [{ x: desk.x + 0.9, y: desk.y + 1.45 }, { x: desk.x + 1.6, y: desk.y + 1.5 }]),
+      // One builder at each desk's keyboard first; a second at a desk only once every desk has one.
+      desks: [...desks.map((desk) => ({ x: desk.x + 0.9, y: desk.y + 1.45 })), ...desks.map((desk) => ({ x: desk.x + 1.6, y: desk.y + 1.5 }))],
       bench: spread(bench.x + 0.7, 1.75, 3, 0.8),
-      // The reviewer stands in the gate, between its posts; a second one just in front of it, never behind a post.
+      // The reviewer stands in the gate, between its posts; a second one beside its front post, a body clear of the first.
       gate: [
         { x: gate.x + 0.15, y: gate.y + gate.d / 2 },
-        { x: gate.x + 0.75, y: gate.y + gate.d / 2 + 0.3 },
+        { x: gate.x - 0.6, y: gate.y + gate.d + 0.45 },
       ],
       dock: spread(dock.x + 0.8, dock.y + 1.1, 2, 0.9),
-      lounge: loungePairs(table, sofa).flat().concat(loungeSolo(table)),
+      lounge: loungePairs(table, sofa).flat(),
     },
   };
 }
@@ -464,9 +463,10 @@ export function crowded(a: Spot, b: Spot): boolean {
 export function idleHaunts(plan: RoomPlan): Haunt[] {
   const { hopper, bench, dock, whiteboard } = plan;
   const raw: { key: HauntKey; pairs: [Spot, Spot][]; solo: Spot[] }[] = [
-    { key: 'lounge', pairs: loungePairs(plan.table, plan.sofa), solo: loungeSolo(plan.table) },
+    { key: 'lounge', pairs: loungePairs(plan.table, plan.sofa), solo: [] },
     { key: 'whiteboard', pairs: [[{ x: 1.15, y: whiteboard.y + 0.5 }, { x: 1.15, y: whiteboard.y + 1.9 }]], solo: [] },
-    { key: 'dock', pairs: [[{ x: dock.x + 0.35, y: dock.y + 1.65 }, { x: dock.x + 1.0, y: dock.y + 1.0 }]], solo: [] },
+    // On the dock, clear of the crates in its front corner.
+    { key: 'dock', pairs: [[{ x: dock.x + 0.3, y: dock.y + 0.5 }, { x: dock.x + 0.3, y: dock.y + 1.8 }]], solo: [] },
     { key: 'hopper', pairs: [[{ x: hopper.x + 0.7, y: hopper.y + hopper.d + 0.55 }, { x: hopper.x + 2.1, y: hopper.y + hopper.d + 0.55 }]], solo: [] },
     { key: 'bench', pairs: [], solo: [{ x: bench.x + 1.9, y: bench.y + bench.d + 0.7 }] },
   ];
