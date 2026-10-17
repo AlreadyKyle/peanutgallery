@@ -3560,6 +3560,13 @@ ol.timeline {
   vector-effect: non-scaling-stroke;
 }
 
+/* An agent's mark says what it is doing where it does it: none on a walk, and the book only in the
+   lounge. The pose comes from the frame loop (StudioRoom.tsx); still, every agent rests. */
+.studio-agent[data-pose='walk'] .agent-mark,
+.studio-agent[data-pose='away'][data-activity='reading'] .agent-mark {
+  opacity: 0;
+}
+
 /* The role card an agent shows on hover, focus or tap: written facts first, the card an addition. */
 .role-card {
   position: absolute;

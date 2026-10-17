@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { iso, type Box, type RoomPlan } from '../lib/studio-scene';
+import { iso, paintOrder, type Box, type RoomPlan } from '../lib/studio-scene';
 
 // The studio's room as a line drawing (docs/specs/final-state.md, The live studio and Studio
 // evolution): an isometric room in the site's thick-line style, 2px ink strokes on paper fills, the
@@ -99,6 +99,14 @@ function Pipe({ plan }: { plan: RoomPlan }) {
       {[1.8, 2.6].map((z) => (
         <g key={z}>{line([[x - r - 0.06, 0.06, z], [x + r + 0.06, 0.06, z]], 'room-line')}</g>
       ))}
+    </g>
+  );
+}
+
+function Hopper({ plan }: { plan: RoomPlan }) {
+  const hop = plan.hopper;
+  return (
+    <g data-station="hopper">
       {box(hop, 'hopper')}
       <polygon className="room-hole" points={pts([[hop.x + 0.2, hop.y + 0.15, hop.h], [hop.x + hop.w - 0.2, hop.y + 0.15, hop.h], [hop.x + hop.w - 0.2, hop.y + hop.d - 0.15, hop.h], [hop.x + 0.2, hop.y + hop.d - 0.15, hop.h]])} />
     </g>
@@ -165,12 +173,18 @@ function Bench({ plan }: { plan: RoomPlan }) {
   );
 }
 
-function Gate({ plan }: { plan: RoomPlan }) {
+/** The gate's marking on the floor: under everything that stands on it. */
+function GateFloor({ plan }: { plan: RoomPlan }) {
   const g = plan.gate;
+  return <polygon className="room-hatch" points={pts([[g.x - 0.4, g.y, 0], [g.x + 0.7, g.y, 0], [g.x + 0.7, g.y + g.d, 0], [g.x - 0.4, g.y + g.d, 0]])} />;
+}
+
+/** The gate's back post, and its front post with the lintel over both, so an agent can stand between. */
+function GatePost({ plan, front }: { plan: RoomPlan; front: boolean }) {
+  const g = plan.gate;
+  if (!front) return <g data-station="gate">{box({ x: g.x, y: g.y, w: g.w, d: 0.3, h: g.h }, 'post-a')}</g>;
   return (
     <g data-station="gate">
-      <polygon className="room-hatch" points={pts([[g.x - 0.4, g.y, 0], [g.x + 0.7, g.y, 0], [g.x + 0.7, g.y + g.d, 0], [g.x - 0.4, g.y + g.d, 0]])} />
-      {box({ x: g.x, y: g.y, w: g.w, d: 0.3, h: g.h }, 'post-a')}
       {box({ x: g.x, y: g.y + g.d - 0.3, w: g.w, d: 0.3, h: g.h }, 'post-b')}
       {box({ x: g.x - 0.05, y: g.y - 0.05, w: g.w + 0.1, d: g.d + 0.1, z: g.h, h: 0.3 }, 'lintel')}
       {/* A check mark on the lintel: the gate passes what it checks. */}
@@ -187,25 +201,45 @@ function Dock({ plan }: { plan: RoomPlan }) {
       {[0.2, 0.55, 0.9].map((f) => (
         <g key={f}>{line([[k.x + k.w, k.y + k.d * f, 0.02], [k.x + k.w, k.y + k.d * f + 0.25, k.h - 0.02]], 'room-thin')}</g>
       ))}
-      {box({ x: k.x + 1.5, y: k.y + 0.25, w: 0.8, d: 0.8, z: k.h, h: 0.7 }, 'crate-a')}
-      {box({ x: k.x + 1.6, y: k.y + 0.3, w: 0.6, d: 0.6, z: k.h + 0.7, h: 0.5 }, 'crate-b')}
-      {line([[k.x + 1.9, k.y + 0.25, k.h + 0.7], [k.x + 1.9, k.y + 1.05, k.h + 0.7]], 'room-thin')}
     </g>
   );
 }
 
-function Lounge({ plan }: { plan: RoomPlan }) {
+function Crates({ plan }: { plan: RoomPlan }) {
+  const k = plan.dock;
+  return (
+    <g data-station="dock">
+      {/* In the dock's front corner, clear of the gate and of the box a ship sends off. */}
+      {box({ x: k.x + 1.65, y: k.y + k.d - 1.05, w: 0.8, d: 0.8, z: k.h, h: 0.7 }, 'crate-a')}
+      {box({ x: k.x + 1.75, y: k.y + k.d - 0.95, w: 0.6, d: 0.6, z: k.h + 0.7, h: 0.5 }, 'crate-b')}
+      {line([[k.x + 2.05, k.y + k.d - 0.95, k.h + 1.2], [k.x + 2.05, k.y + k.d - 0.35, k.h + 1.2]], 'room-thin')}
+    </g>
+  );
+}
+
+function Rug({ plan }: { plan: RoomPlan }) {
   const s = plan.sofa;
-  const rug = plan.decor.includes('rug');
+  return <polygon className="room-hatch" points={pts([[0.6, s.y - 2.9, 0], [3.6, s.y - 2.9, 0], [3.6, s.y - 0.2, 0], [0.6, s.y - 0.2, 0]])} />;
+}
+
+function Sofa({ plan }: { plan: RoomPlan }) {
+  const s = plan.sofa;
   return (
     <g data-station="lounge">
-      {rug ? <polygon className="room-hatch" points={pts([[0.6, s.y - 2.9, 0], [3.6, s.y - 2.9, 0], [3.6, s.y - 0.2, 0], [0.6, s.y - 0.2, 0]])} /> : null}
-      {box({ x: s.x, y: s.y + s.d - 0.28, w: s.w, d: 0.28, h: s.h + 0.55 }, 'sofa-back')}
       {box(s, 'sofa-seat')}
+      {box({ x: s.x, y: s.y + s.d - 0.28, w: s.w, d: 0.28, h: s.h + 0.55 }, 'sofa-back')}
       {box({ x: s.x - 0.05, y: s.y, w: 0.3, d: s.d, h: s.h + 0.2 }, 'sofa-arm-a')}
       {box({ x: s.x + s.w - 0.25, y: s.y, w: 0.3, d: s.d, h: s.h + 0.2 }, 'sofa-arm-b')}
-      {box({ x: s.x + 0.9, y: s.y - 1.4, w: 0.9, d: 0.6, h: 0.35 }, 'table')}
-      {box({ x: s.x + 1.15, y: s.y - 1.3, w: 0.3, d: 0.22, z: 0.35, h: 0.06 }, 'book')}
+    </g>
+  );
+}
+
+function Table({ plan }: { plan: RoomPlan }) {
+  const t = plan.table;
+  return (
+    <g data-station="lounge">
+      {box(t, 'table')}
+      {box({ x: t.x + 0.25, y: t.y + 0.1, w: 0.3, d: 0.22, z: t.h, h: 0.06 }, 'book')}
     </g>
   );
 }
@@ -267,27 +301,51 @@ function Lamp({ x, y }: { x: number; y: number }) {
   );
 }
 
-/** Everything behind the agents: the floor, the walls, the pipe and the stations, back to front. */
-export function RoomDrawing({ plan, shipped = 0, legendary = 0 }: { plan: RoomPlan; shipped?: number; legendary?: number }) {
+/** A piece of furniture that stands on the floor: drawn in painter's order with the agents. */
+export type Piece = { key: string; foot: Box; node: ReactNode };
+
+/** The room in two layers: what is under or on the walls (`back`), and what stands on the floor. */
+export function roomLayers(plan: RoomPlan, shipped = 0, legendary = 0): { back: ReactNode; pieces: Piece[] } {
   const decor = plan.decor;
-  return (
-    <g className="room-drawing">
+  const { gate, dock, sofa } = plan;
+  const back = (
+    <>
       <Floor plan={plan} />
+      {decor.includes('rug') ? <Rug plan={plan} /> : null}
+      <GateFloor plan={plan} />
       <Walls plan={plan} />
       {decor.includes('legendary_wall') ? <LegendaryWall plan={plan} count={legendary} /> : null}
       <Pipe plan={plan} />
       <Whiteboard plan={plan} />
       {decor.includes('shelf') || decor.includes('trophy_shelf') ? <Shelf plan={plan} items={shipped} trophies={decor.includes('trophy_shelf')} /> : null}
-      <Bench plan={plan} />
-      {decor.includes('plant') ? <Plant x={plan.bench.x - 1.2} y={0.2} /> : null}
-      {plan.desks.map((desk, i) => (
-        <Desk key={i} b={desk} i={i} />
+    </>
+  );
+  const pieces: Piece[] = [
+    { key: 'hopper', foot: plan.hopper, node: <Hopper plan={plan} /> },
+    { key: 'bench', foot: plan.bench, node: <Bench plan={plan} /> },
+    ...plan.desks.map((desk, i) => ({ key: `desk${i}`, foot: desk, node: <Desk b={desk} i={i} /> })),
+    { key: 'gate-a', foot: { x: gate.x, y: gate.y, w: gate.w, d: 0.3, h: gate.h }, node: <GatePost plan={plan} front={false} /> },
+    { key: 'gate-b', foot: { x: gate.x, y: gate.y + gate.d - 0.3, w: gate.w, d: 0.3, h: gate.h }, node: <GatePost plan={plan} front /> },
+    { key: 'sofa', foot: { x: sofa.x - 0.05, y: sofa.y, w: sofa.w + 0.1, d: sofa.d, h: sofa.h + 0.55 }, node: <Sofa plan={plan} /> },
+    { key: 'table', foot: plan.table, node: <Table plan={plan} /> },
+    { key: 'dock', foot: dock, node: <Dock plan={plan} /> },
+    { key: 'crates', foot: { x: dock.x + 1.65, y: dock.y + dock.d - 1.05, w: 0.8, d: 0.8, h: 1.45 }, node: <Crates plan={plan} /> },
+  ];
+  if (decor.includes('plant')) pieces.push({ key: 'plant-a', foot: { x: plan.bench.x - 1.2, y: 0.2, w: 0.5, d: 0.5, h: 1 }, node: <Plant x={plan.bench.x - 1.2} y={0.2} /> });
+  if (decor.includes('plant') && plan.w > 11) pieces.push({ key: 'plant-b', foot: { x: plan.w - 3.6, y: plan.d - 0.8, w: 0.5, d: 0.5, h: 1 }, node: <Plant x={plan.w - 3.6} y={plan.d - 0.8} /> });
+  if (decor.includes('lamp')) pieces.push({ key: 'lamp', foot: { x: 0.4, y: plan.d - 2.5, w: 0.2, d: 0.2, h: 2 }, node: <Lamp x={0.5} y={plan.d - 2.4} /> });
+  return { back, pieces };
+}
+
+/** The whole room, back to front, with nobody in it (the blueprint on /studio/history). */
+export function RoomDrawing({ plan, shipped = 0, legendary = 0 }: { plan: RoomPlan; shipped?: number; legendary?: number }) {
+  const { back, pieces } = roomLayers(plan, shipped, legendary);
+  return (
+    <g className="room-drawing">
+      {back}
+      {paintOrder(pieces.map((piece) => piece.foot)).map((i) => (
+        <g key={pieces[i]!.key}>{pieces[i]!.node}</g>
       ))}
-      <Gate plan={plan} />
-      <Lounge plan={plan} />
-      {decor.includes('lamp') ? <Lamp x={0.5} y={plan.d - 2.4} /> : null}
-      <Dock plan={plan} />
-      {decor.includes('plant') && plan.w > 11 ? <Plant x={plan.w - 3.6} y={plan.d - 0.8} /> : null}
     </g>
   );
 }

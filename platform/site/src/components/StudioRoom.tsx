@@ -1,64 +1,112 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { copy } from '../lib/copy';
 import type { StudioDoc } from '../lib/community-types';
 import { motionAllowed } from '../lib/motion';
 import { rarityOf } from '../lib/suits';
 import type { Snapshot } from '../lib/source';
-import { eraKey, iso, placeAgents, roomPlan, type AgentPlace, type RoomPlan, type Spot } from '../lib/studio-scene';
+import { eraKey, findPath, idleHaunts, iso, paintOrder, pathLength, placeAgents, roomPlan, seeded, type AgentPlace, type Box, type HauntKey, type RoomPlan, type Spot } from '../lib/studio-scene';
 import { Avatar, avatarFeatures, avatarParts } from './Avatar';
-import { RoomDrawing, TILE, viewBoxOf } from './RoomDrawing';
+import { roomLayers, TILE, viewBoxOf } from './RoomDrawing';
 
 // The live studio (docs/specs/final-state.md, The live studio; DESIGN.md, The live studio): the
-// room an era gives, and the agents in it where the live data puts them. They walk between stations
-// when the data moves them, bob while they work, type at the desks and chat in pairs with a small
-// speech mark (never words). A coin drops through the pipe when a card's funding rises, a paper plane
-// brings a suggestion, and a ship leaves the dock as a box. Hover, focus or a tap on an agent shows
-// its role card; the same facts are written in a list under the room for screen readers and the
-// keyboard, which shows only while focus is in it (the board, 17 October 2026: the visible list pushed
-// the page down and repeated the role cards). Under reduced motion the room is drawn still, every agent
-// at its station; an agent under the pointer or focus never moves.
+// room an era gives, and the agents in it where the live data puts them. They walk round the furniture
+// between stations when the data moves them, bob while they work, type at the desks, and are drawn in
+// one painter's order with the furniture, so an agent behind a desk stands behind it. An agent with no
+// card never stands still for long: it wanders between the room's idle spots (the lounge, the
+// whiteboard, the hopper, the bench, the dock, a window or the plant) on its own rhythm, and a
+// chatting pair goes together and trades a small speech mark (never words) once both have arrived. A
+// coin drops through the pipe when a card's funding rises, a paper plane brings a suggestion, and a
+// ship leaves the dock as a box. Hover, focus or a tap on an agent shows its role card; the same facts
+// are written in a list under the room for screen readers and the keyboard, which shows only while
+// focus is in it (the board, 17 October 2026: the visible list pushed the page down and repeated the
+// role cards). Under reduced motion the room is drawn still, every agent at its place in the data; an
+// agent under the pointer or focus never moves.
 
 export type Pulse = { id: string; kind: 'coin' | 'plane' | 'box'; cardId?: string };
 
 const AGENT_SCALE = 0.42;
 const WALK_MS_PER_TILE = 520;
+/** How long an idle agent stays at a spot before it wanders on: between these, its own rhythm. */
+const REST_MS = [4500, 11000] as const;
+const IDLE: ReadonlySet<AgentPlace['activity']> = new Set(['chatting', 'reading', 'resting']);
+
+type Pose = 'walk' | 'rest' | 'away';
 
 type Anim = {
-  from: Spot;
-  to: Spot;
+  /** The walk under way, corner to corner; its last spot is where the agent is going. */
+  path: Spot[];
+  len: number;
   start: number;
   dur: number;
+  /** Where the live data puts the agent: its station, or its lounge spot when it has no card. */
+  home: Spot;
   frozen: Spot | null;
   hopAt: number;
   phase: number;
   /** The second of a chatting pair speaks while the first listens. */
   chatFlip?: boolean;
+  /** An agent with no card wanders between the room's idle spots. */
+  wander: boolean;
+  haunt: HauntKey | null;
+  restUntil: number;
+  leg: number;
+  /** A pair's leader picks where they go; this is the spot it keeps for its partner. */
+  pairSpot: Spot | null;
+  pose: Pose | null;
 };
 
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 
-/** Where a walk has got to: along x first, then along y, as people walk between desks. */
+const target = (anim: Anim): Spot => anim.path[anim.path.length - 1]!;
+
+/** Where a walk has got to, along its corners. */
 function walkAt(anim: Anim, now: number): Spot {
   if (anim.frozen !== null) return anim.frozen;
-  const t = anim.dur <= 0 ? 1 : Math.min(1, (now - anim.start) / anim.dur);
-  if (t >= 1) return anim.to;
-  const dx = anim.to.x - anim.from.x;
-  const dy = anim.to.y - anim.from.y;
-  const total = Math.abs(dx) + Math.abs(dy);
-  if (total === 0) return anim.to;
-  const along = ease(t) * total;
-  if (along <= Math.abs(dx)) return { x: anim.from.x + Math.sign(dx) * along, y: anim.from.y };
-  return { x: anim.to.x, y: anim.from.y + Math.sign(dy) * (along - Math.abs(dx)) };
+  const t = anim.dur <= 0 ? 1 : Math.min(1, Math.max(0, (now - anim.start) / anim.dur));
+  if (t >= 1 || anim.len === 0) return target(anim);
+  let left = ease(t) * anim.len;
+  for (let i = 1; i < anim.path.length; i += 1) {
+    const a = anim.path[i - 1]!;
+    const b = anim.path[i]!;
+    const leg = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
+    if (left <= leg) {
+      const f = leg === 0 ? 1 : left / leg;
+      return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+    }
+    left -= leg;
+  }
+  return target(anim);
 }
 
 function walking(anim: Anim, now: number): boolean {
   return anim.frozen === null && now - anim.start < anim.dur;
 }
 
+/** Start a walk round the furniture from where the agent is to `to`; under reduced motion it is there at once. */
+function walkTo(anim: Anim, plan: RoomPlan, to: Spot, now: number, min = 700): void {
+  const from = walkAt(anim, now);
+  if (!motionAllowed()) {
+    anim.path = [to];
+    anim.len = 0;
+    anim.dur = 0;
+    anim.start = now;
+    return;
+  }
+  const path = findPath(plan, from, to);
+  const len = pathLength(path);
+  anim.path = path;
+  anim.len = len;
+  anim.start = now;
+  anim.dur = len === 0 ? 0 : Math.max(min, Math.min(7000, len * WALK_MS_PER_TILE));
+}
+
 function screen(spot: Spot): { sx: number; sy: number } {
   return iso(spot.x, spot.y, 0, TILE);
 }
+
+/** An agent's footprint, for the painter's order with the furniture. */
+const footAt = (spot: Spot): Box => ({ x: spot.x - 0.15, y: spot.y - 0.15, w: 0.3, d: 0.3, h: 1.5 });
 
 /** The small mark over an agent that says what it is doing, drawn, never written. */
 function ActivityMark({ place }: { place: AgentPlace }) {
@@ -261,30 +309,115 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sprites, setSprites] = useState<Pulse[]>([]);
   const seenPulses = useRef(new Set<string>());
-  const titleId = useId();
+  const activeRef = useRef<{ id: string; at: Spot } | null>(null);
+  activeRef.current = active;
+  const shipped = snapshot.cards.filter((card) => card.stage === 'live').length;
+  const legendary = snapshot.cards.filter((card) => rarityOf(card) === 'legendary').length;
 
-  // Each agent's walk: a new target starts a walk from wherever it stands now.
+  const layers = useMemo(() => roomLayers(plan, shipped, legendary), [plan, shipped, legendary]);
+  const haunts = useMemo(() => idleHaunts(plan), [plan]);
+  const [, setOrderTick] = useState(0);
+
+  // Each agent's walk: a new place in the data starts a walk round the furniture from wherever it
+  // stands now. An agent with no card keeps wandering; one given a card walks to its station at once.
   const now = () => (typeof performance === 'undefined' ? Date.now() : performance.now());
   for (const place of places) {
-    const was = anims.current.get(place.role.id);
+    const id = place.role.id;
+    const idle = IDLE.has(place.activity);
+    const was = anims.current.get(id);
     if (was === undefined) {
-      anims.current.set(place.role.id, { from: place.spot, to: place.spot, start: 0, dur: 0, frozen: null, hopAt: -1e9, phase: Math.random() * Math.PI * 2 });
-    } else if (was.to.x !== place.spot.x || was.to.y !== place.spot.y) {
       const t = now();
-      const from = walkAt(was, t);
-      const tiles = Math.abs(place.spot.x - from.x) + Math.abs(place.spot.y - from.y);
-      const moving = motionAllowed();
-      anims.current.set(place.role.id, {
-        ...was,
-        from: moving ? from : place.spot,
-        to: place.spot,
-        start: t,
-        dur: moving ? Math.max(900, Math.min(4200, tiles * WALK_MS_PER_TILE)) : 0,
-        frozen: was.frozen,
+      anims.current.set(id, {
+        path: [place.spot],
+        len: 0,
+        start: 0,
+        dur: 0,
+        home: place.spot,
+        frozen: null,
+        hopAt: -1e9,
+        phase: seeded(id, 0) * Math.PI * 2,
+        wander: idle,
+        haunt: 'lounge',
+        // The first stroll starts at a different moment for each agent, so they never set off together.
+        restUntil: t + 1200 + seeded(id, 1) * 5000,
+        leg: 0,
+        pairSpot: null,
+        pose: null,
       });
+    } else if (was.home.x !== place.spot.x || was.home.y !== place.spot.y || was.wander !== idle) {
+      const t = now();
+      const joined = !was.wander && idle;
+      was.home = place.spot;
+      was.wander = idle;
+      // Given a card, or back from one: straight to the new place. Already wandering: carry on.
+      if (!idle || joined || !motionAllowed()) {
+        walkTo(was, plan, place.spot, t, 900);
+        was.haunt = 'lounge';
+        was.restUntil = t + was.dur + REST_MS[0];
+      }
     }
-    anims.current.get(place.role.id)!.chatFlip = place.partner !== null && place.role.id > place.partner;
+    anims.current.get(id)!.chatFlip = place.partner !== null && id > place.partner;
   }
+
+  /** Where every agent stands right now: under reduced motion, at its place in the data. */
+  const spotOf = (anim: Anim, t: number): Spot => (motionAllowed() ? walkAt(anim, t) : (anim.frozen ?? anim.home));
+
+  /** The painter's order of the furniture and the agents, back to front, as keys. */
+  const orderAt = (t: number): string[] => {
+    const items: { key: string; foot: Box }[] = layers.pieces.map((piece) => ({ key: `piece:${piece.key}`, foot: piece.foot }));
+    for (const place of places) {
+      const anim = anims.current.get(place.role.id);
+      items.push({ key: `agent:${place.role.id}`, foot: footAt(anim === undefined ? place.spot : spotOf(anim, t)) });
+    }
+    return paintOrder(items.map((item) => item.foot)).map((i) => items[i]!.key);
+  };
+
+  /**
+   * The next stroll for an idle agent that has rested long enough: another of the room's idle spots,
+   * one nobody else is at or heading for. The leader of a chatting pair takes a place with room for
+   * two and keeps the second spot for its partner, who follows.
+   */
+  const wander = (t: number) => {
+    const ends = [...anims.current.values()].map((anim) => target(anim));
+    const free = (spot: Spot, self: Anim) => ends.every((end, i) => [...anims.current.values()][i] === self || Math.abs(end.x - spot.x) + Math.abs(end.y - spot.y) > 0.6);
+    for (const place of places) {
+      const anim = anims.current.get(place.role.id);
+      if (anim === undefined || !anim.wander || anim.frozen !== null) continue;
+      const partner = place.partner === null ? undefined : anims.current.get(place.partner);
+      const follower = partner !== undefined && place.role.id > place.partner!;
+      if (follower) {
+        // The follower goes where its leader went, once the leader has set off.
+        if (partner.leg !== anim.leg && partner.pairSpot !== null && !walking(anim, t)) {
+          walkTo(anim, plan, partner.pairSpot, t);
+          anim.haunt = partner.haunt;
+          anim.leg = partner.leg;
+          anim.restUntil = partner.restUntil;
+        }
+        continue;
+      }
+      if (walking(anim, t) || t < anim.restUntil) continue;
+      if (partner !== undefined && (partner.frozen !== null || walking(partner, t))) continue;
+      const need = partner === undefined ? 1 : 2;
+      const options = haunts.filter((haunt) => haunt.key !== anim.haunt && haunt.spots.filter((spot) => free(spot, anim)).length >= need);
+      if (options.length === 0) {
+        anim.restUntil = t + REST_MS[0];
+        continue;
+      }
+      // The lounge counts twice: between cards the agents come back to it most.
+      const weighted = options.flatMap((haunt) => (haunt.key === 'lounge' ? [haunt, haunt] : [haunt]));
+      const haunt = weighted[Math.floor(seeded(place.role.id, 10 + anim.leg) * weighted.length)]!;
+      const spots = haunt.spots.filter((spot) => free(spot, anim));
+      const first = Math.floor(seeded(place.role.id, 100 + anim.leg) * spots.length);
+      const spot = spots[first]!;
+      walkTo(anim, plan, spot, t);
+      ends.push(spot);
+      anim.haunt = haunt.key;
+      anim.leg += 1;
+      anim.restUntil = t + anim.dur + REST_MS[0] + seeded(place.role.id, 1000 + anim.leg) * (REST_MS[1] - REST_MS[0]);
+      anim.pairSpot = need === 2 ? (spots[(first + 1) % spots.length] ?? null) : null;
+      if (anim.pairSpot !== null) ends.push(anim.pairSpot);
+    }
+  };
 
   // New pulses: the sprite plays, and the agents on that card (or at the desks) hop.
   useEffect(() => {
@@ -306,16 +439,26 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
 
   const spriteDone = useCallback((id: string) => setSprites((was) => was.filter((sprite) => sprite.id !== id)), []);
 
-  // The frame loop: walks, the idle bob, typing and a hop. It runs only while the room is on screen,
-  // the tab is visible and motion is allowed; otherwise the room is drawn still.
+  // The frame loop: walks, idle strolls, the bob, typing and a hop. It runs only while the room is on
+  // screen, the tab is visible and motion is allowed; otherwise the room is drawn still, every agent at
+  // its place in the data.
   useEffect(() => {
+    let order = '';
+    let ordered = 0;
     const draw = (t: number, still: boolean) => {
+      if (!still) wander(t);
       for (const [id, el] of els.current) {
         const anim = anims.current.get(id);
         if (anim === undefined) continue;
-        const spot = still ? (anim.frozen ?? anim.to) : walkAt(anim, t);
+        const spot = still ? (anim.frozen ?? anim.home) : walkAt(anim, t);
         const p = screen(spot);
         el.setAttribute('transform', `translate(${p.sx.toFixed(1)} ${p.sy.toFixed(1)})`);
+        // The mark over an agent shows what it is doing where it does it: none on a walk, the book only in the lounge.
+        const pose: Pose = !still && walking(anim, t) ? 'walk' : anim.wander && anim.haunt !== 'lounge' && !still ? 'away' : 'rest';
+        if (pose !== anim.pose) {
+          el.setAttribute('data-pose', pose);
+          anim.pose = pose;
+        }
         const body = bodies.current.get(id);
         if (body === undefined) continue;
         let lift = 0;
@@ -327,11 +470,25 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
         }
         body.setAttribute('transform', `translate(0 ${lift.toFixed(2)})`);
         if (still) continue;
-        // Typing: the three dots light one after another. Chatting: the two bubbles take turns.
+        // Typing: the three dots light one after another. Chatting: the two bubbles take turns, once
+        // both are standing together.
         const dots = body.querySelectorAll<SVGElement>('.mark-dot');
         dots.forEach((dot, i) => dot.setAttribute('opacity', String(0.25 + 0.75 * Math.max(0, Math.sin(t / 220 - i * 0.9 + anim.phase)))));
         const chat = body.querySelector<SVGElement>('.agent-chat');
-        if (chat !== null) chat.setAttribute('opacity', Math.sin(t / 1300 + (anim.chatFlip ? Math.PI : 0)) > 0 ? '1' : '0');
+        if (chat !== null) {
+          const place = places.find((one) => one.role.id === id);
+          const partner = place?.partner == null ? undefined : anims.current.get(place.partner);
+          const together = partner !== undefined && !walking(anim, t) && !walking(partner, t) && partner.haunt === anim.haunt;
+          chat.setAttribute('opacity', together && Math.sin(t / 1300 + (anim.chatFlip ? Math.PI : 0)) > 0 ? '1' : '0');
+        }
+      }
+      // Who stands in front of what changes as they walk: redraw in the new order, a few times a
+      // second at most, and never while a role card is open over an agent.
+      if (!still && t - ordered > 250 && activeRef.current === null) {
+        ordered = t;
+        const next = orderAt(t).join(' ');
+        if (order !== '' && next !== order) setOrderTick((n) => n + 1);
+        order = next;
       }
     };
     if (!motionAllowed()) {
@@ -362,7 +519,8 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
       observer?.disconnect();
       document.removeEventListener('visibilitychange', start);
     };
-  }, [places]);
+    // The loop reads the agents through refs and the room through closures made for these places.
+  }, [places, plan, layers, haunts]);
 
   const show = (id: string) => {
     if (closeTimer.current !== null) clearTimeout(closeTimer.current);
@@ -376,9 +534,17 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
   const release = (id: string) => {
     const anim = anims.current.get(id);
     if (anim === undefined || anim.frozen === null) return;
-    const from = anim.frozen;
-    const tiles = Math.abs(anim.to.x - from.x) + Math.abs(anim.to.y - from.y);
-    anims.current.set(id, { ...anim, frozen: null, from, start: now(), dur: tiles === 0 || !motionAllowed() ? 0 : Math.max(600, tiles * WALK_MS_PER_TILE) });
+    // It walks on from where it was held to where it was going, and an idle one rests a moment first.
+    const t = now();
+    const held = anim.frozen;
+    const to = target(anim);
+    anim.frozen = null;
+    anim.path = [held];
+    anim.len = 0;
+    anim.dur = 0;
+    anim.start = t;
+    walkTo(anim, plan, to, t, 600);
+    if (anim.wander) anim.restUntil = Math.max(anim.restUntil, t + anim.dur + 1500);
   };
   const hide = (id: string, delay = 160) => {
     if (closeTimer.current !== null) clearTimeout(closeTimer.current);
@@ -399,14 +565,11 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
 
   const activePlace = active === null ? null : (places.find((place) => place.role.id === active.id) ?? null);
   const activeAt = active === null ? null : screen(active.at);
-  const ordered = [...places].sort((a, b) => a.spot.x + a.spot.y - (b.spot.x + b.spot.y));
-  const shipped = snapshot.cards.filter((card) => card.stage === 'live').length;
-  const legendary = snapshot.cards.filter((card) => rarityOf(card) === 'legendary').length;
   const eraName = studio?.era.name ?? copy.studioRoom.eras.garage;
 
-  let agentsNode: ReactNode = ordered.map((place) => {
+  const agentNode = (place: AgentPlace): ReactNode => {
     const anim = anims.current.get(place.role.id);
-    const p = screen(anim === undefined ? place.spot : walkAt(anim, now()));
+    const p = screen(anim === undefined ? place.spot : spotOf(anim, now()));
     return (
       <g
         key={place.role.id}
@@ -446,23 +609,30 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
         </g>
       </g>
     );
+  };
+  // The furniture and the agents in one painter's order, so an agent behind a desk is drawn behind it.
+  const byId = new Map(places.map((place) => [place.role.id, place]));
+  const pieceByKey = new Map(layers.pieces.map((piece) => [piece.key, piece]));
+  const standing: ReactNode = orderAt(now()).map((key) => {
+    const [kind, id] = key.split(/:(.*)/s) as [string, string];
+    if (kind === 'agent') return agentNode(byId.get(id)!);
+    return <g key={key}>{pieceByKey.get(id)!.node}</g>;
   });
-  if (places.length === 0) agentsNode = null;
 
   return (
     <div className="studio">
       <div className="studio-stage" ref={container} data-era={plan.era}>
+        {/* Named by aria-label, not a <title>: a title shows as the browser's own tooltip over the room. */}
         <svg
           className="room"
           data-variant="live"
           viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
           role="group"
-          aria-labelledby={titleId}
+          aria-label={label ?? copy.studioRoom.svgTitle.replace('{era}', eraName)}
           preserveAspectRatio="xMidYMid meet"
         >
-          <title id={titleId}>{label ?? copy.studioRoom.svgTitle.replace('{era}', eraName)}</title>
-          <RoomDrawing plan={plan} shipped={shipped} legendary={legendary} />
-          {agentsNode}
+          <g className="room-drawing">{layers.back}</g>
+          {standing}
           {sprites.map((pulse) => (
             <Sprite key={pulse.id} pulse={pulse} plan={plan} onDone={spriteDone} />
           ))}
