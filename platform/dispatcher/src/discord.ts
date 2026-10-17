@@ -6,7 +6,8 @@
 import { fetchWithTimeout } from './db.js';
 import type { Logger } from './log.js';
 
-export type Lane = 'ships' | 'weekly';
+// announce is the announcements lane (docs/specs/operations.md, announce.ts).
+export type Lane = 'ships' | 'weekly' | 'announce';
 
 export interface PostResult {
   outcome: 'posted' | 'failed' | 'inert';
@@ -24,6 +25,7 @@ export interface DiscordPoster {
 export interface DiscordPosterOptions {
   ships: string | null;
   weekly: string | null;
+  announce?: string | null;
   fetchFn?: typeof fetch;
   log: Logger;
   timeoutMs?: number;
@@ -62,7 +64,7 @@ export function fitPost(head: string, tail: string, max = MAX_CONTENT): string {
 }
 
 export function createDiscordPoster(options: DiscordPosterOptions): DiscordPoster {
-  const urls: Record<Lane, string | null> = { ships: options.ships, weekly: options.weekly };
+  const urls: Record<Lane, string | null> = { ships: options.ships, weekly: options.weekly, announce: options.announce ?? null };
   const fetchFn = fetchWithTimeout(options.fetchFn ?? fetch, options.timeoutMs ?? DISCORD_TIMEOUT_MS);
   const { log } = options;
   return {
