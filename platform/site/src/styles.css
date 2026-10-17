@@ -1120,7 +1120,9 @@ button.link:hover:not(:disabled) {
 .game-shot {
   display: block;
   width: 100%;
-  max-width: 18rem;
+  /* The box art is 3:4, taller than the still it replaced; this width keeps the tile beside its text
+     within the layout audit's balance (scripts/layout-audit.mjs). */
+  max-width: 16.5rem;
   height: auto;
   border: 2px solid var(--ink);
   border-radius: var(--radius-card);
