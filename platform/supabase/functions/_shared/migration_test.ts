@@ -292,6 +292,7 @@ Deno.test("migrations on PGlite", {
         "20261017100000_community_core.sql",
         "20261017100100_community_digests.sql",
         "20261017100200_community_admin.sql",
+        "20261017210000_board_roster.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -4037,7 +4038,10 @@ Deno.test("migrations on PGlite", {
          where n.nspname = 'public' order by 1`,
         );
         const board = [
+          // board-roster: the board's Games and Agents reads (20261017210000_board_roster.sql).
+          "board_agent_roster",
           "board_aal2",
+          "board_games",
           "board_heartbeat",
           "board_jobs",
           "board_needs_you",
