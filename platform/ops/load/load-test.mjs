@@ -535,7 +535,7 @@ export function report(options, targets, outcome) {
   const rpcs = builds.reduce((sum, r) => sum + (targets.find((t) => t.name === r.path)?.rpcs ?? 0), 0);
   const lines = [
     `${verdict} load-test ${options.base} requests=${all.requests} rps=${all.rps.toFixed(1)} p50=${all.p50.toFixed(0)}ms p95=${all.p95.toFixed(0)}ms p99=${all.p99.toFixed(0)}ms error_rate=${pct(all.errorRate)} cache_hit=${pct(cached?.hitRatio ?? null)}`,
-    `thresholds: error_rate<=${pct(options.maxErrorRate)} (benchmarks §2 floor; target ${pct(THRESHOLDS.targetErrorRate)}) p95<=${options.p95Ms}ms p99<=${options.p99Ms}ms (TTFB good/poor under the §8 LCP target) cache_hit>=${pct(options.minHitRatio)} on cached documents (benchmarks §7 floor; target ${pct(THRESHOLDS.targetHitRatio)})`,
+    `thresholds: error_rate<=${pct(options.maxErrorRate)} (benchmarks.md section 2 floor; target ${pct(THRESHOLDS.targetErrorRate)}) p95<=${options.p95Ms}ms p99<=${options.p99Ms}ms (TTFB good/poor under the benchmarks.md section 8 LCP target) cache_hit>=${pct(options.minHitRatio)} on cached documents (benchmarks.md section 7 floor; target ${pct(THRESHOLDS.targetHitRatio)})`,
     `abort: step error_rate>${pct(options.abortErrorRate)} or step p95>${options.abortP95Ms}ms (after ${options.minSamples} requests), function answers from origin>${options.maxOrigin === 0 ? 'off' : options.maxOrigin}, cap ${options.maxRequests} requests`,
   ];
   if (stop !== null) lines.push(`stopped: ${stop.reason}`);
