@@ -11,6 +11,7 @@ platform/site/src/tokens.css
 platform/site/src/components/Card.tsx
 platform/site/src/components/Glyph.tsx
 platform/site/src/lib/motion.ts
+platform/site/src/lib/reveal.ts
 platform/site/src/routes.tsx
 platform/site/public
 platform/site/brand

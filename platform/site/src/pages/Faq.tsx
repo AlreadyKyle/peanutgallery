@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
 import { splitSentence } from '../components/Funding';
 import { copy } from '../lib/copy';
+import { faq } from '../lib/faq';
 import { legal } from '../lib/legal';
 import { RARITY_ODDS } from '../lib/rarity';
 import { XP_PER_DOLLAR } from '../lib/xp';
@@ -65,19 +66,19 @@ export function Faq() {
   return (
     <main className="wide">
       <div className="band">
-        <PageHeader title={copy.faq.title} lede={copy.faq.lede} />
+        <PageHeader title={faq.title} lede={faq.lede} />
       </div>
       <div className="band">
-        <nav className="faq-index" aria-label={copy.faq.indexLabel}>
+        <nav className="faq-index" aria-label={faq.indexLabel}>
           <ul>
-            {copy.faq.sections.map((section) => (
+            {faq.sections.map((section) => (
               <li key={section.id}>
                 <a href={`#${section.id}`}>{section.title}</a>
               </li>
             ))}
           </ul>
         </nav>
-        {copy.faq.sections.map((section) => (
+        {faq.sections.map((section) => (
           <section key={section.id} className="section faq-section" aria-labelledby={section.id}>
             <h2 id={section.id}>{section.title}</h2>
             {section.items.map((item, i) => (

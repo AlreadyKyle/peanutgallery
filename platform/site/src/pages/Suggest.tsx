@@ -15,7 +15,7 @@ import { legal } from '../lib/legal';
 // characters and a description of at most 500. The page says plainly what happens next: a review
 // agent with no tools reads it, and no agent that builds ever sees the player's words.
 
-export const SUGGESTION_AREAS = ['dust', 'new-game', 'site', 'studio'] as const;
+export const SUGGESTION_AREAS = ['dust', 'new_game', 'site', 'studio'] as const;
 export const TITLE_MAX = 80;
 export const BODY_MAX = 500;
 
