@@ -13,7 +13,7 @@ import { ManagedAdapter, REPO_MOUNT } from '../src/adapters/managed.js';
 import type { AgentAdapter, SessionSpec } from '../src/adapters/types.js';
 import { SessionBudgets } from '../src/budgets.js';
 import type { DraftTarget, Job, JobOrigin, OpenCardRow, Role } from '../src/db.js';
-import { draftCard, DraftStop, floorLines, parseDraftInput } from '../src/job-handlers/draft-card.js';
+import { draftCard, draftSessionBudget, DraftStop, floorLines, parseDraftInput } from '../src/job-handlers/draft-card.js';
 import { HANDLERS } from '../src/job-handlers/index.js';
 import type { Workspace, WorkflowDeps } from '../src/job-handlers/workflow.js';
 import { jobTick, type JobContext, type JobState } from '../src/jobs.js';
@@ -356,13 +356,13 @@ describe('draft_card, unattended and billed to the card it drafts', () => {
     ]);
   });
 
-  it("starts a session only when the throttle's money covers its budget: the balance after the other cards' holds, the daily and the monthly cap", async () => {
+  it("starts a session only when the throttle's money leaves the least a session needs: the balance after the other cards' holds, the daily and the monthly cap", async () => {
     const cases: Array<[string, Partial<MoneyState>]> = [
-      ['insufficient_balance', { balanceUsd: 0.5 }],
-      ['daily_cap', { dailyCapUsd: 10, spentTodayUsd: 9.5 }],
-      ['monthly_cap', { monthlyCapUsd: 500, spentThisMonthUsd: 499.6 }],
+      ['insufficient_balance', { balanceUsd: 0.3 }],
+      ['daily_cap', { dailyCapUsd: 10, spentTodayUsd: 9.7 }],
+      ['monthly_cap', { monthlyCapUsd: 500, spentThisMonthUsd: 499.7 }],
       ['monthly_cap', { monthlyCapUsd: null }],
-      ['insufficient_balance', { balanceUsd: 5, cards: [{ id: 'held', stage: 'funded', estimate_usd: 5, actual_usd: 0, funded_usd: 4.5, severity: null }] }],
+      ['insufficient_balance', { balanceUsd: 5, cards: [{ id: 'held', stage: 'funded', estimate_usd: 5, actual_usd: 0, funded_usd: 4.8, severity: null }] }],
     ];
     for (const [reason, state] of cases) {
       const t = setup({ designer: [JSON.stringify(DRAFT)], director: [verdict('approved', ['fits_pillars'])] });
@@ -373,6 +373,18 @@ describe('draft_card, unattended and billed to the card it drafts', () => {
     const t = setup({ designer: [JSON.stringify(DRAFT)], director: [verdict('approved', ['fits_pillars'])] });
     t.workflow.money = async () => money({ balanceUsd: 0.75 });
     expect(await draftCard(t.context)).toMatchObject({ result: 'approved' });
+  });
+
+  it('shrinks a session budget to the money left, as a build budget shrinks, rather than stopping on it', async () => {
+    for (const [state, budget] of [
+      [{ balanceUsd: 0.36 }, 0.36],
+      [{ dailyCapUsd: 10, spentTodayUsd: 9.5 }, 0.5],
+      [{ monthlyCapUsd: 500, spentThisMonthUsd: 499.6 }, 0.4],
+    ] as Array<[Partial<MoneyState>, number]>) {
+      const t = setup({ designer: [JSON.stringify(DRAFT)] });
+      t.workflow.money = async () => money(state);
+      await expect(draftSessionBudget(t.context, t.workflow, { id: NEW_CARD, funded_usd: 0, severity: null })).resolves.toEqual({ budgetUsd: budget, spentUsd: 0 });
+    }
   });
 
   it('withdraws a recorded draft when the money stops the Director, so nothing is left half-graded', async () => {

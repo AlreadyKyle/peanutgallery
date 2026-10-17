@@ -132,6 +132,13 @@ describe("resolveModel", () => {
     expect(resolveModel(host, { MODEL_HOST: " host-model-id " })).toBe("host-model-id");
   });
 
+  it("runs the Game Designer's MODEL_DESIGNER on MODEL_DIRECTOR until it is set", () => {
+    const designer = { name: "Game Designer", model: "MODEL_DESIGNER" as const };
+    expect(resolveModel(designer, { MODEL_DIRECTOR: "director-model-id" })).toBe("director-model-id");
+    expect(resolveModel(designer, { MODEL_DIRECTOR: "director-model-id", MODEL_DESIGNER: "designer-model-id" })).toBe("designer-model-id");
+    expect(() => resolveModel(designer, {})).toThrow("Game Designer: MODEL_DESIGNER is not set");
+  });
+
   it("fails when the variable is empty or absent", () => {
     expect(() => resolveModel(builderA, { MODEL_BUILDER: "" })).toThrow("MODEL_BUILDER is not set");
     expect(() => resolveModel(builderA, {})).toThrow("Builder A: MODEL_BUILDER is not set");

@@ -52,6 +52,7 @@ describe('loadConfig', () => {
       claudeBin: 'claude',
       sessionMaxMinutes: 60,
       modelDirector: null,
+      modelDesigner: null,
       modelHost: null,
       studioAnthropicApiKey: 'studio-key',
       healthcheckUrl: null,
@@ -98,6 +99,7 @@ describe('loadConfig', () => {
       claudeBin: '/opt/claude',
       sessionMaxMinutes: 90,
       modelDirector: 'builder-class',
+      modelDesigner: null,
       modelHost: 'builder-class',
       studioAnthropicApiKey: 'studio-key',
       healthcheckUrl: 'https://hc-ping.com/check-id',
@@ -126,10 +128,11 @@ describe('loadConfig', () => {
   });
 
   it('refuses a model with no row in the price table', () => {
-    for (const name of ['MODEL_BUILDER', 'MODEL_DIRECTOR', 'MODEL_HOST']) {
+    for (const name of ['MODEL_BUILDER', 'MODEL_DIRECTOR', 'MODEL_DESIGNER', 'MODEL_HOST']) {
       expect(() => loadConfig({ ...FULL, [name]: 'unpriced-model' }, REPO), name).toThrow(new ConfigError(`${name} has no row in PRICE_TABLE_JSON`));
     }
     expect(loadConfig({ ...FULL, MODEL_DIRECTOR: '  ', MODEL_HOST: '' }, REPO)).toMatchObject({ modelDirector: null, modelHost: null });
+    expect(loadConfig({ ...FULL, MODEL_DESIGNER: 'builder-class' }, REPO)).toMatchObject({ modelDesigner: 'builder-class' });
   });
 });
 

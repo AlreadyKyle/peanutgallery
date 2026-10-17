@@ -25,6 +25,8 @@ export interface DispatcherConfig {
   // The director and host models, when set. Nothing in the dispatcher runs them yet; they are
   // checked against the price table so a role seeded with one can be metered.
   modelDirector: string | null;
+  // The Game Designer's model, when set (MODEL_DESIGNER); unset, the Designer runs on MODEL_DIRECTOR.
+  modelDesigner: string | null;
   modelHost: string | null;
   priceTable: PriceTable;
   poolDailyCapUsd: number;
@@ -357,6 +359,7 @@ function buildConfig(env: Env, codeRoot: string, handRun: boolean): DispatcherCo
     netlifySiteIdPlatform: requireEnv(env, 'NETLIFY_SITE_ID_PLATFORM'),
     modelBuilder,
     modelDirector: pricedModel(optionalEnv(env, 'MODEL_DIRECTOR', ''), 'MODEL_DIRECTOR', priceTable),
+    modelDesigner: pricedModel(optionalEnv(env, 'MODEL_DESIGNER', ''), 'MODEL_DESIGNER', priceTable),
     modelHost: pricedModel(optionalEnv(env, 'MODEL_HOST', ''), 'MODEL_HOST', priceTable),
     priceTable,
     poolDailyCapUsd: numberEnv(env, 'POOL_DAILY_CAP_USD', 100),

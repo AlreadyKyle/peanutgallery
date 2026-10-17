@@ -68,7 +68,7 @@ The board supplies these; nothing in the repository holds them. Export them in t
    ```sh
    platform/ops/make-dispatcher-env.sh
    ```
-   It prints the path it wrote (a new temporary folder) and the key names, never the values. It refuses when an exported value is missing, when `VPS_GITHUB_TOKEN` equals the Mac's token, when `GITHUB_READ_TOKEN` equals a token that can write, when either token is not fine-grained, when a `MANAGED_*` id from step 4 is missing, or when `MODEL_BUILDER`, or a `MODEL_DIRECTOR` or `MODEL_HOST` that `.env` sets, has no row in `PRICE_TABLE_JSON`. It copies no `ANTHROPIC_API_KEY`, `CLAUDE_BIN` or `DISPATCHER_WORKTREE_ROOT` from the Mac, and uses `SUPABASE_SECRET_KEY` as the service key when `.env` has one.
+   It prints the path it wrote (a new temporary folder) and the key names, never the values. It refuses when an exported value is missing, when `VPS_GITHUB_TOKEN` equals the Mac's token, when `GITHUB_READ_TOKEN` equals a token that can write, when either token is not fine-grained, when a `MANAGED_*` id from step 4 is missing, or when `MODEL_BUILDER`, or a `MODEL_DIRECTOR`, `MODEL_DESIGNER` or `MODEL_HOST` that `.env` sets, has no row in `PRICE_TABLE_JSON`. It copies no `ANTHROPIC_API_KEY`, `CLAUDE_BIN` or `DISPATCHER_WORKTREE_ROOT` from the Mac, and uses `SUPABASE_SECRET_KEY` as the service key when `.env` has one.
 8. **Upload it** (replace `<path>` with the printed path), then delete the local copy:
    ```sh
    ssh root@$VPS_IP 'install -d -m 0700 /etc/peanutgallery'
