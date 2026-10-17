@@ -91,8 +91,8 @@
   --weight-strong: 600;
   --weight-bold: 700;
   --leading-body: 1.6;
-  --leading-display: 1.15; /* the page heading (h1) */
-  --leading-heading: 1.25; /* section headings (h2) */
+  --leading-display: 1.04; /* the page heading (h1): set tight, like a printed headline */
+  --leading-heading: 1.15; /* section headings (h2) */
   --leading-title: 1.35; /* h3 and h4, card, row and choice titles: a two-line title's lines never touch */
 
   /* Type scale (the board, 23 Sep 2026). Headings grow with the viewport, from a 390px phone to a
@@ -100,8 +100,14 @@
   --size-small: 0.875rem; /* 14px: meta lines, the card's index row and spec rows, a row's date and meta, footer */
   --size-body: 1.0625rem; /* 17px: paragraphs, nav, buttons, row titles */
   --size-lead: 1.25rem; /* 20px: the lede, figures, h3 and card titles */
-  --size-h2: clamp(1.5rem, 1.25rem + 1vw, 2rem); /* 24px to 32px: section headings */
-  --size-h1: clamp(2rem, 1.5rem + 2.25vw, 3.5rem); /* 33px to 56px: the page heading */
+  --size-h2: clamp(1.625rem, 1.2rem + 1.6vw, 2.5rem); /* 26px to 40px: section headings */
+  --size-h1: clamp(2.375rem, 1.4rem + 3.6vw, 4.5rem); /* 38px to 72px: the page heading */
+  --size-hero: clamp(2.375rem, 1.5rem + 2.6vw, 3.75rem); /* 38px to 60px: home's pitch, which shares its row with the lede */
+
+  /* Tracking: the only letter-spacing values. Display type sets tight, the index labels open. */
+  --tracking-display: -0.03em; /* h1 and the pitch */
+  --tracking-heading: -0.015em; /* h2 */
+  --tracking-label: 0.04em; /* the index numbers and labels set in the mono face */
 
   /* Space */
   --space-1: 0.5rem;
@@ -114,7 +120,7 @@
   --band-pad: clamp(3rem, 9vw, 6rem);
 
   /* Layout */
-  --wrap: 72rem;
+  --wrap: 76rem; /* 1216px: wide enough that the page fills a 1440px screen */
   --measure: 44rem;
   --measure-text: 36em; /* running text: about 72 characters a line at the body size */
   --gutter: 1.25rem;

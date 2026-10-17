@@ -142,7 +142,9 @@ function Planned({ detail }: { detail: CardDetail }) {
 function Detail({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }) {
   return (
     <>
-      <section aria-labelledby="card-face">
+      {/* From 64rem the face stays in view in its own column while the facts scroll beside it, so its
+          height is not meant to match theirs (DESIGN.md, No dead space). */}
+      <section className="card-face-column" aria-labelledby="card-face" data-balance="ignore">
         <h2 id="card-face" className="sr-only">
           {words.cardHeading}
         </h2>
@@ -192,7 +194,7 @@ export function CardPage() {
   // The body arrives after first paint, so the signal plate never grows to fill a short window: the
   // title renders once, where it stays, and the paper band takes the height left over (styles.css).
   return (
-    <main className="title-stays">
+    <main className="title-stays card-page">
       <div className="band">
         <p className="back">
           <Link className="target" to="/">

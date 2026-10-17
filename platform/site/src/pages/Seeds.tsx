@@ -213,7 +213,7 @@ export function Seeds() {
   const [sort, setSort] = useState<SeedSort>('trending');
   const list = useCommunity<PageDoc<SeedSummary>>(`/seeds?sort=${sort}`);
   return (
-    <main className="wide">
+    <main className="wide sheet">
       <div className="band">
         <PageHeader title={copy.seeds.title} lede={copy.seeds.lede} />
       </div>

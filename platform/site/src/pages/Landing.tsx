@@ -77,9 +77,9 @@ function StatusLine({ studio, view }: { studio: StudioState; view: HomeView | nu
 function Hero({ studio, live }: { studio: StudioState; live: ReturnType<typeof useLiveHome> }) {
   const env = siteEnv();
   return (
-    <div className="hero hero-with-video">
-      <div className="hero-text">
-        <h1>{copy.pitchTitle}</h1>
+    <div className="hero hero-home">
+      <h1>{copy.pitchTitle}</h1>
+      <div className="hero-side">
         <p className="lede">{copy.pitchBody}</p>
         {/* The pitch asks for funding, so its button goes to the cards to fund; Play free follows it, and
             How it works stays in the top bar (decision 72). */}
@@ -94,37 +94,44 @@ function Hero({ studio, live }: { studio: StudioState; live: ReturnType<typeof u
             </a>
           )}
         </p>
+        {/* The studio's state, under the actions. */}
+        <div className="hero-status">
+          <StatusLine studio={studio} view={live.view} />
+          <StaleNotice studio={studio} />
+          <Announcer message={live.message} />
+        </div>
       </div>
-      {/* The studio's state: under the pitch on a phone, under the pitch and the video from 64rem. */}
-      <div className="hero-status">
-        <StatusLine studio={studio} view={live.view} />
-        <StaleNotice studio={studio} />
-        <Announcer message={live.message} />
-      </div>
-      <ExplainerVideo />
     </div>
   );
 }
 
-/** The first game: its box art (docs/specs/final-state.md, a 3:4 cover), its name, one line and Play, so home shows the agents ship (decision 68). */
-function GameSection() {
+/**
+ * The first game and the explainer, side by side from 64rem: the game's box art, its name, one line
+ * and Play (decision 68), and the video that shows how a card becomes a change in it. Without a play
+ * address the video takes the row alone.
+ */
+function ShowcaseSection() {
   const env = siteEnv();
-  if (env.playUrl === '') return null;
   return (
-    <section className="section game-tile" aria-labelledby="game">
-      <img className="game-shot" src="/games/dust-box-art.svg" width={375} height={500} alt={copy.game.alt} />
-      <div className="game-text">
-        <h2 id="game">{copy.game.title}</h2>
-        <p className="game-name">{copy.game.name}</p>
-        <p>{copy.game.line}</p>
-        <p>
-          <a className="button" href={env.playUrl}>
-            <Glyph name="cartridge" />
-            {copy.game.play}
-          </a>
-        </p>
-      </div>
-    </section>
+    <div className="showcase">
+      {env.playUrl === '' ? null : (
+        <section className="section game-tile" aria-labelledby="game">
+          <img className="game-shot" src="/games/dust-box-art.svg" width={375} height={500} alt={copy.game.alt} />
+          <div className="game-text">
+            <h2 id="game">{copy.game.title}</h2>
+            <p className="game-name">{copy.game.name}</p>
+            <p>{copy.game.line}</p>
+            <p>
+              <a className="button" href={env.playUrl}>
+                <Glyph name="cartridge" />
+                {copy.game.play}
+              </a>
+            </p>
+          </div>
+        </section>
+      )}
+      <ExplainerVideo />
+    </div>
   );
 }
 
@@ -141,7 +148,7 @@ function FundSection({ studio, live }: { studio: StudioState; live: ReturnType<t
         unavailable={view === null && studio.state !== 'loading'}
       />
       {view !== null ? (
-        <FundNow cards={view.groups.fund} snapshot={view.snapshot} changed={live.changed} />
+        <FundNow cards={view.groups.fund} snapshot={view.snapshot} changed={live.changed} machine={<MachineCard />} />
       ) : studio.state === 'loading' ? (
         <p className="muted" aria-busy="true">
           {copy.loadingCards}
@@ -149,8 +156,9 @@ function FundSection({ studio, live }: { studio: StudioState; live: ReturnType<t
       ) : (
         <p className="muted">{unavailableLine(studio)}</p>
       )}
-      {/* The Machine card (docs/specs/final-state.md, Card suits): always open, general support. */}
-      <MachineCard />
+      {/* The Machine card (docs/specs/final-state.md, Card suits): always open, general support. With the
+          cards drawn it sits beside the next card in line; without them it follows the loading line. */}
+      {view !== null ? null : <MachineCard />}
     </section>
   );
 }
@@ -190,31 +198,38 @@ function MoneySection({ studio, view }: { studio: StudioState; view: HomeView | 
   return (
     <section className="section" aria-labelledby="money">
       <h2 id="money">{legal.moneyHeading}</h2>
-      {snapshot === null ? (
-        <p className="muted" aria-busy={studio.state === 'loading' ? 'true' : undefined}>
-          {studio.state === 'loading' ? legal.loadingFigures : unavailableLine(studio)}
-        </p>
-      ) : snapshot.pool === null ? (
-        <p className="muted">{legal.partUnavailable}</p>
-      ) : (
-        <PoolLine balance={snapshot.pool.balance_usd} />
-      )}
-      <p className="money-split">
-        {splitSentence()} {legal.agentShareLine} {legal.notDonations}
-      </p>
-      {snapshot === null ? null : (
-        <>
-          <h3 className="rows-heading">{legal.latestActions}</h3>
-          {snapshot.missing.includes('events') ? (
+      {/* The pool and the split on the left, the latest agent actions beside them from 64rem. */}
+      <div className="money-grid">
+        <div className="money-summary">
+          {snapshot === null ? (
+            <p className="muted" aria-busy={studio.state === 'loading' ? 'true' : undefined}>
+              {studio.state === 'loading' ? legal.loadingFigures : unavailableLine(studio)}
+            </p>
+          ) : snapshot.pool === null ? (
             <p className="muted">{legal.partUnavailable}</p>
           ) : (
-            <EventList snapshot={snapshot} limit={HOME_ACTIONS} collapse />
+            <PoolLine balance={snapshot.pool.balance_usd} />
           )}
-        </>
-      )}
-      <p className="more">
-        <MoreLink to="/ledger">{copy.fullLedger}</MoreLink>
-      </p>
+          <p className="money-split">
+            {splitSentence()} {legal.agentShareLine} {legal.notDonations}
+          </p>
+        </div>
+        <div className="money-actions">
+          {snapshot === null ? null : (
+            <>
+              <h3 className="rows-heading">{legal.latestActions}</h3>
+              {snapshot.missing.includes('events') ? (
+                <p className="muted">{legal.partUnavailable}</p>
+              ) : (
+                <EventList snapshot={snapshot} limit={HOME_ACTIONS} collapse />
+              )}
+            </>
+          )}
+          <p className="more">
+            <MoreLink to="/ledger">{copy.fullLedger}</MoreLink>
+          </p>
+        </div>
+      </div>
     </section>
   );
 }
@@ -228,13 +243,14 @@ export function Landing() {
     <main className="wide home">
       <div className="band">
         <Hero studio={studio} live={live} />
+        {/* The live studio sits on the first band, beside nothing, so it is in view when the page opens
+            (docs/specs/brand.md, Home). */}
+        {view === null ? null : <LiveStudio snapshot={view.snapshot} />}
       </div>
       <div className="band">
-        {/* The live studio opens the paper band (docs/specs/final-state.md, The live studio). */}
-        {view === null ? null : <LiveStudio snapshot={view.snapshot} />}
         {view === null ? null : <SinceLastVisit cards={view.snapshot.cards} since={since} />}
         <FundSection studio={studio} live={live} />
-        <GameSection />
+        <ShowcaseSection />
         {view === null ? null : <FlowSection view={view} />}
       </div>
       {view === null ? null : <TeamSection view={view} />}

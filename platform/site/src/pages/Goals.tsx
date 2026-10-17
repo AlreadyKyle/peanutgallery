@@ -77,7 +77,7 @@ export function Goals() {
   const goals = doc.state === 'ready' ? [...doc.data.goals].sort((a, b) => a.amountCents - b.amountCents) : [];
   const next = goals.find((goal) => goal.state === 'next') ?? null;
   return (
-    <main className="wide">
+    <main className="wide sheet">
       <div className="band">
         <PageHeader title={copy.goals.title} lede={copy.goals.lede} />
       </div>

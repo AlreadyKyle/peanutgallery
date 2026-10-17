@@ -303,14 +303,15 @@ describe('Landing', () => {
 
     await screen.findByRole('region', { name: copy.team.title });
     await lanesDrawn();
-    // The live studio opens the paper band (docs/specs/final-state.md, The live studio).
+    // The live studio sits on the plate under the pitch, in view when the page opens (docs/specs/brand.md, Home).
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([copy.studioRoom.title, copy.flow.fundTitle, copy.game.title, copy.flow.title, copy.team.title, legal.moneyHeading]);
-    // Four bands: the pitch (signal), the cards (paper: the cards to fund, the first game, then how
+    // Four bands: the pitch and the live studio (signal), the cards (paper: the cards to fund, the first game, then how
     // they move), the team (ink) and the money (paper).
     const bands = [...container.querySelectorAll<HTMLElement>('main > *')];
     expect(bands.map((band) => band.className)).toEqual(['band', 'band', 'band', 'band']);
     expect(bands[0]!.querySelector('h1')).not.toBeNull();
-    expect([...bands[1]!.querySelectorAll('h2')].map((h) => h.id)).toEqual(['studio', 'fund', 'game', 'flow']);
+    expect([...bands[0]!.querySelectorAll('h2')].map((h) => h.id)).toEqual(['studio']);
+    expect([...bands[1]!.querySelectorAll('h2')].map((h) => h.id)).toEqual(['fund', 'game', 'flow']);
     // The first game's tile: its name, its box art with alt text, and Play to the game (decision 68).
     expect(screen.getByRole('link', { name: copy.game.play }).getAttribute('href')).toBe('https://play.example');
     expect(screen.getByRole('img', { name: copy.game.alt }).getAttribute('src')).toBe('/games/dust-box-art.svg');

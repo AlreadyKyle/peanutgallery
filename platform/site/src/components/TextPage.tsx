@@ -97,7 +97,7 @@ export function TextPage({
   footer?: ReactNode;
 }) {
   return (
-    <main className="text-page">
+    <main className="text-page sheet">
       <div className="band">
         <PageHeader title={title ?? page.title} lede={page.lede}>
           {status}

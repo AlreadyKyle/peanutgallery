@@ -94,6 +94,9 @@ test('a visible tab reads /api/live every 60 seconds and /api/cards only on the 
     const pool = { ...studio.pool, balance_usd: (12.33 + reads / 100).toFixed(4) };
     return route.fulfill({ status: 200, contentType: 'application/json; charset=utf-8', body: JSON.stringify(toDocuments({ ...studio, pool }).live) });
   });
+  // The live studio now opens home in view; under reduced motion it is drawn still, so running the
+  // clock a minute does not also run a minute of its animation frames.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.clock.install();
   const api = apiRequests(page);
   const live = await fetchProbe(page, '/api/live');

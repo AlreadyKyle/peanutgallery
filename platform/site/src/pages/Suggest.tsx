@@ -167,7 +167,7 @@ export function Suggest() {
   const list = useCommunity<PageDoc<SuggestionSummary>>(query);
   const filterId = useId();
   return (
-    <main className="wide">
+    <main className="wide sheet">
       <div className="band">
         <PageHeader title={copy.suggest.title} lede={copy.suggest.lede} />
       </div>
