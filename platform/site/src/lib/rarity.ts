@@ -28,6 +28,6 @@ export function rarityFromUnit(u: number): Rarity {
 
 export async function cardRarity(cardId: string): Promise<Rarity> {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(cardId)));
-  const u = (((digest[0] << 24) >>> 0) + (digest[1] << 16) + (digest[2] << 8) + digest[3]) / 2 ** 32;
+  const u = new DataView(digest.buffer).getUint32(0) / 2 ** 32;
   return rarityFromUnit(u);
 }
