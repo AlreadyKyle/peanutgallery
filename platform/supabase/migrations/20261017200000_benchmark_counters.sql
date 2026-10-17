@@ -24,7 +24,7 @@ alter table public.play_counts add constraint play_counts_event_check
   check (event in (
     'dust_load', 'dust_share', 'card_share', 'dust_next_card',
     'dust_return_1d', 'dust_return_7d', 'dust_session_2m', 'dust_session_4m', 'dust_seed_save', 'dust_seed_open',
-    'home_load', 'home_dwell_15s', 'home_dwell_45s', 'broadcast_load', 'broadcast_qr', 'discord_click'
+    'home_load', 'home_dwell_mid', 'home_dwell_long', 'broadcast_load', 'broadcast_qr', 'discord_click'
   ));
 
 create or replace function public.count_play_event(p_event text) returns boolean
@@ -34,7 +34,7 @@ set search_path = public
 as $$
 begin
   -- The same list as the site's PLAY_EVENTS (platform/site/netlify/functions/card.mts).
-  if p_event is null or p_event not in ('dust_load', 'dust_share', 'card_share', 'dust_next_card', 'dust_return_1d', 'dust_return_7d', 'dust_session_2m', 'dust_session_4m', 'dust_seed_save', 'dust_seed_open', 'home_load', 'home_dwell_15s', 'home_dwell_45s', 'broadcast_load', 'broadcast_qr', 'discord_click') then
+  if p_event is null or p_event not in ('dust_load', 'dust_share', 'card_share', 'dust_next_card', 'dust_return_1d', 'dust_return_7d', 'dust_session_2m', 'dust_session_4m', 'dust_seed_save', 'dust_seed_open', 'home_load', 'home_dwell_mid', 'home_dwell_long', 'broadcast_load', 'broadcast_qr', 'discord_click') then
     return false;
   end if;
   insert into public.play_counts (day, event, count)

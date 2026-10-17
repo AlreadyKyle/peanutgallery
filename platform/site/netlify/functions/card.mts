@@ -35,7 +35,7 @@ export const SESSION_PATTERN = /^cs_(live|test)_[A-Za-z0-9]{10,250}$/;
 export const PLAY_EVENTS = [
   'dust_load', 'dust_share', 'card_share', 'dust_next_card',
   'dust_return_1d', 'dust_return_7d', 'dust_session_2m', 'dust_session_4m', 'dust_seed_save', 'dust_seed_open',
-  'home_load', 'home_dwell_15s', 'home_dwell_45s', 'broadcast_load', 'broadcast_qr', 'discord_click',
+  'home_load', 'home_dwell_mid', 'home_dwell_long', 'broadcast_load', 'broadcast_qr', 'discord_click',
 ] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CARD_PATH = /^\/api\/card\/([^/]+)$/;
