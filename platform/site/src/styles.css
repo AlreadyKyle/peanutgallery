@@ -2522,11 +2522,32 @@ input[type='radio'] {
   margin-top: var(--space-3);
 }
 
+/* The lede is the pitch's ask, so it reads as a second line of the headline, not as body text. */
+.hero-home .lede {
+  margin: 0;
+  font-size: var(--size-h2);
+  font-weight: var(--weight-strong);
+  line-height: var(--leading-heading);
+}
+
+/* From 64rem the plate shares the live studio's columns: the pitch over the room and the lede, the
+   actions and the status line over the studio's ruled column, on its rule and its text edge, so the
+   right-hand column reads as one from the lede down to the pipe (the board, 17 October 2026). */
 @media (min-width: 64rem) {
   .hero-home {
-    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-    column-gap: var(--space-5);
+    grid-template-columns: minmax(0, 1fr) 24rem;
+    column-gap: var(--space-4);
     align-items: end;
+  }
+
+  /* The pitch keeps its three lines in the wider column, so it stands as tall as the column beside it. */
+  .hero-home h1 {
+    max-width: 9.5em;
+  }
+
+  .hero-home .hero-side {
+    border-inline-start: 1px solid var(--hairline);
+    padding-inline-start: var(--space-3);
   }
 }
 
@@ -3591,9 +3612,21 @@ ol.timeline {
   color: var(--text-muted);
 }
 
+/* The written facts under the room are for screen readers and the keyboard: hidden until focus is in
+   them, then drawn as rows (the board, 17 October 2026: the role cards carry them for the eye). */
+.studio-facts:not(:focus-within) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .studio-facts {
-  display: grid;
-  gap: 0 var(--space-3);
   margin-top: var(--space-2);
   font-size: var(--size-small);
 }
@@ -3614,12 +3647,6 @@ ol.timeline {
 
 .studio-fact-doing {
   display: block;
-}
-
-@media (min-width: 48rem) {
-  .studio-facts {
-    grid-template-columns: 1fr 1fr;
-  }
 }
 
 /* The pipe: a row per event, its kind as a glyph and a word, who, rarity and when under it. */
