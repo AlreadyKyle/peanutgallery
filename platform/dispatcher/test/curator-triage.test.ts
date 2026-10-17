@@ -3,6 +3,8 @@
 // the rest go to one tool-less managed session billed as overhead, as quoted data in a delimited
 // block; the answer is kept only for ids in the batch, with the guard's flags restored; and a run
 // with the flag off or nothing waiting starts no session. Also draft_card's cluster brief.
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import type { AgentAdapter, SessionSpec } from '../src/adapters/types.js';
@@ -14,7 +16,7 @@ import type { WorkflowDeps } from '../src/job-handlers/workflow.js';
 import type { JobContext } from '../src/jobs.js';
 import { createLogger } from '../src/log.js';
 import { parsePriceTable } from '../src/pricing.js';
-import { TypedOutput } from '../src/typed-output.js';
+import { AGENTS_DIR, TypedOutput } from '../src/typed-output.js';
 import { RecordingAlerter } from './helpers/fake-alert.js';
 import { FakeAdapter, usageEvent } from './helpers/fake-adapter.js';
 import { FakeDb, NOW, role } from './helpers/fake-db.js';
@@ -101,6 +103,18 @@ describe('the Curator guard', () => {
     expect(guardFlags(INJECTIONS[4]!)).toContain('money_or_secrets');
     expect(guardFlags(s(1, 'Add a night mode', 'The sand could glow in the dark.'))).toEqual([]);
     expect(guardFlags(s(2, 'Faster gatherers', 'Ignore the slow start: make gatherers quicker.'))).toEqual([]);
+  });
+
+  it("agrees with every case in the Curator's eval set (platform/agents/evals/cases/curator)", () => {
+    const dir = path.join(AGENTS_DIR, 'evals', 'cases', 'curator');
+    const files = readdirSync(dir).filter((file) => file.endsWith('.json'));
+    expect(files.length).toBeGreaterThanOrEqual(8);
+    for (const file of files) {
+      const c = JSON.parse(readFileSync(path.join(dir, file), 'utf8')) as { input: { suggestion: CuratorSuggestion }; expect: { guard_flags: boolean; safety_flags_include: string[] } };
+      const flags = guardFlags(c.input.suggestion);
+      if (c.expect.guard_flags) for (const flag of c.expect.safety_flags_include) expect(flags, file).toContain(flag);
+      else expect(flags, file).toEqual([]);
+    }
   });
 
   it('quotes a suggestion so it cannot close the data block', () => {
