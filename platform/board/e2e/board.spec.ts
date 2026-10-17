@@ -539,6 +539,7 @@ test('Games and agents reads nothing until a tab is chosen, shows the box art un
   await expect(agent).toContainText("$1.50 of the studio's $3.00 today, 2% of the daily cap of $100.00");
   await expect(agent).toContainText('Builds funded game cards in the paths each card allows.');
   await expect(roster.locator('[data-group="planned"] li[data-role="Host"]')).toContainText('Planned (When the stream exists.)');
+  if (process.env.BOARD_E2E_SHOTS) await roster.screenshot({ path: `${process.env.BOARD_E2E_SHOTS}/agents-375.png` });
   await roster.getByLabel('Reason for turning a role on or off').fill('Too many failed builds');
   await agent.getByRole('button', { name: 'Turn Builder A off' }).click();
   await expect(roster.getByRole('status')).toHaveText('Builder A turned off.');
@@ -583,6 +584,8 @@ test('Games changes a game only with a reason, each write sending its contract b
   ]);
   await tile.getByText('Recent changes').click();
   await expect(tile).toContainText('featured: Our first game');
+  // BOARD_E2E_SHOTS=<folder> keeps a screenshot of the managed tile to look at.
+  if (process.env.BOARD_E2E_SHOTS) await roster.screenshot({ path: `${process.env.BOARD_E2E_SHOTS}/games-375.png` });
   expect(await overflows(page)).toBe(false);
   expect(reports).toEqual([]);
 });
