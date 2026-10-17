@@ -1,18 +1,29 @@
-// The words for the layers after the units (milestones, weather, gems and perks, and the first
-// steps), Three-free and DOM-free so tests/depth-render.test.ts runs them in Node. Every number in
-// them comes from the config, so a config-lane change to a weather kind or a perk never leaves its
-// description behind. The HUD (render/hud.ts) and the controls (render/controls.ts) put them on screen.
+// The words for the layers after the units (milestones, weather, gems and perks, forks, orders, dust
+// devils and the first steps), Three-free and DOM-free so tests/depth-render.test.ts runs them in
+// Node. Every number in them comes from the config, so a config-lane change to a weather kind, a fork
+// or a perk never leaves its description behind. The HUD (render/hud.ts) and the controls
+// (render/controls.ts) put them on screen.
 import {
+  canFill,
   costOf,
   currentWeather,
+  devilHere,
+  devilReward,
   dustForNextGem,
   findRow,
   gemsForPress,
   milestoneFactor,
   nextMilestone,
+  orderBonus,
+  orderProgress,
+  orderRest,
+  orderReward,
+  ordersOpen,
   ownedCount,
+  pendingForks,
+  whirling,
 } from '../sim/sim';
-import type { PerkRow, SimConfig, SimState, WeatherKind } from '../sim/types';
+import type { ForkEffect, ForkOption, OrderState, PerkRow, SimConfig, SimState, UnlockRow, WeatherKind } from '../sim/types';
 import { formatTimes } from './a11y';
 import { fill, formatDust, formatPercent } from './format';
 import type { Strings } from './strings';
@@ -161,4 +172,147 @@ export function gemGoal(state: SimState, config: SimConfig): GemGoal | null {
   const from = now * now * now * table.dustPerGem;
   const span = next - from;
   return { progress: span <= 0 ? 1 : Math.min(1, Math.max(0, (state.totalDust - from) / span)), remaining: Math.max(0, next - state.totalDust) };
+}
+
+// ---- Forks ------------------------------------------------------------------------------------
+
+/** What one side of a fork does, from its effect: "Strikes ×2", "Cart ×2", "Dust devils give ×3". */
+export function describeForkEffect(effect: ForkEffect, config: SimConfig, strings: Strings): string {
+  const times = formatTimes(effect.value);
+  switch (effect.type) {
+    case 'multiplier':
+      return fill(strings.depth.forkMultiplier, { times });
+    case 'strike':
+      return fill(strings.depth.forkStrike, { times });
+    case 'unit':
+      return fill(strings.depth.forkUnit, { unit: unitName(config, effect.unit), times });
+    case 'weather':
+      return fill(strings.depth.forkWeather, { times });
+    case 'devil':
+      return fill(strings.depth.forkDevil, { times });
+    case 'order':
+      return fill(strings.depth.forkOrder, { times });
+  }
+}
+
+export interface ForkOptionView {
+  option: ForkOption;
+  effect: string;
+  /** The option button's accessible name. */
+  label: string;
+}
+
+export interface ForkView {
+  row: UnlockRow;
+  options: ForkOptionView[];
+  /** Forks still waiting after this one. */
+  more: number;
+}
+
+/** The first fork waiting for a choice, with its options in words, or null when none is waiting. */
+export function forkView(state: SimState, config: SimConfig, strings: Strings): ForkView | null {
+  const pending = pendingForks(state, config);
+  const row = pending[0];
+  if (row === undefined || row.effect.type !== 'fork') return null;
+  const options = row.effect.options.map((option) => {
+    const effect = describeForkEffect(option.effect, config, strings);
+    return { option, effect, label: fill(strings.depth.forkLabel, { name: option.name, effect }) };
+  });
+  return { row, options, more: pending.length - 1 };
+}
+
+/** What the live region says when a fork opens: "Workshop: choose one. Iron broom, Strikes ×2 or ...". */
+export function forkOpenWords(row: UnlockRow, config: SimConfig, strings: Strings): string {
+  if (row.effect.type !== 'fork') return '';
+  const options = row.effect.options.map((option) => `${option.name}, ${describeForkEffect(option.effect, config, strings)}`);
+  return fill(strings.depth.forkOpenSaid, { name: row.name, options: options.join(strings.depth.forkOr) });
+}
+
+// ---- Orders -----------------------------------------------------------------------------------
+
+/** An order in words: "Own 4 Cart", "Gather 1,200 dust", "Strike 30 times". */
+export function orderWords(order: OrderState, config: SimConfig, strings: Strings): string {
+  if (order.type === 'own') return fill(strings.depth.orderOwn, { count: String(order.target), unit: unitName(config, order.unit ?? '') });
+  if (order.type === 'strikes') return fill(strings.depth.orderStrikes, { count: String(order.target) });
+  return fill(strings.depth.orderGather, { amount: formatDust(order.target) });
+}
+
+export interface OrderView {
+  /** What the order asks for. */
+  text: string;
+  /** "2 of 4". */
+  count: string;
+  /** 0 to 1. */
+  progress: number;
+  /** It can be filled now. */
+  ready: boolean;
+  /** Seconds before a met order can be filled. */
+  rest: number;
+  reward: number;
+  /** The fill button's text and accessible name. */
+  fillText: string;
+  fillLabel: string;
+  /** "3 filled, +6%": what filled orders add for good. */
+  filled: string;
+}
+
+export function orderView(state: SimState, config: SimConfig, strings: Strings): OrderView | null {
+  const order = state.order;
+  const progress = orderProgress(state);
+  if (!ordersOpen(state, config) || order === undefined || progress === null) return null;
+  const reward = orderReward(state, config);
+  const amount = formatDust(reward);
+  const have = Math.min(progress.have, progress.need);
+  const show = (n: number): string => (order.type === 'gather' ? formatDust(Math.floor(n)) : String(n));
+  return {
+    text: orderWords(order, config, strings),
+    count: fill(strings.depth.orderProgress, { have: show(have), need: show(progress.need) }),
+    progress: progress.need <= 0 ? 1 : Math.min(1, Math.max(0, have / progress.need)),
+    ready: canFill(state, config),
+    rest: orderRest(state),
+    reward,
+    fillText: fill(strings.depth.orderFill, { amount }),
+    fillLabel: fill(strings.depth.orderFillLabel, { amount }),
+    filled: fill(strings.depth.ordersCount, { count: String(state.ordersFilled ?? 0), percent: formatPercent(orderBonus(state, config)) }),
+  };
+}
+
+// ---- Dust devils ------------------------------------------------------------------------------
+
+export interface DevilView {
+  reward: number;
+  /** The catch button's text and accessible name. */
+  text: string;
+  label: string;
+}
+
+/** The dust devil on the island, or null when there is none. */
+export function devilView(state: SimState, config: SimConfig, strings: Strings): DevilView | null {
+  if (config.unlocks.devils === undefined || !devilHere(state)) return null;
+  const reward = devilReward(state, config);
+  const amount = formatDust(reward);
+  return { reward, text: fill(strings.depth.devilCatch, { amount }), label: fill(strings.depth.devilCatchLabel, { amount }) };
+}
+
+/** The whirl a caught devil left: its effect in words and the seconds it has left, or null. */
+export function whirlView(state: SimState, config: SimConfig, strings: Strings): { effect: string; secondsLeft: number } | null {
+  const table = config.unlocks.devils;
+  if (table === undefined || state.devil === undefined || !whirling(state)) return null;
+  return {
+    effect: fill(strings.depth.whirlEffect, { times: formatTimes(table.whirlStrike) }),
+    secondsLeft: Math.max(0, Math.ceil(state.devil.whirlUntil - state.elapsedSeconds)),
+  };
+}
+
+/** The banner and the live region's words for a caught dust devil. */
+export function devilCaughtWords(config: SimConfig, strings: Strings, gain: number): { title: string; body: string; said: string } {
+  const table = config.unlocks.devils;
+  const times = formatTimes(table?.whirlStrike ?? 1);
+  const seconds = String(table?.whirlSeconds ?? 0);
+  const amount = formatDust(gain);
+  return {
+    title: fill(strings.depth.devilCaughtTitle, { amount }),
+    body: fill(strings.depth.devilCaughtBody, { times, seconds }),
+    said: fill(strings.depth.devilCaughtSaid, { amount, times, seconds }),
+  };
 }

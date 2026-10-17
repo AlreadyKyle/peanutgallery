@@ -33,6 +33,7 @@ export interface Strings {
     strike: string;
     weather: string;
     gems: string;
+    fork: string;
   };
   // The Share your run button under the canvas (render/share.ts).
   share: {
@@ -58,7 +59,8 @@ export interface Strings {
     gallery: string;
     galleryLabel: string;
   };
-  // The layers after the units: first steps, milestones, weather, gems and perks (render/depth.ts).
+  // The layers after the units: first steps, milestones, weather, gems and perks, forks, orders and
+  // dust devils (render/depth.ts).
   depth: Record<(typeof DEPTH_KEYS)[number], string>;
   // The accessible DOM layer's text (render/controls.ts): the canvas is hidden from assistive technology.
   a11y: {
@@ -144,6 +146,43 @@ const DEPTH_KEYS = [
   'nextGem',
   'gemsIntro',
   'perksShow',
+  'forkKicker',
+  'forkNote',
+  'forkMore',
+  'forkLabel',
+  'forkChosenSaid',
+  'forkOpenSaid',
+  'forkOr',
+  'forkMultiplier',
+  'forkStrike',
+  'forkUnit',
+  'forkWeather',
+  'forkDevil',
+  'forkOrder',
+  'orderKicker',
+  'orderOwn',
+  'orderGather',
+  'orderStrikes',
+  'orderProgress',
+  'orderFill',
+  'orderFillLabel',
+  'orderRest',
+  'orderSwap',
+  'orderSwapLabel',
+  'orderSaid',
+  'orderFilledSaid',
+  'orderFilledToast',
+  'ordersCount',
+  'devilKicker',
+  'devilCatch',
+  'devilCatchLabel',
+  'devilSaid',
+  'devilGone',
+  'devilCaughtTitle',
+  'devilCaughtBody',
+  'devilCaughtSaid',
+  'whirl',
+  'whirlEffect',
 ] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -203,6 +242,7 @@ export function parseStrings(raw: unknown): Strings {
       strike: requireText(effectsRaw, 'strike', 'strings.effects'),
       weather: requireText(effectsRaw, 'weather', 'strings.effects'),
       gems: requireText(effectsRaw, 'gems', 'strings.effects'),
+      fork: requireText(effectsRaw, 'fork', 'strings.effects'),
     },
     share,
     seed,
