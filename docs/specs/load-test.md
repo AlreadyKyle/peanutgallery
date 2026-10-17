@@ -94,7 +94,7 @@ What breaks first, and at what level. Inferred means reasoned from the code and 
 - [x] Production hosts are refused without `--i-mean-production`, and a production run is refused above 100 requests a second, 300 seconds or 10,000 requests (`load.test.mjs`, the command line).
 - [x] The report gives p50, p95, p99, the error rate, the throughput and the cache hit ratio per step and per path, and fails on the thresholds above (`load.test.mjs`, the stats math and the verdict).
 - [x] The workflow reads contents only, persists no credential, names no secret, hands its inputs to the tool through the environment, and runs production once after a push to main that changes the tool, and by hand (`load.test.mjs`, the workflow).
-- [ ] The production run after merge passes, and its first line is quoted in Evidence.
+- [ ] The production run after merge passes, and its first line is quoted in Evidence. The first run (below) aborted at the 50-a-second step on the per-address protection; the workflow's production peak is now 30 a second, and the run on the commit that made that change is the one this box waits on.
 
 ## Verification
 
@@ -106,9 +106,32 @@ What breaks first, and at what level. Inferred means reasoned from the code and 
 
 ## Evidence
 
-To be added when the production run has run.
+First production run, `load-test` run 39067389558 on the merge commit 68fd76a (#197), 2026-10-17 20:36 UTC, one Actions runner:
+
+```
+ABORTED load-test https://mobmachine.games requests=1693 rps=18.0 p50=6ms p95=107ms p99=621ms error_rate=1.1% cache_hit=89.5%
+stopped: step error rate 8.59% over 2.00% after 198 requests
+step                                   reqs    rps    p50    p95    p99  errors   cache
+1: 5 req/s x 30s                        140    4.7      8    909   2004    0.0%   87.9%
+2: 15 req/s x 30s                       448   14.9      7    182    710    0.0%   96.4%
+3: 30 req/s x 30s                       906   30.2      6     32    120    0.0%   98.9%
+4: 50 req/s x 30s                       199   49.5      5     52    116    9.0%   98.3%
+error: / 403 x15
+error: /how-it-works 403 x2
+error: /api/live 403 x1
+supabase: 30 function answers were built or revalidated (miss 30, stale 0), so at most 31 RPC calls
+```
+
+What it measured:
+
+- Up to 30 requests a second from one address the site answered every request: 0 errors, p95 32 ms and a 98.9% cache hit ratio in that step. The first step's slower p95 and p99 are the cold edge and preview image filling the cache.
+- Four seconds into the 50-a-second step, static pages (`/`, `/how-it-works`) began answering 403 to the runner. No rule in this repository limits the static pages (the code-based rules sit on the documents and answer 429), so the 403 comes from Netlify's own per-address protection in front of the site (inferred from the status and the paths). It refused one address sending about 17 home page loads a second; it is not the site running out of capacity, and visitors at other addresses are not refused by it.
+- The stop condition worked as designed: the run aborted at once, with 1,693 requests sent and at most 31 RPC calls reaching Supabase.
+
+So a single runner measures the site up to about 30 requests a second and the per-address protection above that. Capacity above that needs load from many addresses, which this test does not do (Decisions).
 
 ## Decisions
 
 - 2026-10-17: the load test runs from Actions, one address, so its mix holds each function group under the per-address rules instead of spreading over many runners. A test that trips the rules measures the rule, not the site, and a single runner is enough for the default 50 requests a second.
+- 2026-10-17: after the first production run, the workflow's production peak defaults to 30 requests a second, the highest step one runner held with no errors. A higher peak from one runner measures Netlify's per-address protection, not the site. Testing beyond it means many addresses at once, which is a later decision because it looks like the abuse the protection exists to stop.
 - 2026-10-17: latency thresholds come from Time to First Byte guidance under the LCP benchmark, because `benchmarks.md` has no server latency row. The review team may replace them with a measured baseline.
