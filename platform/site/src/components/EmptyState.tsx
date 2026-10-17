@@ -8,19 +8,21 @@ export type EmptyNext = { readonly to: string; readonly label: string };
  * What a list says when it has nothing to show (docs/specs/brand.md, the second review): a dashed
  * tile, like an empty lane on home, with the reason and the page's own next step, so the page never
  * ends on a bare grey line. A list that did not load also says to try again, and with `onRetry` a
- * Try again button reads it again beside the next step.
+ * Try again button, above the next step, reads it again.
  */
 export function EmptyState({ line, next, unavailable = false, onRetry }: { line: string; next: EmptyNext; unavailable?: boolean; onRetry?: () => void }) {
   return (
     <div className="empty-state">
       <p className="empty-state-line">{line}</p>
       {unavailable ? <p className="muted">{copy.emptyState.retry}</p> : null}
-      <p className="empty-state-actions">
-        {unavailable && onRetry !== undefined ? (
+      {unavailable && onRetry !== undefined ? (
+        <p>
           <button type="button" className="button button-secondary" onClick={onRetry}>
             {copy.emptyState.tryAgain}
           </button>
-        ) : null}
+        </p>
+      ) : null}
+      <p>
         {next.to.startsWith('/') ? (
           <Link className="button button-secondary" to={next.to}>
             {next.label}

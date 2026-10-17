@@ -2901,13 +2901,6 @@ main > .band:not(:first-child) .showcase::before {
   font-weight: var(--weight-strong);
 }
 
-/* Try again and the next step: side by side, each its own width, one to a line when they wrap. */
-.empty-state-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-}
-
 /* What an empty lane says instead: a dashed tile, never a card (it carries no card's data). */
 .flow-empty {
   padding: var(--space-2);
