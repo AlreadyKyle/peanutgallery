@@ -184,6 +184,28 @@ test.describe('the Menu on a phone', () => {
   });
 });
 
+// Home's plate shares the live studio's columns from 64rem (the board, 17 October 2026): the lede sits
+// on the studio column's text edge, and the agents' written facts are for screen readers and the
+// keyboard only, so nothing but the room and the pipe sits on the plate.
+for (const width of [1024, 1440]) {
+  test(`lines the lede up with the studio column and keeps the facts list out of sight at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/');
+    const studio = page.locator('.live-studio');
+    await expect(studio.locator('.studio-agent').first()).toBeVisible();
+    // The hero's side and the studio's heading share the column's rule, and so its text edge.
+    const side = (await page.locator('.hero-home .hero-side').boundingBox())!;
+    const heading = (await studio.getByRole('heading', { name: 'The studio, live' }).boundingBox())!;
+    expect(Math.abs(side.x - heading.x)).toBeLessThanOrEqual(1);
+    const ledeX = await page.locator('.hero-home .lede').evaluate((el) => el.getBoundingClientRect().x);
+    const headingTextX = await studio.getByRole('heading', { name: 'The studio, live' }).evaluate((el) => el.getBoundingClientRect().x + parseFloat(getComputedStyle(el).borderInlineStartWidth) + parseFloat(getComputedStyle(el).paddingInlineStart));
+    expect(Math.abs(ledeX - headingTextX)).toBeLessThanOrEqual(1);
+    const facts = studio.getByRole('list', { name: 'What each agent is doing' });
+    await expect(facts).toHaveCount(1);
+    expect((await facts.boundingBox())!.height).toBeLessThanOrEqual(1);
+  });
+}
+
 test('build sha meta is stamped', async ({ page }) => {
   await page.goto('/');
   const sha = await page.locator('meta[name="build-sha"]').getAttribute('content');
