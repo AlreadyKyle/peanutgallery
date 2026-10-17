@@ -343,7 +343,7 @@ describe('Landing', () => {
     const watch = [...container.querySelectorAll('a[href^="/card/"]')].filter((a) => a.closest('.live-studio') === null).map((a) => a.textContent);
     expect(watch.length).toBeGreaterThan(0);
     expect(new Set(watch)).toEqual(new Set([copy.cardPage.watchBuilt, copy.cardPage.watchWasBuilt]));
-  });
+  }, 20_000); // About 1.2 s alone; pnpm verify runs every package at once, and under that load it passed 5 s.
 
   it('says in one status line how many cards are open and building, with the figures at 600', async () => {
     renderLanding(fakeSource());

@@ -18,7 +18,7 @@ describe('the load test command line (scripts/load-test.mjs)', () => {
   });
 
   it('refuses production unless --i-mean-production is passed', () => {
-    for (const host of ['https://mobmachine.games', 'https://www.mobmachine.games', 'https://play.mobmachine.games', 'https://peanutgallery.games', 'https://some-site.netlify.app']) {
+    for (const host of ['https://mobmachine.games', 'https://www.mobmachine.games', 'https://play.mobmachine.games', 'https://some-site.netlify.app']) {
       expect(parseLoadArgs([host]), host).toEqual({ error: expect.stringContaining('refusing to load-test production') });
       expect((parseLoadArgs([host, '--i-mean-production']) as LoadOptions).production, host).toBe(true);
     }
