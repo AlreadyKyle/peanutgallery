@@ -90,7 +90,7 @@ Where this file and the spec disagree, the spec wins and this file is corrected.
 | P1 | XP is not money: it cannot be bought, sold, transferred or spent | FS: XP | In this series |
 | P2 | Funding earns 10 XP per US dollar times the card's rarity multiplier (1, 1.5, 2, 3); the Machine card counts at 1 | FS: XP | In this series (`xp.ts`) |
 | P3 | Participation XP capped at 100 a day: accepted suggestion 50, featured seed 50, upvote 1; a shipped suggestion 150, uncapped | FS: XP | In this series |
-| P4 | Level n needs `100 * n^1.5` total XP; tiers Spectator, Regular, Backer, Patron, Producer, Executive, Legend | FS: XP | In this series |
+| P4 | Level n needs `100 * (n - 1)^1.5` total XP (level 1 at 0); tiers Spectator, Regular, Backer, Patron, Producer, Executive, Legend | FS: XP | In this series |
 | P5 | Badges earned by rule, listed with their rule in `platform/supabase/seed/badges.json` | FS: XP | In this series |
 | P6 | Code-drawn alien avatars with parts unlocked by level and badges; a frame per tier and rarity frames | FS: XP | In this series |
 | P7 | A collection of funded cards with their rarity on the profile | FS: Rarity | In this series |

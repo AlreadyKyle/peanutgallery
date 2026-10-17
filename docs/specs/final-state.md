@@ -61,7 +61,7 @@ Every card has one suit. The suit says what the money pays for and is drawn as a
 - XP is not money and cannot be bought, sold, transferred or spent. It is a record of participation.
 - Funding: 10 XP per US dollar contributed, times the card's rarity multiplier. The Machine card counts at 1x.
 - Participation XP, capped at 100 a day so money stays the main path but non-payers progress: an accepted suggestion 50, a suggestion that ships 150 (not capped), a seed featured 50, an upvote cast 1.
-- Levels: level n needs `100 * n^1.5` total XP, rounded. Level names run in tiers: Spectator, Regular, Backer, Patron, Producer, Executive, Legend.
+- Levels: level n needs `100 * (n - 1)^1.5` total XP, rounded, so level 1 starts at 0 XP and level 2 at 100. Level names run in tiers: Spectator, Regular, Backer, Patron, Producer, Executive, Legend.
 - Badges are earned by rule (first card, five suits, first legendary, a card you funded shipped, a suggestion shipped, ten seeds shared and so on), listed with their rule in `platform/supabase/seed/badges.json`.
 - Avatars: the same code-drawn alien system as the team, with parts (eyes, antennae, body, pattern) unlocked by level and badges. Frames: one per level tier, plus rarity frames earned by collecting a card of that rarity.
 - Supporter benefit: loyalty is recognition first (frames, flair, early looks at new game pitches). A money discount is a later, separate kernel spec (the backlog entry Loyalty bonus for repeat supporters) because it changes money.

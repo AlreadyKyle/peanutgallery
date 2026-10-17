@@ -97,8 +97,8 @@ function guarded(item: CuratorSuggestion, flags: string[]): CuratorTriageItem {
   return { id: item.id, area: AREAS.includes(item.area) ? item.area : 'studio', kind: 'feature', cluster_key: 'flagged', fit: 0, safety_flags: flags, summary: null };
 }
 
-// The model's items kept: ids in the batch only, each once, the guard's flags restored, and summaries
-// null wherever an instruction or money flag stands.
+// The model's items kept: ids in the batch only, each once, the guard's flags restored (over the
+// suggestion and over the model's summary), and summaries null wherever an instruction or money flag stands.
 export function reconcile(batch: readonly CuratorSuggestion[], answered: readonly CuratorTriageItem[]): CuratorTriageItem[] {
   const byId = new Map(batch.map((item) => [item.id, item]));
   const seen = new Set<string>();
@@ -107,7 +107,10 @@ export function reconcile(batch: readonly CuratorSuggestion[], answered: readonl
     const source = byId.get(item.id);
     if (!source || seen.has(item.id)) continue;
     seen.add(item.id);
-    const flags = [...new Set([...item.safety_flags, ...guardFlags(source)])];
+    // The guard reads the model's own summary too: a summary written under an injection the guard
+    // missed in the suggestion is declined before it can reach the Designer.
+    const summaryFlags = item.summary === null ? [] : guardFlags({ title: item.summary, body: '' });
+    const flags = [...new Set([...item.safety_flags, ...guardFlags(source), ...summaryFlags])];
     const silent = flags.includes('instruction_to_agents') || flags.includes('money_or_secrets');
     if (flags.includes('money_or_secrets') && !flags.includes('instruction_to_agents')) flags.unshift('instruction_to_agents');
     kept.push({ ...item, safety_flags: flags, summary: silent ? null : item.summary });
