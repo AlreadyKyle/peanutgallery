@@ -2800,6 +2800,19 @@ ol.timeline {
   max-width: var(--measure-text);
 }
 
+/* The Twitch badge (LiveStudio.tsx, only with VITE_TWITCH_CHANNEL): the Live stamp as a link. */
+.live-studio > p.twitch {
+  margin-block: var(--space-1) var(--space-2);
+}
+
+.twitch .tag-stamp {
+  display: inline-flex;
+  min-height: var(--target);
+  margin-block: 0;
+  font-weight: var(--weight-strong);
+  text-decoration: none;
+}
+
 .live-studio-grid {
   display: grid;
   gap: var(--space-4);

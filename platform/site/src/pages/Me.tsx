@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { CREATURE_COLOURS } from '../components/Avatar';
 import { Glyph } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
@@ -9,6 +9,7 @@ import { adoptSessionFromLocation, rpc, sendMagicLink, signOut, useMyProfile } f
 import type { AvatarSpec, Profile } from '../lib/community-types';
 import { copy } from '../lib/copy';
 import { legal } from '../lib/legal';
+import { pendingSeedPath } from '../lib/seed-link';
 import { TIERS } from '../lib/xp';
 
 // /me (docs/specs/final-state.md, Identity and anonymity): sign in by a magic link, then the
@@ -183,9 +184,13 @@ function Claim({ onClaimed }: { onClaimed: () => void }) {
 }
 
 export function Me() {
+  const navigate = useNavigate();
   useEffect(() => {
-    adoptSessionFromLocation();
-  }, []);
+    // A player who signed in to save a seed (/seeds?save=) goes back to finish the save.
+    if (!adoptSessionFromLocation()) return;
+    const back = pendingSeedPath();
+    if (back !== null) navigate(back, { replace: true });
+  }, [navigate]);
   const me = useMyProfile();
   return (
     <main className="wide">
