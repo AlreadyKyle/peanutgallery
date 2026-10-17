@@ -4,6 +4,8 @@ import { ExplainerVideo } from '../components/ExplainerVideo';
 import { FundNow, MachineFlow } from '../components/Flow';
 import { splitSentence } from '../components/Funding';
 import { Glyph } from '../components/Glyph';
+import { LiveStudio } from '../components/LiveStudio';
+import { MachineCard } from '../components/MachineCard';
 import { Announcer } from '../components/Announcer';
 import { PoolLine } from '../components/PoolStat';
 import { SinceLastVisit } from '../components/SinceLastVisit';
@@ -147,6 +149,8 @@ function FundSection({ studio, live }: { studio: StudioState; live: ReturnType<t
       ) : (
         <p className="muted">{unavailableLine(studio)}</p>
       )}
+      {/* The Machine card (docs/specs/final-state.md, Card suits): always open, general support. */}
+      <MachineCard />
     </section>
   );
 }
@@ -226,6 +230,8 @@ export function Landing() {
         <Hero studio={studio} live={live} />
       </div>
       <div className="band">
+        {/* The live studio opens the paper band (docs/specs/final-state.md, The live studio). */}
+        {view === null ? null : <LiveStudio snapshot={view.snapshot} />}
         {view === null ? null : <SinceLastVisit cards={view.snapshot.cards} since={since} />}
         <FundSection studio={studio} live={live} />
         <GameSection />

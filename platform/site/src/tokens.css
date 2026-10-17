@@ -49,6 +49,8 @@
   --coin: #d9a441; /* money only: Contribute, the funding bar's fill, the coin mark, the Funded glyph */
   --coin-down: #b8862f; /* Contribute on hover and press, on paper and ink */
   --coin-up: #ecc36e; /* Contribute on hover and press, on the signal band */
+  --blueprint: #1c3a63; /* the blueprint ground of /studio/history only (docs/specs/final-state.md, Studio evolution) */
+  --blueprint-line: #4a6d9c; /* the blueprint's grid and its quiet lines, decorative */
 
   /* Agent avatars. Fills only: every shape has an --ink outline, so none carries meaning by colour. */
   --creature-blue: #8db9e8;
@@ -129,4 +131,7 @@
   --stagger: 50ms;
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  /* The scene (docs/specs/final-state.md, the motion pass): a section's reveal and the legendary sheen. */
+  --dur-reveal: 480ms;
+  --ease-scene: cubic-bezier(0.22, 1, 0.36, 1);
 }

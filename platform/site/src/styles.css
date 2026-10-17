@@ -2784,3 +2784,1236 @@ ol.timeline {
   margin-top: var(--space-1);
   max-width: 20rem;
 }
+
+/* The final state (docs/specs/final-state.md) ----------------------------------------------------
+   The live studio and the pipe, the suits and rarity on the card, the Machine card, goals, the
+   blueprints, suggestions, seeds, profiles, the FAQ and the broadcast overlay. */
+
+/* The live studio: the room, and the pipe beside it from 64rem. On a phone the room comes first. */
+.live-studio > p {
+  max-width: var(--measure-text);
+}
+
+.live-studio-grid {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+@media (min-width: 64rem) {
+  .live-studio-grid {
+    grid-template-columns: minmax(0, 1fr) 20rem;
+    align-items: start;
+  }
+}
+
+.studio-stage {
+  position: relative;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-card);
+  background: var(--paper);
+  padding: var(--space-2);
+}
+
+.room {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.room-fill,
+.room-side,
+.room-shade,
+.room-wall,
+.room-wall-lit,
+.room-window,
+.room-screen,
+.room-hole,
+.room-leaf,
+.room-edge {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.room-fill,
+.room-wall-lit,
+.room-leaf {
+  fill: var(--paper);
+}
+
+.room-side,
+.room-wall,
+.room-window {
+  fill: var(--paper-hover);
+}
+
+.room-shade {
+  fill: var(--line);
+}
+
+.room-screen,
+.room-hole {
+  fill: var(--ink);
+}
+
+.room-edge,
+.room-strong,
+.room-cap {
+  stroke-width: 2;
+}
+
+.room-edge {
+  fill: none;
+}
+
+.room-grid {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.room-line,
+.room-thin {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.room-thin {
+  stroke-width: 1.25;
+}
+
+.room-hatch {
+  fill: var(--paper-hover);
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The blueprint (/studio/history): paper lines on the blueprint ground, nothing filled. */
+.room[data-variant='blueprint'] :is(.room-fill, .room-side, .room-shade, .room-wall, .room-wall-lit, .room-window, .room-leaf, .room-hatch) {
+  fill: var(--blueprint);
+  stroke: var(--paper);
+}
+
+.room[data-variant='blueprint'] :is(.room-screen, .room-hole) {
+  fill: var(--blueprint-line);
+  stroke: var(--paper);
+}
+
+.room[data-variant='blueprint'] :is(.room-line, .room-thin, .room-edge) {
+  stroke: var(--paper);
+}
+
+.room[data-variant='blueprint'] .room-grid {
+  stroke: var(--blueprint-line);
+}
+
+/* The agents: the team's own avatars, drawn at the room's line weight. */
+.studio-agent {
+  cursor: pointer;
+  outline: none;
+}
+
+.studio-agent .avatar-body,
+.studio-agent .avatar-line,
+.studio-agent .avatar-eye {
+  vector-effect: non-scaling-stroke;
+  stroke-width: 1.75;
+}
+
+.studio-agent .avatar-thin {
+  stroke-width: 1.25;
+}
+
+.studio-agent .avatar-ground {
+  fill: var(--line);
+}
+
+.agent-ring {
+  fill: none;
+  stroke: var(--focus-colour);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+  opacity: 0;
+}
+
+.studio-agent:focus-visible .agent-ring,
+.studio-agent[aria-expanded='true'] .agent-ring,
+.studio-agent:hover .agent-ring {
+  opacity: 1;
+}
+
+.mark-bubble {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.mark-dot {
+  fill: var(--ink);
+}
+
+.mark-ink,
+.sprite-line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.sprite-paper {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The role card an agent shows on hover, focus or tap: written facts first, the card an addition. */
+.role-card {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  gap: var(--space-1);
+  align-items: flex-start;
+  width: min(17rem, 80%);
+  padding: 0.75em;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--size-small);
+  line-height: var(--leading-title);
+  transform: translate(-50%, -100%);
+  pointer-events: auto;
+}
+
+.role-card[data-below='true'] {
+  transform: translate(-50%, 3.5rem);
+}
+
+.role-card p {
+  margin: 0;
+}
+
+.role-card-name {
+  font-weight: var(--weight-bold);
+}
+
+.role-card-title {
+  color: var(--text-muted);
+}
+
+.role-card-doing {
+  margin-block: 0.25rem !important;
+}
+
+.studio-era {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  margin: 0;
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+}
+
+.studio-era-word {
+  color: var(--text-muted);
+}
+
+.studio-facts {
+  display: grid;
+  gap: 0 var(--space-3);
+  margin-top: var(--space-2);
+  font-size: var(--size-small);
+}
+
+.studio-facts li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 var(--space-1);
+  padding-block: var(--space-1);
+  border-top: 1px solid var(--hairline);
+}
+
+.studio-fact-name {
+  font-weight: var(--weight-strong);
+}
+
+.studio-fact-role {
+  color: var(--text-muted);
+}
+
+.studio-fact-doing {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 48rem) {
+  .studio-facts {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* The pipe: a row per event, its kind as a glyph and a word, who, rarity and when under it. */
+.pipe-title {
+  font-size: var(--size-lead);
+}
+
+.pipe-intro {
+  margin-top: 0.25rem;
+  color: var(--text-muted);
+  font-size: var(--size-small);
+}
+
+.pipe-rows {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pipe-row {
+  padding-block: 0.75em;
+  border-top: 1px solid var(--hairline);
+}
+
+.pipe-row:last-child {
+  border-bottom: 1px solid var(--hairline);
+}
+
+.pipe-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+}
+
+.pipe-text {
+  margin: 0.25rem 0 0;
+  line-height: var(--leading-title);
+}
+
+.pipe-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75em;
+  margin: 0.375rem 0 0;
+  color: var(--text-muted);
+  font-size: var(--size-small);
+}
+
+.pipe-older {
+  margin-top: var(--space-2);
+}
+
+.person-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: inherit;
+}
+
+/* A player's frame: a ring whose pattern names its tier or rarity, written beside it where it matters. */
+.person-frame {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+.person-frame .avatar {
+  display: block;
+}
+
+.person-frame[data-frame='none'] {
+  border-color: var(--line);
+}
+
+.person-frame[data-frame='regular'],
+.person-frame[data-frame='uncommon'] {
+  border-width: 4px;
+  border-style: double;
+}
+
+.person-frame[data-frame='backer'],
+.person-frame[data-frame='rare'] {
+  border-width: 3px;
+  border-style: dashed;
+}
+
+.person-frame[data-frame='patron'],
+.person-frame[data-frame='producer'] {
+  border-width: 3px;
+  outline: 1px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.person-frame[data-frame='executive'],
+.person-frame[data-frame='legend'],
+.person-frame[data-frame='legendary'] {
+  border-width: 6px;
+  border-style: double;
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+/* Rarity on the card: a word on a tab over the top edge, and a pattern inside the edge. Common keeps
+   the plain edge; uncommon adds an inner rule, rare a double rule, legendary a hatched frame with a
+   sheen that sweeps it on hover. Never colour alone: the word is always there. */
+.rarity-notch {
+  position: absolute;
+  top: -0.85rem;
+  right: var(--space-3);
+  z-index: 1;
+  padding: 0.0625rem 0.5em;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+  line-height: var(--leading-title);
+}
+
+.rarity-tag {
+  white-space: nowrap;
+}
+
+.rarity-edge {
+  position: absolute;
+  inset: 5px;
+  border-radius: calc(var(--radius-card) - 5px);
+  pointer-events: none;
+}
+
+[data-rarity='uncommon'] > .rarity-edge {
+  border: 1px solid var(--ink);
+}
+
+[data-rarity='rare'] > .rarity-edge {
+  border: 4px double var(--ink);
+}
+
+[data-rarity='legendary'] > .rarity-edge {
+  overflow: hidden;
+  padding: 5px;
+  background: repeating-linear-gradient(-45deg, var(--ink) 0 1.5px, transparent 1.5px 5px);
+  -webkit-mask: linear-gradient(var(--ink) 0 0) content-box, linear-gradient(var(--ink) 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(var(--ink) 0 0) content-box exclude, linear-gradient(var(--ink) 0 0);
+}
+
+[data-rarity='legendary'] > .rarity-edge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, var(--paper) 50%, transparent 65%);
+  transform: translateX(-120%);
+}
+
+.card[data-rarity] .card-index {
+  padding-top: 0.25rem;
+}
+
+/* The Machine card: always open, drawn like a card, with its preset amounts as chips. */
+.machine-card {
+  position: relative;
+  max-width: var(--measure);
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-card);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.machine-card .card-index {
+  margin-bottom: var(--space-1);
+}
+
+.machine-body {
+  margin: var(--space-1) 0 var(--space-2);
+}
+
+.machine-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.machine-amounts .amount {
+  min-width: 4.5rem;
+  justify-content: center;
+}
+
+.machine-action {
+  margin: var(--space-2) 0 var(--space-1);
+}
+
+/* Goals: one long track of lifetime funding, the milestones as ticks on it and rows under it. */
+.goals-lifetime {
+  font-size: var(--size-lead);
+}
+
+.goals-figure {
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.goals-track {
+  position: relative;
+  margin-block: var(--space-3) var(--space-5);
+}
+
+.goals-track .funding-bar {
+  height: 1rem;
+}
+
+.goals-ticks {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.goals-ticks li {
+  position: absolute;
+  top: -0.375rem;
+  left: var(--at);
+  display: grid;
+  justify-items: center;
+  transform: translateX(-50%);
+}
+
+.goals-tick {
+  width: 2px;
+  height: 1.75rem;
+  background: var(--ink);
+}
+
+.goals-tick-label {
+  margin-top: 0.25rem;
+  font-size: var(--size-small);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.goals-ticks li[data-state='later'] .goals-tick {
+  opacity: 0.45;
+}
+
+.goals-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.goal {
+  display: grid;
+  gap: var(--space-1);
+  padding-block: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+
+.goal h3 {
+  font-size: var(--size-lead);
+}
+
+.goal p {
+  margin: 0.375rem 0 0;
+}
+
+.goal-rail {
+  display: flex;
+  gap: var(--space-2);
+  margin: 0 !important;
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+}
+
+.goal-amount {
+  font-variant-numeric: tabular-nums;
+}
+
+.goal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--size-small);
+}
+
+.goal[data-state='later'] h3 {
+  color: var(--text-muted);
+}
+
+@media (min-width: 48rem) {
+  .goal {
+    grid-template-columns: var(--rail) 1fr;
+  }
+
+  .goal-rail {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+}
+
+.plain-list {
+  padding-left: 1.25em;
+  list-style: disc;
+}
+
+.plain-list li + li {
+  margin-top: 0.375rem;
+}
+
+.steps-list {
+  padding-left: 1.5em;
+}
+
+.steps-list li + li {
+  margin-top: 0.375rem;
+}
+
+/* Studio history: each era as a blueprint, paper lines on the blueprint ground. */
+.blueprint {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-card);
+  background: var(--blueprint);
+  color: var(--paper);
+  --focus-colour: var(--paper);
+}
+
+.blueprint-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-1);
+}
+
+.blueprint-head p {
+  margin: 0;
+}
+
+.blueprint-era {
+  display: flex;
+  gap: var(--space-1);
+  align-items: baseline;
+}
+
+.blueprint-index {
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+}
+
+.blueprint-name {
+  font-size: var(--size-h2);
+  font-weight: var(--weight-bold);
+}
+
+.blueprint-when {
+  font-size: var(--size-small);
+}
+
+.blueprint-room {
+  margin-block: var(--space-2);
+}
+
+.blueprint-facts {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--size-small);
+}
+
+.blueprint-facts dt {
+  font-weight: var(--weight-strong);
+}
+
+.blueprint-facts dd {
+  margin: 0.25rem 0 0;
+}
+
+@media (min-width: 48rem) {
+  .blueprint-facts {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.era-stepper {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: var(--space-3);
+}
+
+.era-range {
+  border: 0;
+  padding: 0;
+  accent-color: var(--ink);
+}
+
+.era-rows li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.era-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: var(--target);
+  padding: 0.5em 1.25em;
+  border: 1px solid var(--field);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-weight: var(--weight-strong);
+  cursor: pointer;
+}
+
+/* Forms: suggestions, the player's profile. */
+.form {
+  display: grid;
+  gap: var(--space-1);
+  max-width: var(--measure);
+}
+
+.form label {
+  margin-top: var(--space-1);
+  font-weight: var(--weight-strong);
+}
+
+.form p {
+  margin: 0;
+}
+
+.field-count {
+  justify-self: end;
+}
+
+.check-row {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.check-row input {
+  width: 1.25rem;
+  min-height: 1.25rem;
+  margin: 0;
+  accent-color: var(--ink);
+}
+
+.notice-plain {
+  display: flex;
+  gap: var(--space-1);
+  align-items: flex-start;
+  max-width: var(--measure-text);
+  padding: var(--space-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  font-size: var(--size-small);
+}
+
+.notice-plain .glyph {
+  flex: none;
+  margin-top: 0.125rem;
+}
+
+.list-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.inline-select {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  font-weight: var(--weight-strong);
+}
+
+.inline-select select {
+  width: auto;
+}
+
+/* Suggestions: the upvotes beside each, its state as a glyph and a word. */
+.suggestions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.suggestion {
+  display: grid;
+  grid-template-columns: 4rem 1fr;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+
+.suggestion h3 {
+  margin-top: 0.375rem;
+  font-size: var(--size-body);
+}
+
+.suggestion p {
+  margin: 0.375rem 0 0;
+}
+
+.suggestion-index,
+.suggestion-meta,
+.seed-meta,
+.seed-index {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem var(--space-1);
+}
+
+.suggestion-index .tag {
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+}
+
+.upvote-button {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  min-width: var(--target);
+  min-height: var(--target);
+  padding: 0.25em 0.5em;
+  border: 1px solid var(--field);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-weight: var(--weight-strong);
+  cursor: pointer;
+}
+
+.upvote-button[aria-pressed='true'] {
+  border-width: 3px;
+  border-color: currentColor;
+  padding: calc(0.25em - 2px) calc(0.5em - 2px);
+}
+
+.upvote-button:hover:not(:disabled) {
+  background: var(--paper-hover);
+}
+
+.upvote-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-strong);
+}
+
+.upvote-static {
+  margin: 0;
+  text-align: center;
+}
+
+/* Seeds: a grid of boxes like the team's, the Play button at each foot. */
+.seed-grid,
+.badge-grid,
+.collection-grid {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-2) 0 0;
+}
+
+.seed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.seed h3 {
+  font-size: var(--size-lead);
+}
+
+.seed p {
+  margin: 0;
+}
+
+.seed-code code {
+  font-size: 0.9em;
+  overflow-wrap: anywhere;
+}
+
+.seed-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: auto;
+  padding-top: var(--space-1);
+}
+
+.seed-score {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+@media (min-width: 48rem) {
+  .seed-grid,
+  .collection-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .badge-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 72rem) {
+  .seed-grid,
+  .collection-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .badge-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Profiles: the avatar in its frame beside the level, the XP bar in ink (XP is never money). */
+.profile-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.profile-id {
+  flex: 1 1 16rem;
+}
+
+.profile-id p {
+  margin: 0;
+}
+
+.flair {
+  font-size: var(--size-lead);
+  font-weight: var(--weight-bold);
+}
+
+.xp {
+  margin-top: var(--space-2);
+}
+
+.xp-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  align-items: baseline;
+  font-weight: var(--weight-strong);
+}
+
+.xp-level {
+  font-size: var(--size-lead);
+  font-weight: var(--weight-bold);
+}
+
+.xp-figure {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.xp-bar {
+  position: relative;
+  height: 0.625rem;
+  margin-block: var(--space-1) 0.375rem;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-tile);
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.xp-bar-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  transform: translateX(calc(var(--fill) - 100%));
+}
+
+.badge-tile {
+  display: grid;
+  gap: 0.25rem;
+  justify-items: start;
+  padding: var(--space-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.badge-medal {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+}
+
+.badge-name {
+  font-weight: var(--weight-bold);
+}
+
+.collection-suit + .collection-suit {
+  margin-top: var(--space-4);
+}
+
+.collection-suit h3 {
+  display: flex;
+  gap: var(--space-1);
+  align-items: baseline;
+  font-size: var(--size-body);
+}
+
+.collected {
+  position: relative;
+  display: grid;
+  gap: var(--space-1);
+  justify-items: start;
+  padding: var(--space-3);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-card);
+  background: var(--paper);
+}
+
+.collected .rarity-tag {
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+}
+
+.collected-title {
+  font-weight: var(--weight-bold);
+}
+
+.me-editor {
+  max-width: none;
+}
+
+.me-preview {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+}
+
+.me-fields {
+  display: grid;
+  gap: var(--space-1);
+  max-width: var(--measure);
+}
+
+@media (min-width: 48rem) {
+  .me-editor {
+    grid-template-columns: 12rem minmax(0, 1fr);
+    gap: var(--space-4);
+    align-items: start;
+  }
+}
+
+.me-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: var(--space-3);
+}
+
+/* The FAQ: the topics as links, then each question and its answer. */
+.faq-index ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+.faq-index a {
+  display: inline-flex;
+  min-height: var(--target);
+  align-items: center;
+}
+
+.faq-item {
+  max-width: var(--measure-text);
+  padding-block: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+
+.faq-item h3 {
+  margin-bottom: var(--space-1);
+}
+
+.faq-item p {
+  margin: var(--space-1) 0 0;
+}
+
+/* The broadcast overlay: one 1920 by 1080 frame, zoomed to fit a smaller window. */
+.page[data-bare='true'] {
+  min-height: 0;
+}
+
+main.broadcast {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  width: 1920px;
+  height: 1080px;
+  max-width: none;
+  overflow: hidden;
+  zoom: var(--broadcast-scale);
+}
+
+main.broadcast > .band {
+  padding: var(--space-3) var(--space-5);
+}
+
+main.broadcast > .band + .band {
+  margin-top: 0;
+}
+
+.broadcast-head {
+  display: grid !important;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.broadcast-brand {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  margin: 0;
+  font-size: var(--size-lead);
+  font-weight: var(--weight-bold);
+}
+
+.broadcast-pitch {
+  font-size: var(--size-h2);
+}
+
+.broadcast-fund {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.broadcast-fund p {
+  display: grid;
+  margin: 0;
+  text-align: right;
+}
+
+.broadcast-fund-line {
+  color: var(--text-muted);
+}
+
+.broadcast-url {
+  font-size: var(--size-h2);
+  font-weight: var(--weight-bold);
+}
+
+.qr {
+  width: 8.5rem;
+  height: 8.5rem;
+}
+
+.qr-ground {
+  fill: var(--paper);
+}
+
+.qr-module {
+  fill: var(--ink);
+}
+
+.broadcast-body {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 36rem;
+  gap: var(--space-4);
+  min-height: 0;
+}
+
+.broadcast-room {
+  min-height: 0;
+}
+
+.broadcast-room .studio-stage {
+  height: 100%;
+}
+
+.broadcast-room .room {
+  height: 100%;
+}
+
+.broadcast-side {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--space-3);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.broadcast-cards h2 {
+  font-size: var(--size-lead);
+}
+
+.broadcast-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: var(--space-2);
+}
+
+/* Motion of the final state: transform and opacity only, under no-preference only. The legendary
+   sheen sweeps the hatched frame once per hover and never runs on its own. */
+@media (prefers-reduced-motion: no-preference) {
+  .card:hover[data-rarity='legendary'] > .rarity-edge::after,
+  .collected:hover[data-rarity='legendary'] > .rarity-edge::after {
+    transform: translateX(120%);
+    transition: transform var(--dur-reveal) var(--ease-scene);
+  }
+
+  .xp-bar-fill {
+    transition: transform var(--dur-move) var(--ease-out);
+  }
+
+  .upvote-button,
+  .era-pick {
+    transition: transform var(--dur-quick) var(--ease-out);
+  }
+
+  .upvote-button:active:not(:disabled),
+  .era-pick:active {
+    transform: scale(0.97);
+  }
+}

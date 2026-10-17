@@ -1,5 +1,6 @@
 import { FundingBar, fundingCaption } from '../components/Funding';
 import { Guarded } from '../components/Guarded';
+import { MachineCard } from '../components/MachineCard';
 import { PageHeader } from '../components/PageHeader';
 import { StaleNotice } from '../components/StaleNotice';
 import { LinkedText } from '../components/TextPage';
@@ -146,6 +147,8 @@ export function Contribute() {
                 );
               }}
             </Guarded>
+            {/* The Machine card (docs/specs/final-state.md): the same checkout as Fund the next card in line. */}
+            <MachineCard studioPct={studioPct} headingLevel={2} />
             <p className="muted small">{legal.split}</p>
             <p className="muted small">{legal.usdNote}</p>
           </div>

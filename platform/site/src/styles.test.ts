@@ -356,7 +356,9 @@ describe('colour (DESIGN.md, Colour), measured from tokens.css', () => {
 
   it('never uses a gradient but for the Paused hatch, nor a glow or shadow but the change marker', () => {
     const gradients = ALL_RULES.filter((rule) => /gradient\(/.test(rule.body)).map((rule) => rule.selector);
-    expect(gradients).toEqual([".card[data-face='paused']::before"]);
+    // docs/specs/final-state.md (Rarity) adds the legendary card's hatched edge and the sheen that
+    // sweeps it: rarity is drawn as an edge pattern, never colour alone.
+    expect(gradients).toEqual([".card[data-face='paused']::before", "[data-rarity='legendary'] > .rarity-edge", "[data-rarity='legendary'] > .rarity-edge::after"]);
     const shadows = ALL_RULES.filter((rule) => /(box|text)-shadow:/.test(rule.body)).map((rule) => rule.selector);
     expect(shadows).toEqual(['.changed']);
   });
@@ -512,7 +514,8 @@ describe('motion', () => {
     for (const match of both.matchAll(/(?:^|[;\s])(?:transition|animation):\s*([^;]+);/g)) {
       const value = match[1]!;
       expect(value, value).not.toMatch(/\b\d+(\.\d+)?m?s\b/);
-      expect(value, value).toMatch(/var\(--dur-(quick|move|flip)\)/);
+      // --dur-reveal is the scene's duration (docs/specs/final-state.md, the motion pass: 200 to 500ms).
+      expect(value, value).toMatch(/var\(--dur-(quick|move|flip|reveal)\)/);
       expect(value, value).not.toMatch(/\ball\b/);
     }
     expect(both).not.toMatch(/\binfinite\b|view-transition|@starting-style|\blinear\(/);
