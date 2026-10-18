@@ -1656,7 +1656,7 @@ footer {
     min-height: min(560px, 100svh);
   }
 
-  /* Room for the goal's label and a whole unlock name on one line. */
+  /* Room for the goal's label and a whole unlock name on one line (a phone stacks them, below). */
   .hud-goal {
     flex-basis: 248px;
   }
@@ -1675,8 +1675,18 @@ footer {
     display: none;
   }
 
-  /* A phone has no room for both on one line: the goal's label sits over its name, so the name is read
-     whole ("Sturdy brooms", not "Sturdy bro..."). */
+  #studio-line .studio-next {
+    display: flex;
+    justify-content: center;
+    width: fit-content;
+    margin: 0 auto;
+  }
+}
+
+/* A phone narrower than 600px. */
+@media (max-width: 599.98px) {
+  /* No room for the goal's label and its name on one line: the label sits over the name, so the name
+     is read whole ("Sturdy broom", not "Sturdy bro..."). */
   .hud-goal {
     flex-basis: 176px;
   }
@@ -1692,10 +1702,14 @@ footer {
     text-align: left;
   }
 
-  #studio-line .studio-next {
-    display: flex;
-    justify-content: center;
-    width: fit-content;
-    margin: 0 auto;
+  /* The order's words take their own line, with the bar and the count under them, so a large gather
+     order is read whole ("Gather 1,398 dust", not "Gather 1,398 du...") and its bar keeps its length. */
+  .order-body {
+    grid-template-columns: minmax(24px, 1fr) auto;
+    row-gap: 3px;
+  }
+
+  .order-text {
+    grid-column: 1 / -1;
   }
 }
