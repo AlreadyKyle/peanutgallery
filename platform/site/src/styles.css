@@ -553,6 +553,11 @@ main > .band:not(:first-child) .contribute > h2::before {
   line-height: var(--leading-title);
 }
 
+/* A link to a section (/#fund) lands with its rule and number in view, not cut by the window's top. */
+h2[id] {
+  scroll-margin-top: var(--space-5);
+}
+
 /* The sheet (main.sheet: the text pages, the ledger, the FAQ, goals, suggest, seeds, /thanks): from
    64rem every section after the first band sets its heading in the left five twelfths, held in view
    while its text scrolls, and its text in the seven beside it, so the text keeps its reading measure
