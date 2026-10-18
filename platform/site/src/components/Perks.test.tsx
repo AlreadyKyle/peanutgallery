@@ -39,6 +39,8 @@ describe('Perks', () => {
         <Perks signIn />
       </MemoryRouter>,
     );
+    // A first visit draws the profile side once the studio says sign-in is open.
+    expect((await screen.findByRole('link', { name: legal.perks.signIn })).getAttribute('href')).toBe('/me');
     for (const line of [...legal.perks.guest, ...legal.perks.profile]) expect(screen.getByText(line)).toBeTruthy();
     expect(screen.getByText(legal.perks.note)).toBeTruthy();
     expect(screen.getByRole('link', { name: legal.perks.signIn }).getAttribute('href')).toBe('/me');
@@ -68,14 +70,14 @@ describe('Perks', () => {
     expect(screen.queryByRole('link')).toBeNull();
   });
 
-  it('sends Keep this card to the desk, which claims the payment once signed in', () => {
+  it('sends Keep this card to the desk, which claims the payment once signed in', async () => {
     signInIs(true);
     render(
       <MemoryRouter>
         <KeepThisCard />
       </MemoryRouter>,
     );
-    expect(screen.getByRole('heading', { name: legal.perks.keepTitle })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: legal.perks.keepTitle })).toBeTruthy();
     expect(screen.getByRole('link', { name: legal.perks.keep }).getAttribute('href')).toBe('/me?keep=1');
   });
 

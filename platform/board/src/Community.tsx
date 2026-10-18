@@ -52,24 +52,35 @@ function useList(load: Loader) {
   const [items, setItems] = useState<Row[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
   const [error, setError] = useState('');
+  // Each fresh read takes a new number; an answer to an older one (a search typed over, a filter
+  // changed) arrives too late to show, and a page loaded for it is not added.
+  const latest = useRef(0);
   const refresh = useCallback(() => {
+    const read = ++latest.current;
     setError('');
     load(null)
       .then((page) => {
+        if (read !== latest.current) return;
         setItems(page.items);
         setNext(page.next);
       })
-      .catch((reason: unknown) => setError(errorMessage(reason)));
+      .catch((reason: unknown) => {
+        if (read === latest.current) setError(errorMessage(reason));
+      });
   }, [load]);
   useEffect(refresh, [refresh]);
   const more = () => {
     if (next === null) return;
+    const read = latest.current;
     load(next)
       .then((page) => {
+        if (read !== latest.current) return;
         setItems((prev) => [...(prev ?? []), ...page.items]);
         setNext(page.next);
       })
-      .catch((reason: unknown) => setError(errorMessage(reason)));
+      .catch((reason: unknown) => {
+        if (read === latest.current) setError(errorMessage(reason));
+      });
   };
   return { items, next, error, refresh, more };
 }
@@ -247,6 +258,8 @@ function Suggestions({ client, reason, busy, run }: { client: SupabaseClient } &
                   const cluster = typeof s.clusterId === 'string' ? s.clusterId : null;
                   const clusterKey = text(s.clusterKey) || (cluster ?? '').slice(0, 8);
                   const triage = (typeof s.triage === 'object' && s.triage !== null ? s.triage : {}) as Row;
+                  // The Curator's flags are a list: shown as words, and not at all when there are none.
+                  const flags = (Array.isArray(triage.flags) ? triage.flags.map(text) : [text(triage.flags)]).filter((flag) => flag !== '').join(', ');
                   const into = clusters.find((c) => c.id === merges[id] && c.id !== cluster) ?? null;
                   const card = cards.find((c) => text(c.id) === links[id]) ?? null;
                   return (
@@ -261,7 +274,7 @@ function Suggestions({ client, reason, busy, run }: { client: SupabaseClient } &
                         {s.declineReason ? `: ${text(s.declineReason)}` : ''}
                       </td>
                       <td data-label="Curator">
-                        {text(triage.summary)} <span className="muted">{text(triage.flags)} {text(s.clusterKey)}</span>
+                        {text(triage.summary)} <span className="muted">{flags === '' ? '' : `Flags: ${flags}. `}{text(s.clusterKey)}</span>
                       </td>
                       <td className="actions">
                         <div className="act-stack">

@@ -225,7 +225,7 @@ function role(id: string, title: string, description: string): Role {
 }
 
 function supply(over: Partial<Supply> = {}): Supply {
-  return { drafting: false, short: true, reason: null, runs_today: 0, run_limit: 3, next_check_at: null, ...over };
+  return { drafting: false, stalled: false, short: true, reason: null, runs_today: 0, run_limit: 3, next_check_at: null, ...over };
 }
 
 function fakeSource(over: Partial<Snapshot> = {}): StudioSource {
@@ -339,7 +339,7 @@ describe('Landing', () => {
     // Every card is in band 2.
     expect(container.querySelectorAll('li.card').length).toBeGreaterThan(0);
     for (const card of container.querySelectorAll('li.card, .funding-bar')) expect(card.closest('main > .band')).toBe(bands[1]);
-    // The stations, Fund first, each also a link in the rail and a tag in the room.
+    // The stations, Fund first, each also a link in the rail; the room carries no labels over them.
     expect([...container.querySelectorAll('.floor-parts > [data-station-part]')].map((part) => part.getAttribute('data-station-part'))).toEqual([
       'fund',
       'ideas',
@@ -348,7 +348,7 @@ describe('Landing', () => {
       'shipped',
     ]);
     expect([...container.querySelectorAll('.floor-stations a')].map((a) => a.getAttribute('href'))).toEqual(['#fund', '#ideas', '#next', '#building', '#shipped', '#team']);
-    expect([...bands[0]!.querySelectorAll('.station-tags a')].map((a) => a.getAttribute('href'))).toEqual(['#fund', '#ideas', '#building', '#shipped', '#team']);
+    expect(bands[0]!.querySelectorAll('.station-tags, .station-tag, .station-pill')).toHaveLength(0);
     // No filter chips, no old sections, no Right now panel, no How it works steps, no fixed rules.
     expect(screen.queryByRole('group', { name: copy.filterLabel })).toBeNull();
     for (const old of ['Building now', "Fund what's next", 'Queued', 'Planned next']) expect(screen.queryByRole('heading', { level: 2, name: old })).toBeNull();

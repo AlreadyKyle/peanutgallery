@@ -76,6 +76,17 @@ describe('the card page tags', () => {
     expect(out).toContain('<meta property="og:image:width" content="1200" />');
   });
 
+  it('writes a title holding $ replacement patterns as it is, once', () => {
+    const title = "Win $' and $& and $` and $$5";
+    const out = withCardMeta(html, ID, { title, summary: 'Crisp $\' too.' });
+    const shown = "Win $' and $&amp; and $` and $$5";
+    expect(out).toContain(`<title>${shown} · Mob Machine</title>`);
+    expect(out).toContain(`<meta property="og:title" content="${shown} · Mob Machine" />`);
+    expect(out).toContain(`<meta property="og:description" content="Crisp $' too." />`);
+    expect(out.match(/<title>/g)).toHaveLength(1);
+    expect(out.match(/<\/html>/g)).toHaveLength(1);
+  });
+
   it('refuses a body with no title', () => {
     expect(metaFrom('{"card":{"title":""}}')).toBeNull();
     expect(metaFrom('not json')).toBeNull();
