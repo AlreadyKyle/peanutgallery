@@ -542,6 +542,8 @@ export const legal = {
           'It also counts, a day at a time: how many times Dust is opened from a save a day or a week old, how many visits to Dust reach 2 and 4 minutes, how many times Save as seed is pressed and a seed link is opened, how many times the home page is shown and stays open 15 and 45 seconds, how many times the broadcast page is loaded and its QR code is followed, and how many clicks go to Discord.',
           'Each is one running total for the day and nothing else. Your browser decides whether a count applies, from what it already holds: whether Dust was opened from a save a day or a week old comes from the time your own save records, and that time is never sent.',
           'A count sets no cookie and stores no identifier and no IP address, so it cannot tell who you are, and nothing new is stored in your browser to make one.',
+          // docs/specs/daily-dust.md
+          'For Daily Dust it also counts, the same way, how many runs are started, finished and shared each day.',
         ],
       },
       {

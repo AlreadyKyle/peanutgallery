@@ -9,6 +9,8 @@
 // been visible for a session, and a press or a ?seed= link for a seed. Nothing new is stored to decide
 // them, and each is sent at most once per page load.
 
+// The daily counters (docs/specs/daily-dust.md): a Daily Dust run started, finished and shared. A server
+// that does not know a name yet answers 400, and the game never reads the answer.
 export type PlayEvent =
   | 'dust_load'
   | 'dust_share'
@@ -18,7 +20,10 @@ export type PlayEvent =
   | 'dust_session_2m'
   | 'dust_session_4m'
   | 'dust_seed_save'
-  | 'dust_seed_open';
+  | 'dust_seed_open'
+  | 'dust_daily_start'
+  | 'dust_daily_finish'
+  | 'dust_daily_share';
 
 export const COUNT_PATH = '/api/count';
 

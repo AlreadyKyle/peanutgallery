@@ -70,7 +70,8 @@ export {
   unitRate,
   whirling,
 } from './sim';
-export { hashState } from './hash';
+export { hashState, hashText } from './hash';
+export { DAILY_FIRST_DATE, DAILY_MARK_SECONDS, DAILY_SECONDS, dailyDate, dailyLeft, dailyOver, dailyScore, dailySeed, isDailyDate, utcDate } from './daily';
 export { awaySeconds, MAX_AWAY_SECONDS, parseSavedAt, parseSavedState, SAVE_VERSION, serializeState } from './save';
 export { nextRandom, seedRng } from './rng';
 export {

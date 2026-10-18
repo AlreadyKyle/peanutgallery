@@ -10,7 +10,7 @@ export const IMAGE_HEIGHT = 630;
 export const IMAGE_FILE_NAME = 'dust-run.png';
 
 // The page's palette (render/style.css): paper, ink, the sand of the pile and the Dust suit magenta.
-const COLORS = {
+export const COLORS = {
   background: '#fdfcf8',
   panel: '#f8ecc9',
   panelEdge: '#151515',
@@ -20,12 +20,12 @@ const COLORS = {
   muted: '#55524c',
   mote: '#e6dfd0',
 };
-const FONT = "'Atkinson Hyperlegible Next', sans-serif";
-const MARGIN = 72;
+export const FONT = "'Atkinson Hyperlegible Next', sans-serif";
+export const MARGIN = 72;
 // Unlock names sit in pills, at most two rows of them; the rest collapse to "+N" so the address stays clear.
-const PILL_HEIGHT = 48;
-const PILL_PAD = 20;
-const PILL_GAP = 12;
+export const PILL_HEIGHT = 48;
+export const PILL_PAD = 20;
+export const PILL_GAP = 12;
 const PILL_TOP = 410;
 const PILL_ROWS = 2;
 
@@ -102,11 +102,10 @@ export type CardContext = Pick<
   'fillStyle' | 'strokeStyle' | 'lineWidth' | 'font' | 'textBaseline' | 'fillRect' | 'fillText' | 'measureText' | 'beginPath' | 'arc' | 'fill' | 'stroke' | 'roundRect'
 >;
 
-export function drawRunCard(ctx: CardContext, facts: RunFacts): void {
+/** The paper ground with motes of dust, scattered evenly by a fixed low-discrepancy sequence, so every card looks the same. */
+export function drawPaper(ctx: CardContext): void {
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
-
-  // Motes of dust, scattered evenly by a fixed low-discrepancy sequence, so every card looks the same.
   ctx.fillStyle = COLORS.mote;
   for (let i = 1; i <= 40; i += 1) {
     const x = ((i * 0.7548776662) % 1) * IMAGE_WIDTH;
@@ -115,6 +114,31 @@ export function drawRunCard(ctx: CardContext, facts: RunFacts): void {
     ctx.arc(x, y, 2 + (i % 4), 0, Math.PI * 2);
     ctx.fill();
   }
+}
+
+/** The suit band along the bottom edge, ruled off in ink. */
+export function drawSuitBand(ctx: CardContext): void {
+  ctx.fillStyle = COLORS.panelEdge;
+  ctx.fillRect(0, IMAGE_HEIGHT - 20, IMAGE_WIDTH, 4);
+  ctx.fillStyle = COLORS.accent;
+  ctx.fillRect(0, IMAGE_HEIGHT - 16, IMAGE_WIDTH, 16);
+}
+
+/** A pill in ink on the sand of the pile, with its label: the run card's unlocks, the daily card's highlights. */
+export function drawPill(ctx: CardContext, pill: Pill): void {
+  ctx.fillStyle = COLORS.panel;
+  ctx.strokeStyle = COLORS.panelEdge;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(pill.x, pill.y, pill.width, PILL_HEIGHT, PILL_HEIGHT / 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = COLORS.text;
+  ctx.fillText(pill.label, pill.x + PILL_PAD, pill.y + 34);
+}
+
+export function drawRunCard(ctx: CardContext, facts: RunFacts): void {
+  drawPaper(ctx);
 
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = COLORS.accent;
@@ -134,27 +158,13 @@ export function drawRunCard(ctx: CardContext, facts: RunFacts): void {
   ctx.fillText(facts.unlocks, MARGIN, 370);
 
   ctx.font = `30px ${FONT}`;
-  for (const pill of layoutPills(facts.names, (text) => ctx.measureText(text).width)) {
-    ctx.fillStyle = COLORS.panel;
-    ctx.strokeStyle = COLORS.panelEdge;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.roundRect(pill.x, pill.y, pill.width, PILL_HEIGHT, PILL_HEIGHT / 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = COLORS.text;
-    ctx.fillText(pill.label, pill.x + PILL_PAD, pill.y + 34);
-  }
+  for (const pill of layoutPills(facts.names, (text) => ctx.measureText(text).width)) drawPill(ctx, pill);
 
   ctx.fillStyle = COLORS.muted;
   ctx.font = `32px ${FONT}`;
   ctx.fillText(facts.url, MARGIN, IMAGE_HEIGHT - MARGIN + 16);
 
-  // The suit band along the bottom edge, ruled off in ink.
-  ctx.fillStyle = COLORS.panelEdge;
-  ctx.fillRect(0, IMAGE_HEIGHT - 20, IMAGE_WIDTH, 4);
-  ctx.fillStyle = COLORS.accent;
-  ctx.fillRect(0, IMAGE_HEIGHT - 16, IMAGE_WIDTH, 16);
+  drawSuitBand(ctx);
 }
 
 /**
@@ -162,17 +172,22 @@ export function drawRunCard(ctx: CardContext, facts: RunFacts): void {
  * Synchronous on purpose: Safari only opens the share sheet inside the click, so no await comes first.
  */
 export function runCardFile(facts: RunFacts, doc: Document = document): File | null {
+  return cardFile((ctx) => drawRunCard(ctx, facts), IMAGE_FILE_NAME, doc);
+}
+
+/** A 1200 by 630 card drawn by `draw` on a fresh canvas, as a PNG file, or null where the browser cannot. Synchronous, as runCardFile. */
+export function cardFile(draw: (ctx: CanvasRenderingContext2D) => void, name: string, doc: Document = document): File | null {
   const canvas = doc.createElement('canvas');
   canvas.width = IMAGE_WIDTH;
   canvas.height = IMAGE_HEIGHT;
   const ctx = canvas.getContext('2d');
   if (ctx === null || typeof ctx.roundRect !== 'function') return null;
-  drawRunCard(ctx, facts);
+  draw(ctx);
   const url = canvas.toDataURL('image/png');
   const prefix = 'data:image/png;base64,';
   if (!url.startsWith(prefix)) return null;
   const binary = atob(url.slice(prefix.length));
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  return new File([bytes], IMAGE_FILE_NAME, { type: 'image/png' });
+  return new File([bytes], name, { type: 'image/png' });
 }

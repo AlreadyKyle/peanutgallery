@@ -198,6 +198,7 @@ Each line is one mechanic from the kick-off plan or a later decision, with its e
 - [Link a Twitch or Discord account](BACKLOG.md#link-a-twitch-or-discord-account): a linked identity for the overlay and the clubhouse.
 - [The site and games in more languages](BACKLOG.md#the-site-and-games-in-more-languages): translations under the copy rules.
 - [The 48-hour Build](BACKLOG.md#the-48-hour-build): a live event that takes a new game from pitch to first playable on stream.
+- [A fair Daily Dust board](BACKLOG.md#a-fair-daily-dust-board): a board for the day's run, from server-checked replays only.
 
 ## 5. Business model
 

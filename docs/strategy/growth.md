@@ -31,6 +31,7 @@ Every arrow is a feature. The loop is weakest where an arrow has no feature; the
 | YouTube Shorts and TikTok | 15 to 45 second clips of a moment: a legendary card opening, a ship, an era change, a before and after of a game change | Event beats in the feed that are visually distinct; box art | Seed and card link opens from Shorts (needs the source tags) |
 | Discord | Ship, milestone and suggestion posts | Built ship posts; suggestion status | Discord to site clicks |
 | Seeds and run images | A friend's shared run that opens at the same moment | Seeds (`?seed=`), Share your run image | Seed opens per shared seed |
+| Daily Dust results | A friend's result for the run everyone plays today | Daily Dust (`?daily=`), its result card and text | Daily shares per finished run (`play.dust_daily_share` over `play.dust_daily_finish`) |
 | Card links | A friend's funded card with its preview | Card share and preview images | Card shares per contribution |
 | itch.io | Each game listed as a free web game with its box art | Box art; a game page per game | Plays from the itch.io referrer (aggregate) |
 | Press | Stories about an AI studio funded in public, with numbers | The ledger, /goals, /studio/history | Spikes in new supporters per beat |
@@ -71,6 +72,7 @@ People share what makes them look good, what surprised them, or what they made. 
 | Shareable | Why someone shares it | Artifact |
 |---|---|---|
 | A seed | "Look at my run" or "try this from where I am" | A link that opens the run, and the run image |
+| A Daily Dust result | "Beat this": everyone played the same run today | Five lines of text with a glyph row, the day's link and the result card (`docs/specs/daily-dust.md`) |
 | A legendary card I funded | Rarity is status, and it is checkable | Card link with a rarity frame in its preview |
 | A suggestion that shipped | "I asked for this and it is in the game" | Card link with "Suggested by" |
 | A milestone reached | Being part of something that grew | /goals and the era blueprint image |
