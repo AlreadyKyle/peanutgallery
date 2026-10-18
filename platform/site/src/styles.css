@@ -797,6 +797,12 @@ a.target {
   main.card-page .hero > h1 {
     margin-bottom: var(--space-3);
   }
+
+  /* A text page's plate with only its heading (the not found page) gives the heading the whole row,
+     so a short title never wraps beside an empty column. */
+  main:not(.wide, .sheet) .hero:not(.hero-home):has(> h1:only-child) {
+    display: block;
+  }
 }
 
 /* A card's plate is short: its title at the section size (a card title runs long) and the plate's
