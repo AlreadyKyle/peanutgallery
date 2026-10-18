@@ -52,5 +52,6 @@ export function withCardMeta(html: string, id: string, meta: { title: string; su
   for (const [attr, value] of values) {
     out = out.replace(new RegExp(`(<meta ${attr} content=")[^"]*(")`), (_, a: string, b: string) => `${a}${escapeAttr(value)}${b}`);
   }
-  return out.replace(/<title>[^<]*<\/title>/, `<title>${escapeAttr(title)}</title>`);
+  // A function, as above: a title holding $' or $& must not be read as a replacement pattern.
+  return out.replace(/<title>[^<]*<\/title>/, () => `<title>${escapeAttr(title)}</title>`);
 }

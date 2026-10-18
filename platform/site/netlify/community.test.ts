@@ -78,6 +78,8 @@ describe('the community documents', () => {
       ['/api/community/feed?cursor=%27%3B%20drop', 400],
       ['/api/community/profile/Not_A_Handle', 404],
       ['/api/community/profile/a/b', 404],
+      ['/api/community/profile/%E0%A4%A', 404],
+      ['/api/community/profile/supporter%', 404],
       ['/api/community/card/not-a-card/ideas', 404],
       ['/api/community/card/44ad6d1e-6d7f-4f16-b8d6-5df66bfb157c/ideas?x=1', 400],
       ['/api/community/card/44ad6d1e-6d7f-4f16-b8d6-5df66bfb157c', 404],
