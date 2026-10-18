@@ -144,7 +144,7 @@ export function Team() {
         {studio.state === 'ready' ? <Roster snapshot={studio.snapshot} /> : null}
       </div>
       <div className="band">
-        <WhoRuns id="team-who" />
+        <WhoRuns id="team-who" brief />
       </div>
     </main>
   );

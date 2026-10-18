@@ -151,15 +151,12 @@ export function FundNow({
       {cards.length > HOME_FUND_CARDS ? <MoreLinkLine to="/contribute" words={copy.flow.fundMore.replace('{n}', String(cards.length))} /> : null}
       {/* There is always more than one way to fund (decision 73): under the open cards, the next card
           in line, which needs no draft, so it is there however few cards are open; the Machine card
-          sits beside it, so the two other ways share one row. */}
+          sits beside it, so the two other ways share one row. The Game Designer's line is Next up's,
+          so it is not said twice on home. */}
       <div className="fund-ways">
         <div className="fund-next">
           <p className="fund-empty-title">{legal.pickForMe}</p>
           <p>{legal.fundNextBody}</p>
-          <p className="fund-empty-agent">
-            <Glyph name="pencil" />
-            <span>{draftingLine(snapshot).text}</span>
-          </p>
           {env.stripePaymentLinkUrl === '' ? null : (
             <Link className="button btn-coin" to="/contribute">
               <CoinMark />

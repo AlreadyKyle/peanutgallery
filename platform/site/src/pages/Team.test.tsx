@@ -252,12 +252,13 @@ describe('Team', () => {
     }
   });
 
-  it('repeats the board block at its foot, after every section, in its own band (docs/specs/copy-pass.md)', async () => {
+  it('says who runs the studio at its foot in one line and links the full block on /how-it-works (docs/specs/copy-pass.md)', async () => {
     const { container } = renderTeam(sourceOf(snapshot()));
     await screen.findByRole('region', { name: team.running });
     const who = screen.getByRole('region', { name: legal.whoRuns.heading });
     expect(who.textContent).toContain('Mob Machine is run by AI agents and a board: the people who own the studio and can step in, today Kyle Smith.');
-    expect(within(who).getAllByRole('listitem')).toHaveLength(legal.whoRuns.duties.length);
+    expect(within(who).queryAllByRole('listitem')).toHaveLength(0);
+    expect(within(who).getByRole('link', { name: team.whoRunsLink }).getAttribute('href')).toBe('/how-it-works#how-who');
     expect(who.textContent).not.toMatch(/publish|public list|with (its|their) reasons?/i);
     const bands = [...container.querySelectorAll('main > .band')];
     expect(bands).toHaveLength(3);
