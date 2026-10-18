@@ -1,0 +1,92 @@
+{
+  "mode": "review",
+  "site": "https://mobmachine.games",
+  "playUrl": "https://play.mobmachine.games",
+  "discordInvite": "https://discord.gg/rwkbWhMk8r",
+  "supabaseUrl": "https://lyxndueoeisyqzewflpu.supabase.co",
+  "supabasePublishableKey": "sb_publishable_-i-BKWMS4TmEfSldTE9b7g_UMBRV2wh",
+  "channels": {
+    "x": {
+      "enabled": true,
+      "via": "postiz",
+      "maxPerDay": 3,
+      "tag": "x"
+    },
+    "bluesky": {
+      "enabled": true,
+      "via": "direct",
+      "maxPerDay": 3,
+      "tag": "bsky"
+    },
+    "threads": {
+      "enabled": true,
+      "via": "postiz",
+      "maxPerDay": 2,
+      "tag": "threads"
+    },
+    "mastodon": {
+      "enabled": true,
+      "via": "direct",
+      "maxPerDay": 2,
+      "tag": "mastodon"
+    },
+    "linkedin": {
+      "enabled": false,
+      "via": "postiz",
+      "maxPerDay": 1,
+      "tag": "linkedin"
+    },
+    "discord": {
+      "enabled": true,
+      "via": "direct",
+      "maxPerDay": 3,
+      "tag": "discord"
+    },
+    "youtube": {
+      "enabled": true,
+      "via": "postiz",
+      "maxPerDay": 1,
+      "tag": "yt",
+      "videoOnly": true
+    },
+    "tiktok": {
+      "enabled": true,
+      "via": "postiz",
+      "maxPerDay": 1,
+      "tag": "tiktok",
+      "videoOnly": true
+    },
+    "instagram": {
+      "enabled": false,
+      "via": "postiz",
+      "maxPerDay": 1,
+      "tag": "ig",
+      "mediaOnly": true
+    }
+  },
+  "humanOnly": [
+    "reddit",
+    "hackernews"
+  ],
+  "minGapMinutes": 150,
+  "lookbackHours": 72,
+  "evergreenPerDay": 1,
+  "roles": {
+    "14a155d8-cb35-4044-803e-80651f3daf1e": "Biz Dev",
+    "e95256d4-170e-4038-82af-9586e9be4fe2": "Builder A",
+    "c2fa19a1-d828-4888-8ceb-b8d5180d733e": "Builder B",
+    "de4da3a4-07a3-44bd-8422-23e8b74791dd": "Community",
+    "2bcfc355-0e23-4535-8647-e9451e6a8265": "Game Designer",
+    "c7179995-c868-4b08-a17a-d5f6892b55d9": "Game Director",
+    "9033b2ab-79ae-4bbb-8840-a3abd3d80c5a": "Head of Finance",
+    "eb6ff1d7-ad40-42fb-80dd-08abcf6fe74a": "Head of Product",
+    "0878eb47-9c44-4ee2-8b12-e9bace7661b2": "Host",
+    "0e9a3ce9-3b75-4f4f-849e-e4a1c2f418c6": "HR",
+    "10403e72-adb7-4a62-9224-cd73dd1bfead": "Janitor",
+    "bd4462ae-f584-4eb4-b07b-7c27561079b3": "Platform Builder",
+    "60b55fab-2461-469d-bbc1-5c70423c0d85": "Platform Director",
+    "5aedc4d4-a4a4-4edf-9aca-b7c0e74d142d": "QA",
+    "4b4bddc3-a632-4c7b-ab3d-597ad9088437": "Studio Head",
+    "4fb3cb4f-a8c9-48b1-bbd0-6f915f31e9f4": "Tech Artist"
+  }
+}

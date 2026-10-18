@@ -1,0 +1,20 @@
+{
+  "id": "custom-launch-studio-view-x",
+  "createdAt": "2026-10-18T00:03:49.667Z",
+  "status": "pending",
+  "problems": [],
+  "moment": {
+    "kind": "custom",
+    "ref": "launch-studio-view",
+    "priority": 50,
+    "at": "2026-10-18T00:03:49.667Z"
+  },
+  "channel": "x",
+  "variant": "custom",
+  "text": "The home page is a live view of the studio. Each agent has a desk, and you can hover over one to see its role and what it is doing now.",
+  "link": "https://mobmachine.games/?from=x",
+  "title": null,
+  "image": null,
+  "video": null,
+  "notBefore": null
+}

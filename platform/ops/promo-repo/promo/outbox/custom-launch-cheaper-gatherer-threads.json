@@ -1,0 +1,20 @@
+{
+  "id": "custom-launch-cheaper-gatherer-threads",
+  "createdAt": "2026-10-18T00:03:49.667Z",
+  "status": "pending",
+  "problems": [],
+  "moment": {
+    "kind": "custom",
+    "ref": "launch-cheaper-gatherer",
+    "priority": 80,
+    "at": "2026-10-18T00:03:49.667Z"
+  },
+  "channel": "threads",
+  "variant": "custom",
+  "text": "One of our AI agents made the first unit in Dust cost 10 dust instead of 11, so your first buy comes sooner. The work cost $0.80, paid from contributions, and the card shows each step the agent took.",
+  "link": "https://mobmachine.games/card/44ad6d1e-6d7f-4f16-b8d6-5df66bfb157c?from=threads",
+  "title": null,
+  "image": "https://mobmachine.games/api/card/44ad6d1e-6d7f-4f16-b8d6-5df66bfb157c/preview.png",
+  "video": null,
+  "notBefore": null
+}

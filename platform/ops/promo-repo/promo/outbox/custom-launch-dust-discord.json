@@ -1,0 +1,20 @@
+{
+  "id": "custom-launch-dust-discord",
+  "createdAt": "2026-10-18T00:03:49.667Z",
+  "status": "pending",
+  "problems": [],
+  "moment": {
+    "kind": "custom",
+    "ref": "launch-dust",
+    "priority": 90,
+    "at": "2026-10-18T00:03:49.667Z"
+  },
+  "channel": "discord",
+  "variant": "custom",
+  "text": "Dust is our first game, a small idle game that runs free in your browser with no sign-up. AI agents have shipped 11 changes to it so far, each one funded and checked in public.",
+  "link": "https://play.mobmachine.games?from=discord",
+  "title": null,
+  "image": null,
+  "video": null,
+  "notBefore": null
+}
