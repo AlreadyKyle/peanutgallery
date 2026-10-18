@@ -54,7 +54,7 @@ export function totalFrom(answer: unknown): number | null {
 
 type Pressed = { readonly item: SuggestionSummary; readonly upvoted: boolean; readonly total: number };
 
-function Suggestion({ item, signedIn }: { item: SuggestionSummary; signedIn: boolean }) {
+export function Suggestion({ item, signedIn }: { item: SuggestionSummary; signedIn: boolean }) {
   // The list is a public, cached document, so it cannot say whether this player upvoted, and its count
   // may already include them. After a press the count is the total the RPC answered with and the
   // button shows the press just made. Both belong to the item they were read for: a reload brings a

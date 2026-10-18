@@ -14,6 +14,7 @@ import { HowItWorks } from './pages/HowItWorks';
 import { Landing } from './pages/Landing';
 import { Reports } from './pages/Reports';
 import { Team } from './pages/Team';
+import { YouChip } from './components/YouChip';
 
 // The site's pages in the platform code lane and their links in the top bar. This list is a
 // kernel design file (platform/gate/design-paths.txt, docs/specs/design-review.md): a new page is
@@ -51,11 +52,17 @@ export const pageRoutes: readonly PageRoute[] = [
 /** The top bar's links to these pages, before the kernel's Ledger, Play and Contribute. The top bar
  * keeps to the pages a first visit needs; the rest are in the footer (docs/specs/brand.md). */
 export const pageNav: readonly NavItem[] = [
-  { to: '/how-it-works', label: copy.howItWorksNav },
-  { to: '/team', label: copy.teamNav },
   { to: '/suggest', label: copy.nav.suggest },
+  { to: '/team', label: copy.teamNav },
+  { to: '/how-it-works', label: copy.howItWorksNav },
   { to: '/faq', label: copy.nav.faq },
 ];
+
+/**
+ * The top bar's you slot (docs/specs/place.md): Sign in, or the signed-in player's avatar and level,
+ * a link to /me. App.tsx (kernel) draws it from here, so the frame imports no community code itself.
+ */
+export const youSlot: ReactNode = <YouChip />;
 
 /** The footer's Follow along links to these pages, after the reports and the feed. */
 export const footerNav: readonly NavItem[] = [{ to: '/studio/history', label: copy.nav.history }];

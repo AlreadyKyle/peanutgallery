@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { copy } from '../lib/copy';
 import type { StudioDoc } from '../lib/community-types';
@@ -287,6 +287,55 @@ function Sprite({ pulse, plan, onDone }: { pulse: Pulse; plan: RoomPlan; onDone:
   );
 }
 
+/** The pieces of the room a station tag can stand on (docs/specs/place.md, The floor). */
+export type StationPiece = 'whiteboard' | 'hopper' | 'desks' | 'dock' | 'sofa';
+
+/** A station tag: a labelled link standing on a piece of the room, to that station's part of the page. */
+export type StationTag = {
+  readonly id: string;
+  readonly piece: StationPiece;
+  readonly name: string;
+  readonly label: string;
+  readonly href: string;
+};
+
+/** A piece's footprint in the room's units: the desks as one block round all of them. */
+export function pieceBox(plan: RoomPlan, piece: StationPiece): Box {
+  if (piece === 'desks') {
+    const left = Math.min(...plan.desks.map((desk) => desk.x));
+    const back = Math.min(...plan.desks.map((desk) => desk.y));
+    const right = Math.max(...plan.desks.map((desk) => desk.x + desk.w));
+    const front = Math.max(...plan.desks.map((desk) => desk.y + desk.d));
+    return { x: left, y: back, w: right - left, d: front - back, h: Math.max(...plan.desks.map((desk) => desk.h)) };
+  }
+  return plan[piece];
+}
+
+/** Where a station's tag stands on screen: over the middle of its piece's top. */
+export function tagPoint(plan: RoomPlan, piece: StationPiece): { sx: number; sy: number } {
+  const box = pieceBox(plan, piece);
+  return iso(box.x + box.w / 2, box.y + box.d / 2, (box.z ?? 0) + box.h, TILE);
+}
+
+/** The outline of a lit station's footprint on the floor, a little wider than the piece. */
+function StationRing({ plan, piece }: { plan: RoomPlan; piece: StationPiece }) {
+  const box = pieceBox(plan, piece);
+  const pad = 0.35;
+  const corners: [number, number][] = [
+    [box.x - pad, box.y - pad],
+    [box.x + box.w + pad, box.y - pad],
+    [box.x + box.w + pad, box.y + box.d + pad],
+    [box.x - pad, box.y + box.d + pad],
+  ];
+  const points = corners
+    .map(([x, y]) => {
+      const p = iso(Math.max(0, x), Math.max(0, y), 0, TILE);
+      return `${p.sx.toFixed(1)},${p.sy.toFixed(1)}`;
+    })
+    .join(' ');
+  return <polygon className="station-ring" points={points} />;
+}
+
 export type StudioRoomProps = {
   snapshot: Snapshot;
   studio: StudioDoc | null;
@@ -294,9 +343,19 @@ export type StudioRoomProps = {
   /** Write the list of facts under the room, for screen readers and the keyboard (the broadcast overlay leaves it out). */
   facts?: boolean;
   label?: string;
+  /** The stations' tags, each a link to its part of the page (home's floor); none elsewhere. */
+  stations?: readonly StationTag[];
+  /** The station whose part of the page is in view: its tag and footprint are drawn lit. */
+  lit?: string | null;
+  /**
+   * False draws a picture of the room only (home's rail map): the agents still move, but nothing in
+   * it takes focus or a press, and the drawing is hidden from screen readers, since the room beside
+   * the pitch already carries every fact.
+   */
+  interactive?: boolean;
 };
 
-export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label }: StudioRoomProps) {
+export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label, stations = [], lit = null, interactive = true }: StudioRoomProps) {
   const key = eraKey(studio?.era ?? null);
   const plan = useMemo(() => roomPlan(key, studio?.era.decor.length ? studio.era.decor : undefined), [key, studio]);
   const places = useMemo(() => placeAgents(snapshot, plan), [snapshot, plan]);
@@ -600,23 +659,27 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
         data-activity={place.activity}
         data-role={place.role.id}
         transform={`translate(${p.sx.toFixed(1)} ${p.sy.toFixed(1)})`}
-        tabIndex={0}
-        role="button"
-        aria-label={doingLine(place)}
-        aria-expanded={active?.id === place.role.id}
-        onMouseEnter={() => show(place.role.id)}
-        onMouseLeave={() => hide(place.role.id)}
-        onFocus={() => show(place.role.id)}
-        onBlur={() => hide(place.role.id, 0)}
-        onClick={() => (active?.id === place.role.id ? hide(place.role.id, 0) : show(place.role.id))}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') hide(place.role.id, 0);
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            if (active?.id === place.role.id) hide(place.role.id, 0);
-            else show(place.role.id);
-          }
-        }}
+        {...(interactive
+          ? {
+              tabIndex: 0,
+              role: 'button',
+              'aria-label': doingLine(place),
+              'aria-expanded': active?.id === place.role.id,
+              onMouseEnter: () => show(place.role.id),
+              onMouseLeave: () => hide(place.role.id),
+              onFocus: () => show(place.role.id),
+              onBlur: () => hide(place.role.id, 0),
+              onClick: () => (active?.id === place.role.id ? hide(place.role.id, 0) : show(place.role.id)),
+              onKeyDown: (event: KeyboardEvent<SVGGElement>) => {
+                if (event.key === 'Escape') hide(place.role.id, 0);
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  if (active?.id === place.role.id) hide(place.role.id, 0);
+                  else show(place.role.id);
+                }
+              },
+            }
+          : {})}
       >
         <g
           ref={(el) => {
@@ -649,16 +712,40 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
             className="room"
             data-variant="live"
             viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
-            role="group"
-            aria-label={label ?? copy.studioRoom.svgTitle.replace('{era}', eraName)}
+            {...(interactive ? { role: 'group', 'aria-label': label ?? copy.studioRoom.svgTitle.replace('{era}', eraName) } : { 'aria-hidden': true, focusable: 'false' })}
             preserveAspectRatio="xMidYMid meet"
           >
             <g className="room-drawing">{layers.back}</g>
+            {stations
+              .filter((station) => station.id === lit)
+              .map((station) => (
+                <StationRing key={station.id} plan={plan} piece={station.piece} />
+              ))}
             {standing}
             {sprites.map((pulse) => (
               <Sprite key={pulse.id} pulse={pulse} plan={plan} onDone={spriteDone} />
             ))}
           </svg>
+          {stations.length === 0 ? null : (
+            <ul className="station-tags" aria-label={copy.floor.mapLabel}>
+              {stations.map((station) => {
+                const p = tagPoint(plan, station.piece);
+                return (
+                  <li
+                    key={station.id}
+                    className="station-tag"
+                    data-station={station.id}
+                    data-lit={station.id === lit ? 'true' : undefined}
+                    style={{ left: `${(((p.sx - vb.x) / vb.w) * 100).toFixed(2)}%`, top: `${(((p.sy - vb.y) / vb.h) * 100).toFixed(2)}%` }}
+                  >
+                    <a href={station.href} aria-label={station.label} aria-current={station.id === lit ? 'location' : undefined}>
+                      <span className="station-pill">{station.name}</span>
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
           {activePlace !== null && activeAt !== null ? (
             <RoleCard
               place={activePlace}

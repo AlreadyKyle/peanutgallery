@@ -81,6 +81,50 @@ export function adoptLinkErrorFromLocation(): LinkError | null {
   return error;
 }
 
+const RETURN = 'mm:return-to';
+
+/** Remembers the page a player left to sign in from, so the magic link's landing on /me sends them back. */
+export function rememberReturn(path: string): void {
+  if (!/^\/[A-Za-z0-9/_#?=&-]*$/.test(path) || path.startsWith('//')) return;
+  try {
+    storage()?.setItem(RETURN, path);
+  } catch {
+    // Without storage the player lands on their desk, which is fine.
+  }
+}
+
+/** The page to go back to after signing in, read once. */
+export function takeReturn(): string | null {
+  try {
+    const path = storage()?.getItem(RETURN) ?? null;
+    storage()?.removeItem(RETURN);
+    return path !== null && /^\/[A-Za-z0-9/_#?=&-]*$/.test(path) && !path.startsWith('//') ? path : null;
+  } catch {
+    return null;
+  }
+}
+
+const CLAIM = 'mm:pending-claim';
+
+/** /thanks's Keep this card: after the magic link, /me claims the player's guest contributions at once. */
+export function rememberClaim(): void {
+  try {
+    storage()?.setItem(CLAIM, '1');
+  } catch {
+    // Without storage the player presses Claim on their desk instead.
+  }
+}
+
+export function takeClaim(): boolean {
+  try {
+    const pending = storage()?.getItem(CLAIM) === '1';
+    storage()?.removeItem(CLAIM);
+    return pending;
+  } catch {
+    return false;
+  }
+}
+
 export function signOut(): void {
   writeSession(null);
 }
@@ -144,20 +188,42 @@ export function useSignedIn(): boolean {
 
 export type MyProfile = { state: 'signed-out' } | { state: 'loading' } | { state: 'ready'; profile: Profile } | { state: 'unavailable' };
 
+/**
+ * The last profile read in this tab, shared by every reader (the top bar's you slot, home's panel and
+ * /me), so moving between pages draws the player at once and asks the server again in the background
+ * instead of on every reader's first paint. A new session, or signing out, drops it.
+ */
+let held: { token: string; profile: Profile } | null = null;
+
+function heldProfile(): Profile | null {
+  const session = readSession();
+  return session !== null && held !== null && held.token === session.refreshToken ? held.profile : null;
+}
+
 export function useMyProfile(): MyProfile & { reload: () => void } {
   const signedIn = useSignedIn();
-  const [state, setState] = useState<MyProfile>(signedIn ? { state: 'loading' } : { state: 'signed-out' });
+  const [state, setState] = useState<MyProfile>(() => {
+    if (!signedIn) return { state: 'signed-out' };
+    const profile = heldProfile();
+    return profile === null ? { state: 'loading' } : { state: 'ready', profile };
+  });
   const [nonce, setNonce] = useState(0);
   const reload = useCallback(() => setNonce((n) => n + 1), []);
   useEffect(() => {
     if (!signedIn) {
+      held = null;
       setState({ state: 'signed-out' });
       return;
     }
     let live = true;
-    setState((was) => (was.state === 'ready' ? was : { state: 'loading' }));
+    const ready = heldProfile();
+    setState((was) => (was.state === 'ready' ? was : ready === null ? { state: 'loading' } : { state: 'ready', profile: ready }));
     rpc<Profile>('my_profile')
-      .then((profile) => live && setState({ state: 'ready', profile }))
+      .then((profile) => {
+        const session = readSession();
+        if (session !== null) held = { token: session.refreshToken, profile };
+        if (live) setState({ state: 'ready', profile });
+      })
       .catch((error: unknown) => {
         if (!live) return;
         setState(error instanceof CommunityError && error.status === 401 ? { state: 'signed-out' } : { state: 'unavailable' });

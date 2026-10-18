@@ -506,6 +506,70 @@ nav a.active {
   }
 }
 
+/* The you slot (docs/specs/place.md): Sign in as a quiet link, or the player's avatar in its frame and
+   their level, a link to their desk. Signed in on a phone, the avatar stands alone; signed out below
+   30rem, the slot leaves the row and Your desk sits in the Menu list instead, so the row fits 360px. */
+.you-slot {
+  display: inline-flex;
+}
+
+.you-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--target);
+  min-width: var(--target);
+  justify-content: center;
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.you-chip:hover,
+.you-chip.active {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+
+.you-chip .person-frame {
+  flex: none;
+}
+
+.you-level {
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-you {
+  display: none;
+}
+
+@media (max-width: 29.99rem) {
+  .you-slot:has(> .you-chip:not([data-you='in'])) {
+    display: none;
+  }
+
+  .menu-you {
+    display: block;
+  }
+
+  .you-level {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 64rem) {
+  .you-slot {
+    margin-left: var(--space-1);
+  }
+}
+
 /* Page heading and sections --------------------------------------------- */
 
 .hero p,
@@ -2652,19 +2716,20 @@ input[type='radio'] {
   }
 }
 
-/* From 64rem the plate is two columns, five parts to seven: on the left the pitch, hung from the
-   room's label line, and the pipe's row, its foot on the room's foot; on the right the room. Both
-   columns end on one line, so the plate leaves no hollow beside the room. */
+/* From 64rem the floor's plate is two columns, seven parts to five (docs/specs/place.md, The floor):
+   the room on the left, large, under its small label, its foot on the plate's foot; on the right the
+   panel (the pitch, or welcome back for a signed-in player) hung from the room's top, and the pipe's
+   newest rows at the foot. The room is the picture the page is about, so it takes the wider side. */
 @media (min-width: 64rem) {
-  .home > .band:first-child {
+  .home > .band.floor-plate {
     display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    grid-template-rows: auto 1fr auto;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    grid-template-rows: auto auto 1fr;
     align-content: start;
     column-gap: var(--space-5);
   }
 
-  .home > .band:first-child > *,
+  .home > .band.floor-plate > *,
   .home .live-studio-grid {
     margin: 0;
   }
@@ -2674,27 +2739,26 @@ input[type='radio'] {
     display: contents;
   }
 
-  .hero-home {
-    grid-column: 1;
-    grid-row: 1 / 3;
-  }
-
   .home .live-studio-head {
-    grid-column: 2;
+    grid-column: 1;
     grid-row: 1;
     margin-bottom: var(--space-2);
   }
 
-  /* The room's paper screen fills its rows, so its foot is the pipe's foot whichever column is taller;
-     the drawing sits in the middle of it. */
+  .home .hero-home {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: start;
+  }
+
   .home .live-studio-grid > .studio {
     display: flex;
     flex-direction: column;
-    grid-column: 2;
+    grid-column: 1;
     grid-row: 2 / 4;
   }
 
-  .home .studio-stage {
+  .home .live-studio-grid > .studio > .studio-stage {
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -2702,24 +2766,12 @@ input[type='radio'] {
   }
 
   .home .live-studio-grid > .pipe {
-    grid-column: 1;
+    grid-column: 2;
     grid-row: 3;
     align-self: end;
     margin-top: var(--space-4);
     border-inline-start: 0;
     padding: 0;
-  }
-}
-
-/* Up to 80rem the pitch's column is too narrow for the pipe's row as well: the row runs across the
-   plate's foot instead, and the room's screen ends on the pitch's foot. */
-@media (min-width: 64rem) and (max-width: 79.99rem) {
-  .home .live-studio-grid > .studio {
-    grid-row: 2 / 3;
-  }
-
-  .home .live-studio-grid > .pipe {
-    grid-column: 1 / -1;
   }
 }
 
@@ -4841,4 +4893,345 @@ main.broadcast > .band > * {
   .era-pick:active {
     transform: scale(0.97);
   }
+}
+
+/* The floor (docs/specs/place.md) -------------------------------------------
+   Home is the studio as a place: the room's stations are the page's map. The floor is wider than the
+   reading pages (--wrap-floor), and the top bar and footer widen with it on home, so the page keeps
+   one left edge. */
+
+.page:has(> main.home) > .topbar > .wrap,
+.page:has(> main.home) > .site-footer > .wrap {
+  max-width: var(--wrap-floor);
+}
+
+main.home > .band {
+  padding-inline: max(var(--gutter), calc((100% - var(--wrap-floor)) / 2));
+}
+
+/* The station tags stand on their pieces of the room: a small pill in the room's ink and paper, its
+   link 44px tall above the piece, so a press lands however small the room is drawn. A lit station's
+   tag is filled ink, and its footprint is outlined on the floor; nothing moves. */
+.station-tags {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+}
+
+.station-tag {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  pointer-events: auto;
+}
+
+.station-tag > a {
+  display: inline-flex;
+  align-items: flex-end;
+  min-height: var(--target);
+  min-width: var(--target);
+  justify-content: center;
+  padding: 0 0.25rem 0.375rem;
+  text-decoration: none;
+}
+
+.station-pill {
+  display: inline-block;
+  padding: 0.125rem 0.625rem;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.station-tag > a:hover .station-pill,
+.station-tag > a:focus-visible .station-pill,
+.station-tag[data-lit='true'] .station-pill {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.station-ring {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+/* On a phone the room is drawn edge to edge, as big as the screen allows, and the tags give way to the
+   station strip under it (the rail, below), which has room for the words. */
+@media (max-width: 47.99rem) {
+  .home .live-studio-grid > .studio > .studio-stage {
+    margin-inline: calc(-1 * var(--gutter));
+    border-inline: 0;
+    border-radius: 0;
+  }
+
+  .home .station-tags {
+    display: none;
+  }
+}
+
+/* The stations and the rail. Under 64rem the rail is a strip of station links across the top of the
+   band, the small map left out; from 64rem it is a column beside the stations, held in view while
+   they scroll past, with the room's small map over the list. */
+.floor-rail {
+  margin-bottom: var(--space-4);
+}
+
+.floor-map {
+  display: none;
+}
+
+.floor-stations {
+  display: flex;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.floor-stations a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--target);
+  padding: 0 var(--space-2);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  font-weight: var(--weight-strong);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.floor-stations a:hover,
+.floor-stations a[aria-current='location'] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.floor-station-number {
+  display: none;
+}
+
+.floor-station-count {
+  font-family: var(--font-mono);
+  font-size: var(--size-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.floor-ledger {
+  display: none;
+}
+
+.floor-parts > * + * {
+  margin-top: var(--band-pad);
+}
+
+@media (min-width: 64rem) {
+  .floor {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 9fr);
+    column-gap: var(--space-5);
+    align-items: start;
+  }
+
+  .floor-rail {
+    position: sticky;
+    top: var(--space-3);
+    margin: 0;
+  }
+
+  .floor-map {
+    display: block;
+    margin-bottom: var(--space-3);
+  }
+
+  .floor-map .studio-stage {
+    padding: var(--space-1);
+  }
+
+  .floor-map .studio-era {
+    display: none;
+  }
+
+  .floor-stations {
+    flex-direction: column;
+    gap: 0;
+    overflow: visible;
+  }
+
+  .floor-stations li + li {
+    border-top: 1px solid var(--hairline);
+  }
+
+  .floor-stations a {
+    display: flex;
+    gap: var(--space-1);
+    padding: 0 var(--space-1);
+    border: 0;
+    border-radius: var(--radius);
+  }
+
+  .floor-station-number {
+    display: inline;
+    font-family: var(--font-mono);
+    font-size: var(--size-small);
+    font-weight: var(--weight-bold);
+  }
+
+  .floor-station-name {
+    margin-right: auto;
+  }
+
+  .floor-ledger {
+    display: block;
+    margin-top: var(--space-2);
+  }
+}
+
+/* A station's part: its rule, then its number, glyph and where in the room it is, small, over the
+   heading. Its cards sit in a grid of up to three. */
+.station-part {
+  padding-top: var(--space-3);
+  border-top: 2px solid currentColor;
+}
+
+.station-index {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-2);
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+}
+
+.station-part > h2[id] {
+  scroll-margin-top: var(--space-5);
+}
+
+.station-cards {
+  margin-top: 0;
+}
+
+@media (min-width: 48rem) {
+  .station-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 80rem) {
+  .station-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.station-actions {
+  margin-top: var(--space-3);
+}
+
+.station-note {
+  display: flex;
+  gap: var(--space-1);
+  align-items: flex-start;
+  max-width: var(--measure-text);
+}
+
+.station-part > .rows-heading {
+  margin-top: var(--space-4);
+}
+
+.floor-ideas {
+  margin-top: 0;
+}
+
+/* What you get: two columns of plain lines (as a guest, with a free profile) under one heading, on a
+   ruled panel. Nothing in it is money but the word dollar. */
+.perks {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-card);
+}
+
+.perks-title {
+  margin: 0 0 var(--space-2);
+}
+
+.perks-columns {
+  display: grid;
+  gap: var(--space-3);
+}
+
+@media (min-width: 48rem) {
+  .perks-columns {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  }
+}
+
+.perks-label {
+  margin: 0 0 var(--space-1);
+  font-weight: var(--weight-strong);
+}
+
+.perks-list {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.perks-list li + li {
+  margin-top: 0.25rem;
+}
+
+.perks-note {
+  margin: var(--space-3) 0 0;
+  max-width: var(--measure-text);
+}
+
+.perks > p:last-child {
+  margin-bottom: 0;
+}
+
+/* The signed-in panel on the plate: who, welcome back, the XP bar, the player's cards and the two ways
+   on. The XP bar is ink, never the coin: XP is not money. */
+.here-who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-2);
+  font-weight: var(--weight-strong);
+}
+
+.here-panel .xp {
+  margin-top: var(--space-3);
+}
+
+.here-label {
+  margin: var(--space-4) 0 var(--space-1);
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0;
+}
+
+.here-cards {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.here-cards li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 var(--space-2);
+  padding-block: 0.375rem;
+  border-top: 1px solid var(--hairline);
 }

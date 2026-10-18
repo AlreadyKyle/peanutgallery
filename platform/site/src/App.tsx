@@ -14,7 +14,7 @@ import { Contribute } from './pages/Contribute';
 import { Ledger } from './pages/Ledger';
 import { Contact, Privacy, Refunds, RefundsVersion, Terms, TermsVersion } from './pages/Legal';
 import { Thanks } from './pages/Thanks';
-import { communityNav, footerNav, pageNav, pageRoutes, type PageRoute } from './routes';
+import { communityNav, footerNav, pageNav, pageRoutes, youSlot, type PageRoute } from './routes';
 
 // Kernel (docs/specs/board-site.md): the frame of every page (the top bar, the footer with the legal
 // links and the credit, and the not found page, drawn by components/NotFound.tsx) and the routes of
@@ -163,9 +163,9 @@ export function CartridgeMark() {
 
 /**
  * The top bar (DESIGN.md, Top bar), on the signal plate it shares with band 1: the mark (with the
- * name from 32rem), Play, Contribute and a Menu button that opens the page links as an inline
- * list; from 64rem the links sit in the row and the Menu button goes. Below 22.5rem Play moves into
- * the list. Escape closes the list and returns focus to the button, and moving to another page
+ * name from 32rem), the you slot, Play, Contribute and a Menu button that opens the page links as an
+ * inline list; from 64rem the links sit in the row and the Menu button goes. Below 22.5rem Play moves
+ * into the list, and below 30rem a signed-out you slot does too (Your desk in the list). Escape closes the list and returns focus to the button, and moving to another page
  * closes it.
  */
 function TopBar() {
@@ -193,6 +193,8 @@ function TopBar() {
           <MachineMark />
           <span className="wordmark-text">{copy.studioName}</span>
         </Link>
+        {/* Who is here (routes.tsx, youSlot): Sign in, or the player's avatar and level. */}
+        <span className="you-slot">{youSlot}</span>
         {play === null ? null : (
           <a className="button button-secondary nav-play" href={play}>
             <CartridgeMark />
@@ -225,6 +227,9 @@ function TopBar() {
             ))}
           <li>
             <NavLink to="/ledger">{legal.ledger}</NavLink>
+          </li>
+          <li className="menu-you">
+            <NavLink to="/me">{copy.nav.me}</NavLink>
           </li>
           {play === null ? null : (
             <li className="menu-play">
