@@ -1,4 +1,5 @@
 import { DISCORD_INVITE, PAYMENT_LINK, PLAY_URL } from './fixture-env';
+import { EMPTY_STUDIO } from './prod-studio';
 import { expect, overflowsHorizontally, test, WIDTHS } from './fixtures';
 
 // Home in the board's order, the top bar and Menu, /contribute and /ledger (docs/specs/home-and-design.md).
@@ -184,27 +185,58 @@ test.describe('the Menu on a phone', () => {
   });
 });
 
-// Home's plate shares the live studio's columns from 64rem (the board, 17 October 2026): the lede sits
-// on the studio column's text edge, and the agents' written facts are for screen readers and the
-// keyboard only, so nothing but the room and the pipe sits on the plate.
-for (const width of [1024, 1440]) {
-  test(`lines the lede up with the studio column and keeps the facts list out of sight at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 });
+// Home's plate is one picture (the board, 18 October 2026): one headline, the room whole and in view
+// when the page opens at common laptop sizes, the pitch hung from the room's caption line and the pipe's
+// foot on the room's foot, so no column leaves a hollow. The agents' written facts are for screen
+// readers and the keyboard only.
+for (const size of [
+  { width: 1280, height: 720 },
+  { width: 1440, height: 810 },
+]) {
+  test(`shows the whole room beside the pitch above the fold at ${size.width} by ${size.height}`, async ({ page }) => {
+    await page.setViewportSize(size);
     await page.goto('/');
     const studio = page.locator('.live-studio');
     await expect(studio.locator('.studio-agent').first()).toBeVisible();
-    // The hero's side and the studio's heading share the column's rule, and so its text edge.
-    const side = (await page.locator('.hero-home .hero-side').boundingBox())!;
-    const heading = (await studio.getByRole('heading', { name: 'The studio, live' }).boundingBox())!;
-    expect(Math.abs(side.x - heading.x)).toBeLessThanOrEqual(1);
-    const ledeX = await page.locator('.hero-home .lede').evaluate((el) => el.getBoundingClientRect().x);
-    const headingTextX = await studio.getByRole('heading', { name: 'The studio, live' }).evaluate((el) => el.getBoundingClientRect().x + parseFloat(getComputedStyle(el).borderInlineStartWidth) + parseFloat(getComputedStyle(el).paddingInlineStart));
-    expect(Math.abs(ledeX - headingTextX)).toBeLessThanOrEqual(1);
+    const box = async (selector: string) => (await page.locator(selector).boundingBox())!;
+    const stage = await box('.studio-stage');
+    expect(stage.y + stage.height).toBeLessThanOrEqual(size.height);
+    // One headline: the lede is the lead size, not a second display line.
+    await expect(page.locator('main h1')).toHaveCount(1);
+    expect(await page.locator('.hero-home .lede').evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeLessThanOrEqual(20);
+    // The pitch and the room's caption start on one line; the pipe sits on the pitch's text edge, its
+    // foot on the room's.
+    const h1 = await box('.hero-home h1');
+    const caption = (await studio.getByRole('heading', { name: 'The studio, live' }).boundingBox())!;
+    expect(Math.abs(h1.y - caption.y)).toBeLessThanOrEqual(1);
+    const pipe = await box('.home .pipe');
+    expect(Math.abs(pipe.x - h1.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(pipe.y + pipe.height - (stage.y + stage.height))).toBeLessThanOrEqual(1);
+    expect(pipe.x + pipe.width).toBeLessThan(stage.x);
     const facts = studio.getByRole('list', { name: 'What each agent is doing' });
     await expect(facts).toHaveCount(1);
     expect((await facts.boundingBox())!.height).toBeLessThanOrEqual(1);
   });
 }
+
+// A feed that answers with nothing yet still shows the cards' own story, never an empty pipe.
+test('tells the snapshot in the pipe while the feed is empty', async ({ page }) => {
+  await page.route(/\/api\/community\/feed/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ events: [], next: null }) }));
+  await page.goto('/');
+  const pipe = page.locator('.home .pipe');
+  await expect(pipe.locator('.pipe-row')).toHaveCount(2);
+  await expect(pipe.locator('.pipe-empty')).toHaveCount(0);
+});
+
+test.describe('a studio with no cards', () => {
+  test.use({ studio: EMPTY_STUDIO });
+
+  test("draws one quiet slot where the pipe's rows will land", async ({ page }) => {
+    await page.route(/\/api\/community\/feed/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ events: [], next: null }) }));
+    await page.goto('/');
+    await expect(page.locator('.home .pipe .pipe-empty')).toHaveText('Quiet so far. Every coin, new card and shipment lands here as it happens.');
+  });
+});
 
 test('build sha meta is stamped', async ({ page }) => {
   await page.goto('/');

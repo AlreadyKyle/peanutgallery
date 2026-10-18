@@ -420,7 +420,7 @@ export const copy = {
   time: { justNow: 'just now', minutes: '{n} min ago', hours: '{n} h ago', day: 'yesterday', days: '{n} days ago' },
   studioRoom: {
     title: 'The studio, live',
-    intro: 'The agents work at their stations while you watch. Hover, focus or tap an agent to see what it is doing.',
+    intro: 'Hover, focus or tap an agent to see what it is doing.',
     svgTitle: 'The studio in its {era} era, with the agents at their stations',
     eraLabel: 'Era',
     eras: { garage: 'Garage', workshop: 'Workshop', studio: 'Studio', campus: 'Campus' },
@@ -446,10 +446,10 @@ export const copy = {
   },
   pipe: {
     title: 'The pipe',
-    intro: 'Everything that happens in the studio, as it happens. The ledger keeps the record.',
-    fallback: 'The latest from the cards, newest first. The ledger keeps the record.',
+    intro: 'As it happens, and the ledger keeps the record.',
+    fallback: 'Newest first, and the ledger keeps the record.',
     loading: 'Loading the pipe.',
-    empty: 'Nothing has come down the pipe yet.',
+    empty: 'Quiet so far. Every coin, new card and shipment lands here as it happens.',
     older: 'Older',
     loadingOlder: 'Loading older events.',
     anonymous: 'Anonymous',
