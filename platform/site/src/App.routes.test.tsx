@@ -33,6 +33,7 @@ vi.mock('./routes', async () => {
     ],
     footerNav: [],
     communityNav: [],
+    youSlot: null,
   };
 });
 
@@ -96,8 +97,9 @@ describe('the kernel frame and the card lane routes', () => {
     renderAt('/extra');
     const nav = screen.getByRole('navigation', { name: 'Site' });
     const hrefs = [...nav.querySelectorAll('a')].map((a) => a.getAttribute('href'));
-    // The wordmark home, Contribute, then the Menu list: the card page and the kernel's Ledger.
-    expect(hrefs).toEqual(['/', '/contribute', '/extra', '/ledger']);
+    // The wordmark home, Contribute, then the Menu list: the card page, the kernel's Ledger and the
+    // kernel's own way to the desk.
+    expect(hrefs).toEqual(['/', '/contribute', '/extra', '/ledger', '/me']);
   });
 });
 

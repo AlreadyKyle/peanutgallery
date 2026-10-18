@@ -81,6 +81,50 @@ export function adoptLinkErrorFromLocation(): LinkError | null {
   return error;
 }
 
+const RETURN = 'mm:return-to';
+
+/** Remembers the page a player left to sign in from, so the magic link's landing on /me sends them back. */
+export function rememberReturn(path: string): void {
+  if (!/^\/[A-Za-z0-9/_#?=&-]*$/.test(path) || path.startsWith('//')) return;
+  try {
+    storage()?.setItem(RETURN, path);
+  } catch {
+    // Without storage the player lands on their desk, which is fine.
+  }
+}
+
+/** The page to go back to after signing in, read once. */
+export function takeReturn(): string | null {
+  try {
+    const path = storage()?.getItem(RETURN) ?? null;
+    storage()?.removeItem(RETURN);
+    return path !== null && /^\/[A-Za-z0-9/_#?=&-]*$/.test(path) && !path.startsWith('//') ? path : null;
+  } catch {
+    return null;
+  }
+}
+
+const CLAIM = 'mm:pending-claim';
+
+/** /thanks's Keep this card: after the magic link, /me claims the player's guest contributions at once. */
+export function rememberClaim(): void {
+  try {
+    storage()?.setItem(CLAIM, '1');
+  } catch {
+    // Without storage the player presses Claim on their desk instead.
+  }
+}
+
+export function takeClaim(): boolean {
+  try {
+    const pending = storage()?.getItem(CLAIM) === '1';
+    storage()?.removeItem(CLAIM);
+    return pending;
+  } catch {
+    return false;
+  }
+}
+
 export function signOut(): void {
   writeSession(null);
 }
@@ -105,19 +149,27 @@ export async function sendMagicLink(email: string, redirectTo: string): Promise<
   await post('/auth/otp', { email, redirectTo });
 }
 
+/** The refresh in flight, so readers that ask at once spend the refresh token once, not in a race. */
+let refreshing: Promise<string | null> | null = null;
+
 async function freshToken(): Promise<string | null> {
   const session = readSession();
   if (session === null) return null;
   if (session.expiresAt - Date.now() > 60_000) return session.accessToken;
-  try {
-    const next = await post<{ access_token: string; refresh_token: string; expires_in: number }>('/auth/refresh', { refresh_token: session.refreshToken });
-    const renewed = { accessToken: next.access_token, refreshToken: next.refresh_token, expiresAt: Date.now() + next.expires_in * 1000 };
-    writeSession(renewed);
-    return renewed.accessToken;
-  } catch {
-    writeSession(null);
-    return null;
-  }
+  refreshing ??= post<{ access_token: string; refresh_token: string; expires_in: number }>('/auth/refresh', { refresh_token: session.refreshToken })
+    .then((next) => {
+      const renewed = { accessToken: next.access_token, refreshToken: next.refresh_token, expiresAt: Date.now() + next.expires_in * 1000 };
+      writeSession(renewed);
+      return renewed.accessToken;
+    })
+    .catch(() => {
+      writeSession(null);
+      return null;
+    })
+    .finally(() => {
+      refreshing = null;
+    });
+  return refreshing;
 }
 
 /** One of the player's RPCs (community-types.ts), under their session. */
@@ -144,26 +196,77 @@ export function useSignedIn(): boolean {
 
 export type MyProfile = { state: 'signed-out' } | { state: 'loading' } | { state: 'ready'; profile: Profile } | { state: 'unavailable' };
 
+/**
+ * The last profile read in this tab, shared by every reader (the top bar's you slot, home's panel and
+ * /me), so moving between pages draws the player at once and asks the server again in the background
+ * instead of on every reader's first paint. A new session, or signing out, drops it.
+ */
+let held: { token: string; profile: Profile } | null = null;
+
+/** Said on the window when a new profile is held, so every reader (the you slot too) draws it. */
+const PROFILE_EVENT = 'mm:profile';
+
+/** The my_profile read in flight, shared by readers that mount together; a reload asks afresh. */
+let asking: Promise<Profile> | null = null;
+
+function heldProfile(): Profile | null {
+  const session = readSession();
+  return session !== null && held !== null && held.token === session.refreshToken ? held.profile : null;
+}
+
+function askProfile(fresh: boolean): Promise<Profile> {
+  if (asking !== null && !fresh) return asking;
+  const promise = rpc<Profile>('my_profile').then((profile) => {
+    const session = readSession();
+    if (session !== null) {
+      held = { token: session.refreshToken, profile };
+      window.dispatchEvent(new Event(PROFILE_EVENT));
+    }
+    return profile;
+  });
+  asking = promise;
+  const clear = () => {
+    if (asking === promise) asking = null;
+  };
+  promise.then(clear, clear);
+  return promise;
+}
+
 export function useMyProfile(): MyProfile & { reload: () => void } {
   const signedIn = useSignedIn();
-  const [state, setState] = useState<MyProfile>(signedIn ? { state: 'loading' } : { state: 'signed-out' });
+  const [state, setState] = useState<MyProfile>(() => {
+    if (!signedIn) return { state: 'signed-out' };
+    const profile = heldProfile();
+    return profile === null ? { state: 'loading' } : { state: 'ready', profile };
+  });
   const [nonce, setNonce] = useState(0);
   const reload = useCallback(() => setNonce((n) => n + 1), []);
   useEffect(() => {
     if (!signedIn) {
+      held = null;
       setState({ state: 'signed-out' });
       return;
     }
     let live = true;
-    setState((was) => (was.state === 'ready' ? was : { state: 'loading' }));
-    rpc<Profile>('my_profile')
-      .then((profile) => live && setState({ state: 'ready', profile }))
+    const ready = heldProfile();
+    setState((was) => (was.state === 'ready' ? was : ready === null ? { state: 'loading' } : { state: 'ready', profile: ready }));
+    // Another reader's fresh read (a save or a claim on /me) redraws this one too.
+    const update = () => {
+      const profile = heldProfile();
+      if (live && profile !== null) setState({ state: 'ready', profile });
+    };
+    window.addEventListener(PROFILE_EVENT, update);
+    askProfile(nonce > 0)
+      .then((profile) => {
+        if (live) setState({ state: 'ready', profile });
+      })
       .catch((error: unknown) => {
         if (!live) return;
         setState(error instanceof CommunityError && error.status === 401 ? { state: 'signed-out' } : { state: 'unavailable' });
       });
     return () => {
       live = false;
+      window.removeEventListener(PROFILE_EVENT, update);
     };
   }, [signedIn, nonce]);
   return { ...state, reload };

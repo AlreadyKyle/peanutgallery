@@ -33,7 +33,8 @@ test('an agent under the pointer holds still with its role card open', async ({ 
 
 test('the room is named for assistive technology without a browser tooltip', async ({ page }) => {
   await page.goto('/');
-  const room = page.locator('svg.room[data-variant="live"]');
+  // The plate's room; the rail's small map (docs/specs/place.md) is hidden from assistive technology.
+  const room = page.locator('.floor-plate svg.room[data-variant="live"]');
   await expect(room).toHaveAttribute('aria-label', /^The studio in its .+ era/);
   await expect(room.locator(':scope > title')).toHaveCount(0);
 });

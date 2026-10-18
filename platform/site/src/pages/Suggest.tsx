@@ -5,11 +5,12 @@ import { Glyph, type GlyphName } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
 import { PersonLink } from '../components/Person';
 import { ShowMore } from '../components/ShowMore';
-import { rpc, useSignedIn } from '../lib/account';
+import { rememberReturn, rpc, useSignedIn } from '../lib/account';
 import { CommunityError, relativeTime, usePagedCommunity } from '../lib/community';
 import type { DeclineReason, SuggestionState, SuggestionSummary } from '../lib/community-types';
 import { copy } from '../lib/copy';
 import { legal } from '../lib/legal';
+import { useSignInOpen } from '../lib/sign-in';
 
 // /suggest (docs/specs/final-state.md, Suggestions): the crowd's suggestions, sorted by top or new
 // and filtered by area, each with its upvotes, its state in words and, when declined, the reason from
@@ -54,7 +55,7 @@ export function totalFrom(answer: unknown): number | null {
 
 type Pressed = { readonly item: SuggestionSummary; readonly upvoted: boolean; readonly total: number };
 
-function Suggestion({ item, signedIn }: { item: SuggestionSummary; signedIn: boolean }) {
+export function Suggestion({ item, signedIn, area = true }: { item: SuggestionSummary; signedIn: boolean; area?: boolean }) {
   // The list is a public, cached document, so it cannot say whether this player upvoted, and its count
   // may already include them. After a press the count is the total the RPC answered with and the
   // button shows the press just made. Both belong to the item they were read for: a reload brings a
@@ -91,7 +92,7 @@ function Suggestion({ item, signedIn }: { item: SuggestionSummary; signedIn: boo
       <div className="suggestion-text">
         <p className="suggestion-index">
           <StateChip suggestion={item} />
-          <span className="muted small">{copy.suggest.areas[item.area as (typeof SUGGESTION_AREAS)[number]] ?? item.area}</span>
+          {area ? <span className="muted small">{copy.suggest.areas[item.area as (typeof SUGGESTION_AREAS)[number]] ?? item.area}</span> : null}
         </p>
         <h3>{item.title}</h3>
         {item.summary === null ? null : (
@@ -213,6 +214,7 @@ function SubmitForm({ onSent }: { onSent: () => void }) {
 
 export function Suggest() {
   const signedIn = useSignedIn();
+  const signInOpen = useSignInOpen();
   const [sort, setSort] = useState<'top' | 'new'>('top');
   const [area, setArea] = useState<string>('all');
   const query = `/suggestions?sort=${sort}${area === 'all' ? '' : `&area=${encodeURIComponent(area)}`}`;
@@ -228,6 +230,14 @@ export function Suggest() {
           <h2 id="suggest-send">{copy.suggest.sendTitle}</h2>
           {signedIn ? (
             <SubmitForm onSent={list.reload} />
+          ) : !signInOpen ? (
+            <>
+              <p>{copy.ideas.closed}</p>
+              <p className="notice-plain">
+                <Glyph name="checklist" />
+                <span>{copy.suggest.safety}</span>
+              </p>
+            </>
           ) : (
             <>
               <p>{copy.suggest.signInFirst}</p>
@@ -236,7 +246,7 @@ export function Suggest() {
                 <span>{copy.suggest.safety}</span>
               </p>
               <p>
-                <Link className="button" to="/me">
+                <Link className="button" to="/me" onClick={() => rememberReturn('/suggest#suggest-send')}>
                   {copy.suggest.signIn}
                 </Link>
               </p>

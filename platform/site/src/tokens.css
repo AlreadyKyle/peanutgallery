@@ -126,6 +126,7 @@
 
   /* Layout */
   --wrap: 76rem; /* 1216px: wide enough that the page fills a 1440px screen */
+  --wrap-floor: 90rem; /* 1440px: home's floor, its top bar and footer, so the room and the stations fill a desktop (docs/specs/place.md) */
   --measure: 44rem;
   --measure-text: 36em; /* running text: about 72 characters a line at the body size */
   /* The page's side margin grows with the viewport, like the headings: 20px on a phone up to about

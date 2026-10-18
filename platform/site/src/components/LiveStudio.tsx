@@ -6,7 +6,7 @@ import type { Snapshot } from '../lib/source';
 import { twitchChannel, twitchUrl } from '../lib/twitch';
 import { Glyph } from './Glyph';
 import { Pipe } from './Pipe';
-import { StudioRoom, type Pulse } from './StudioRoom';
+import { StudioRoom, type Pulse, type StationTag } from './StudioRoom';
 
 // Home's opening section (docs/specs/final-state.md, The live studio): the room and the pipe beside
 // it. The room's era comes from /api/community/studio, the garage when that does not answer. The
@@ -51,7 +51,22 @@ export function TwitchLink({ channel }: { channel: string | null }) {
   );
 }
 
-export function LiveStudio({ snapshot }: { snapshot: Snapshot }) {
+export function LiveStudio({
+  snapshot,
+  stations = [],
+  lit = null,
+  pipeSize = 1,
+  pipe = true,
+}: {
+  snapshot: Snapshot;
+  /** Home's floor: the station tags standing on the room, each a link to its part of the page. */
+  stations?: readonly StationTag[];
+  lit?: string | null;
+  /** How many of the pipe's newest rows to show. */
+  pipeSize?: number;
+  /** Draw the pipe here; home's floor draws it beside the pitch instead (FloorPipe). */
+  pipe?: boolean;
+}) {
   const studio = useStudioDoc();
   const feed = useFeed();
   const [pulses, setPulses] = useState<Pulse[]>([]);
@@ -90,7 +105,8 @@ export function LiveStudio({ snapshot }: { snapshot: Snapshot }) {
       </div>
       {/* The room is wide and the pipe a column: the pipe shows as many rows as sit beside the room. */}
       <div className="live-studio-grid">
-        <StudioRoom snapshot={snapshot} studio={studio} pulses={pulses} />
+        <StudioRoom snapshot={snapshot} studio={studio} pulses={pulses} stations={stations} lit={lit} />
+        {pipe ? (
         <Pipe
           events={events}
           live={live}
@@ -98,11 +114,12 @@ export function LiveStudio({ snapshot }: { snapshot: Snapshot }) {
           hasOlder={feed.hasOlder}
           loadingOlder={feed.loadingOlder}
           onOlder={feed.loadOlder}
-          // On home the pipe sits under the pitch, its foot on the room's foot: the newest row only, and
-          // the ledger keeps the rest.
-          pageSize={1}
+          // On home the pipe sits under the panel, its foot on the room's foot: the newest rows only
+          // (pipeSize), and the ledger keeps the rest.
+          pageSize={pipeSize}
           paging={false}
         />
+        ) : null}
       </div>
     </section>
   );

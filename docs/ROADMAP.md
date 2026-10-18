@@ -157,6 +157,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 | `specs/card-follows.md` | agreed | Tell me when this ships for any profile: one email per follow when the card goes live, read from Supabase Auth and never copied, sent by the notices job after the payers; left: `20261018010000_card_follows.sql` in production, `STUDIO_REF` in the ops repository, email sign-in on, the live check, and the first follow email received |
 | `specs/channel-counters.md` | built | landings from each channel's tagged link (`from_<channel>`) on the site and in Dust, and the migration that takes the fourteen names; left: the migration in production, both sites deployed, then a tagged visit read from `daily_metrics` |
 | `specs/ship-notices.md` | agreed | one email per payment and shipped card, read from Stripe and never stored, with a one-click unsubscribe; left: the migration in production, the `NOTICES_ENV` secret and `STUDIO_REF` in the ops repository, the live check, and the first notice received |
+| `specs/place.md` | agreed | the site as a place: the top bar's you slot, home as the studio's floor with the players' ideas as a station, /me as the player's desk, and what a contribution gets you where people pay; left: the merge and the live check |
 
 ## Standing facts for any session
 

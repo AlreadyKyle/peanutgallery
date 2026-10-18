@@ -161,6 +161,20 @@ describe('Terms, Privacy, Refunds and Contact', () => {
   });
 });
 
+describe('the you slot', () => {
+  // The slot is the card lane's code (routes.tsx), so the kernel's own pages draw the bar without it,
+  // however the address is spelt (docs/specs/place.md).
+  it('is in the top bar on a card page and absent on every kernel page', () => {
+    renderAt('/faq');
+    expect(document.querySelector('.you-slot')).not.toBeNull();
+    for (const path of ['/contribute', '/Contribute/', '/%63ontribute', '/th%61nks?session=x', '/ledger', '/terms', '/privacy', '/refunds', '/contact']) {
+      cleanup();
+      renderAt(path);
+      expect(document.querySelector('.you-slot'), path).toBeNull();
+    }
+  });
+});
+
 describe('Site chrome', () => {
   // docs/specs/final-state.md adds the studio's history and the player's own page to the footer.
   it('links Weekly reports, the feed, the community pages, Terms, Privacy, Refunds and Contact in the footer of every page', () => {
@@ -209,13 +223,17 @@ describe('Site chrome', () => {
         .map((link) => [link.textContent, link.getAttribute('href')]),
     ).toEqual([
       [copy.studioName, '/'],
-      [copy.howItWorksNav, '/how-it-works'],
-      [copy.teamNav, '/team'],
-      // The top bar keeps to what a first visit needs; goals, seeds and the player's page are in the
-      // footer (docs/specs/brand.md, the second review).
+      // The you slot (docs/specs/place.md): Sign in for a visitor, the player's desk once signed in.
+      [copy.you.signIn, '/me'],
+      // The top bar keeps to what a first visit needs, Ideas first in the links since players pitch there;
+      // goals and seeds are in the footer (docs/specs/brand.md, the second review).
       [copy.nav.suggest, '/suggest'],
+      [copy.teamNav, '/team'],
+      [copy.howItWorksNav, '/how-it-works'],
       [copy.nav.faq, '/faq'],
       [legal.ledger, '/ledger'],
+      // The menu's own way to the desk, shown on phones where the slot keeps to the avatar.
+      [copy.nav.me, '/me'],
     ]);
     expect(screen.getByText(copy.pitchBody)).toBeTruthy();
     expect(within(screen.getByRole('contentinfo')).getByText(`${copy.footer} ${legal.allAges}`)).toBeTruthy();

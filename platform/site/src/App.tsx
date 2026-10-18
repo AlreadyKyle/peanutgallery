@@ -9,12 +9,13 @@ import { useSiteCounts } from './lib/count';
 import { siteEnv } from './lib/env';
 import { legal } from './lib/legal';
 import { useScrollReveal } from './lib/reveal';
+import { useSignInOpen } from './lib/sign-in';
 import { StudioProvider } from './lib/studio';
 import { Contribute } from './pages/Contribute';
 import { Ledger } from './pages/Ledger';
 import { Contact, Privacy, Refunds, RefundsVersion, Terms, TermsVersion } from './pages/Legal';
 import { Thanks } from './pages/Thanks';
-import { communityNav, footerNav, pageNav, pageRoutes, type PageRoute } from './routes';
+import { communityNav, footerNav, pageNav, pageRoutes, youSlot, type PageRoute } from './routes';
 
 // Kernel (docs/specs/board-site.md): the frame of every page (the top bar, the footer with the legal
 // links and the credit, and the not found page, drawn by components/NotFound.tsx) and the routes of
@@ -163,9 +164,9 @@ export function CartridgeMark() {
 
 /**
  * The top bar (DESIGN.md, Top bar), on the signal plate it shares with band 1: the mark (with the
- * name from 32rem), Play, Contribute and a Menu button that opens the page links as an inline
- * list; from 64rem the links sit in the row and the Menu button goes. Below 22.5rem Play moves into
- * the list. Escape closes the list and returns focus to the button, and moving to another page
+ * name from 32rem), the you slot, Play, Contribute and a Menu button that opens the page links as an
+ * inline list; from 64rem the links sit in the row and the Menu button goes. Below 22.5rem Play moves
+ * into the list, and below 30rem a signed-out you slot does too (Your desk in the list). Escape closes the list and returns focus to the button, and moving to another page
  * closes it.
  */
 function TopBar() {
@@ -173,10 +174,24 @@ function TopBar() {
   const [open, setOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const { pathname } = useLocation();
+  const signInOpen = useSignInOpen();
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
   const play = env.playUrl === '' ? null : env.playUrl;
+  // The you slot is the card lane's code (routes.tsx), so the kernel's own pages (Contribute, /thanks,
+  // the ledger and the legal pages) draw the bar without it: nothing a card changes stands on the way
+  // to paying.
+  // The address is read as the router matches it: decoded (so /%63ontribute is /contribute) and
+  // without regard to case.
+  const raw = pathname.replace(/^\/+/, '').split('/')[0] ?? '';
+  let first = raw.toLowerCase();
+  try {
+    first = decodeURIComponent(raw).toLowerCase();
+  } catch {
+    // A malformed escape is not a kernel path; the router draws its not found page.
+  }
+  const kernelPage = KERNEL_SEGMENTS.includes(first);
   return (
     <header className="topbar">
       <nav
@@ -193,6 +208,8 @@ function TopBar() {
           <MachineMark />
           <span className="wordmark-text">{copy.studioName}</span>
         </Link>
+        {/* Who is here (routes.tsx, youSlot): Sign in, or the player's avatar and level. */}
+        {kernelPage ? null : <span className="you-slot">{youSlot}</span>}
         {play === null ? null : (
           <a className="button button-secondary nav-play" href={play}>
             <CartridgeMark />
@@ -226,6 +243,11 @@ function TopBar() {
           <li>
             <NavLink to="/ledger">{legal.ledger}</NavLink>
           </li>
+          {signInOpen ? (
+            <li className="menu-you">
+              <NavLink to="/me">{copy.nav.me}</NavLink>
+            </li>
+          ) : null}
           {play === null ? null : (
             <li className="menu-play">
               <a href={play}>{copy.play}</a>

@@ -144,6 +144,28 @@ describe('the sign-in routes', () => {
     expect((await post('/api/community/auth/refresh', { refresh_token: 'bad token!' })).status).toBe(400);
   });
 
+  it('says whether email sign-in takes new players, as one boolean read from the public auth settings', async () => {
+    for (const [settings, signIn] of [
+      [{ external: { email: true, google: false }, disable_signup: false, mailer_autoconfirm: false }, true],
+      [{ external: { email: true }, disable_signup: true }, false],
+      [{ external: { email: false }, disable_signup: false }, false],
+      [{}, false],
+    ] as const) {
+      const calls = stubFetch([{ body: settings }]);
+      const response = await get('/api/community/auth/settings');
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ signIn });
+      expect(calls[0]!.url).toBe(`${SUPABASE_URL}/auth/v1/settings`);
+      expect((calls[0]!.init.headers as Record<string, string>).apikey).toBe(SUPABASE_PUBLISHABLE_KEY);
+      expect(response.headers.get('Netlify-CDN-Cache-Control')).toContain('s-maxage=60');
+    }
+    stubFetch([{ status: 500, body: {} }]);
+    expect((await get('/api/community/auth/settings')).status).toBe(502);
+    const none = stubFetch([{ body: {} }]);
+    expect((await get('/api/community/auth/settings?x=1')).status).toBe(400);
+    expect(none).toHaveLength(0);
+  });
+
   it('answers 405 to a GET on a POST route', async () => {
     expect((await get('/api/community/auth/otp')).status).toBe(405);
     expect((await get('/api/community/rpc/my_profile')).status).toBe(405);

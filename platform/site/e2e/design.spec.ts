@@ -292,13 +292,13 @@ test.describe('bands with empty data', () => {
       expect(await grounds(page), path).toEqual(expected(bands));
     }
     // With no team strip, where the money goes moves onto ink, right after the cards on paper (the
-    // cards to fund, then how they move), and every card stays in band 2.
+    // floor's stations), and every card stays in band 2.
     await settle(page, '/');
     const money = page.locator('main > .band:nth-child(3)');
     await expect(money.getByRole('heading', { level: 2, name: 'Where the money goes' })).toBeVisible();
     // The live studio sits on the plate (docs/specs/brand.md), even with no team to draw in it.
     await expect(page.locator('main > .band:nth-child(1)').getByRole('heading', { level: 2 })).toHaveText(['The studio, live']);
-    await expect(page.locator('main > .band:nth-child(2)').getByRole('heading', { level: 2 })).toHaveText(['Pick a card to fund', 'Play the first game', 'How the cards move']);
+    await expect(page.locator('main > .band:nth-child(2)').getByRole('heading', { level: 2 })).toHaveText(['Pick a card to fund', 'Play the first game', 'Ideas', 'Next up', 'Building', 'Shipped']);
     expect(await page.locator('main > .band:not(:nth-child(2)) li.card').count()).toBe(0);
   });
 });

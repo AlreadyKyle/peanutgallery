@@ -15,6 +15,9 @@ async function answerCommunity(page: Page, posts: Post[]) {
     const url = new URL(request.url());
     if (request.method() === 'POST') {
       const body = request.postData() ? (JSON.parse(request.postData()!) as unknown) : null;
+      // The top bar's you slot reads the player's profile on every page (docs/specs/place.md); the
+      // writes are what this spec counts.
+      if (url.pathname === '/api/community/rpc/my_profile') return route.fulfill({ status: 503, contentType: json, body: '{"error":"not in the e2e fixtures"}' });
       posts.push({ path: url.pathname, body, auth: (await request.allHeaders()).authorization ?? null });
       if (url.pathname === '/api/community/rpc/save_seed') return route.fulfill({ status: 200, contentType: json, body: '{"id":"5eed0000-0000-4000-8000-000000000001"}' });
       if (url.pathname === '/api/community/auth/otp') return route.fulfill({ status: 200, contentType: json, body: '{"sent":true}' });
@@ -80,7 +83,8 @@ test('a signed-out player signs in by email and the save completes when the link
   await page.goto('/me#access_token=e2e-link-access&refresh_token=e2e-link-refresh&expires_in=3600');
   await expect(page).toHaveURL(/\/seeds$/);
   await expect(page.getByRole('region', { name: 'Save this seed' }).getByRole('status')).toHaveText('Saved to your profile.');
-  expect(posts.slice(1)).toEqual([{ path: '/api/community/rpc/save_seed', body: { game: 'dust', code: 'dust:v3:abc', title: null, publish: false }, auth: 'Bearer e2e-link-access' }]);
+  // The sign-in also claims any guest payments (docs/specs/place.md); the save is the one other post.
+  expect(posts.slice(1).filter((post) => post.path !== '/api/community/rpc/claim_contributions')).toEqual([{ path: '/api/community/rpc/save_seed', body: { game: 'dust', code: 'dust:v3:abc', title: null, publish: false }, auth: 'Bearer e2e-link-access' }]);
   expect(await page.evaluate(() => window.localStorage.getItem('mm:pending-seed'))).toBeNull();
   expect(reports).toEqual([]);
 });

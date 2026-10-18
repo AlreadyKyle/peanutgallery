@@ -5,6 +5,7 @@ import { FollowCard } from '../components/Follow';
 import { Glyph } from '../components/Glyph';
 import { NotFound } from '../components/NotFound';
 import { PageHeader } from '../components/PageHeader';
+import { Perks } from '../components/Perks';
 import { Replay } from '../components/Replay';
 import { ShareCard } from '../components/ShareCard';
 import { StoppedFacts } from '../components/Stopped';
@@ -152,6 +153,7 @@ function Detail({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }
         {detail.stopped === null && isPlanned(detail.card) ? <Planned detail={detail} /> : <Replay detail={detail} snapshot={snapshot} />}
         {liveFundLink(detail.card, snapshot) ? <FundAgreement /> : null}
         <FollowCard cardId={detail.card.id} stage={detail.card.stage} />
+        {liveFundLink(detail.card, snapshot) ? <Perks /> : null}
       </section>
       <Facts detail={detail} />
       <Changed detail={detail} />
