@@ -20,6 +20,7 @@ CHECKS=(
   "secret-scan|pnpm secret-scan"
   "docs|pnpm test:docs"
   "rename|pnpm test:rename"
+  "claude-mod|node --test platform/claude-mod/tests/mod.test.mjs"
 )
 pids=()
 for check in "${CHECKS[@]}"; do

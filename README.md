@@ -27,6 +27,7 @@ The repository is public (since 6 October 2026). `main` has no branch protection
 - `platform/supabase`: migrations, the `stripe-webhook` function, the seed and the operator scripts.
 - `platform/agents`: the sixteen role specs (JSON) and their prompts.
 - `platform/ops`: the dispatcher's Docker image, systemd units, provisioning and deploy scripts, and the VPS runbook.
+- `platform/claude-mod`: the Dust mod for Claude Code, whose `/dust` opens Dust in the browser while Claude works. `.claude-plugin/marketplace.json` at the root lists it, so it installs from this repository.
 - `seed-1`: Dust, with its simulation, config, content, renderer, bot and tests. It never imports from `platform/`.
 - `BOARD-SETUP.md`: the board's few standing duties, the ones that need a human or legal identity (PLAN.md §10 decision 74), and how to pause the studio without the board's site.
 - `docs`: the constitution (`PLAN.md`), the launch checklist (`ROADMAP.md`), the backlog (`BACKLOG.md`) and the specs.
@@ -68,6 +69,7 @@ Install with `pnpm install --frozen-lockfile`. The dispatcher, the seed and the 
 7. `pnpm secret-scan`: tracked files.
 8. `pnpm test:docs`: the docs drift guard (`docs/docs.test.mjs`).
 9. `pnpm test:rename`: the rename checks.
+10. The Dust mod's static checks (`platform/claude-mod/tests/mod.test.mjs`). Its behaviour tests need the Claude Code CLI: `claude plugin test platform/claude-mod`.
 
 `pnpm verify:changed` runs only the typecheck and tests of the packages a branch touches, plus the docs, secret and rename checks.
 
