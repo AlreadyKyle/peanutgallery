@@ -1,6 +1,6 @@
 # Show HN
 
-Fourth in the posting order, after the three Reddit posts (`README.md`). Hacker News allows an 80-character title. The first comment is posted by the board right after the submission; it is kept under 2,000 characters. Hacker News does not render Markdown, so the comment is plain paragraphs.
+Third in the posting order, after the first two Reddit posts (`README.md`). Hacker News allows an 80-character title. The first comment is posted by the board right after the submission; it is kept under 2,000 characters. Hacker News does not render Markdown, so the comment is plain paragraphs.
 
 ## Title
 

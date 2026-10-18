@@ -1,6 +1,6 @@
 # r/incremental_games
 
-Third in the posting order (`README.md`). Reddit allows a 300-character title and a 40,000-character body.
+Last in the posting order, once Dust shows depth (`README.md`). Reddit allows a 300-character title and a 40,000-character body.
 
 The subreddit's rules, as seen in October 2026: every post needs a line that starts "AI disclosure:" (AutoModerator removes posts without one), and a post about your own game is allowed once per 30 days. The disclosure is the body's first line so it cannot be cut in editing.
 
