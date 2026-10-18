@@ -102,12 +102,12 @@
   --size-lead: 1.25rem; /* 20px: the lede, figures, h3 and card titles */
   --size-h2: clamp(1.625rem, 1.2rem + 1.6vw, 2.5rem); /* 26px to 40px: section headings */
   --size-h1: clamp(2.375rem, 1.4rem + 3.6vw, 4.5rem); /* 38px to 72px: the page heading */
-  --size-hero: clamp(2.375rem, 1.5rem + 2.6vw, 3.75rem); /* 38px to 60px: home's pitch, which shares its row with the lede */
+  --size-hero: clamp(2.375rem, 1rem + 2.6vw, 3.25rem); /* 38px to 52px: home's pitch, three lines beside the room */
 
-  /* Tracking: the only letter-spacing values. Display type sets tight, the index labels open. */
+  /* Tracking: the only letter-spacing values. Display type sets tight, mono labels open. */
   --tracking-display: -0.03em; /* h1 and the pitch */
   --tracking-heading: -0.015em; /* h2 */
-  --tracking-label: 0.04em; /* the index numbers and labels set in the mono face */
+  --tracking-label: 0.04em; /* labels set in the mono face */
 
   /* Space */
   --space-1: 0.5rem;

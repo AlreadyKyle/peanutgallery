@@ -77,13 +77,17 @@ export function LiveStudio({ snapshot }: { snapshot: Snapshot }) {
     if (fresh.length > 0) setPulses((was) => [...was.slice(-12), ...fresh]);
   }, [feed.state, feed.events]);
 
-  const live = feed.state === 'ready';
+  // A feed that answers with nothing yet tells the snapshot's events too, so the pipe is empty only
+  // when the studio has no card at all.
+  const live = feed.state === 'ready' && feed.events.length > 0;
   const events = live ? feed.events : feedFromSnapshot(snapshot);
   return (
     <section className="section live-studio" aria-labelledby="studio" id="studio-live">
-      <h2 id="studio">{copy.studioRoom.title}</h2>
-      <p>{copy.studioRoom.intro}</p>
-      <TwitchLink channel={twitchChannel()} />
+      <div className="live-studio-head">
+        <h2 id="studio">{copy.studioRoom.title}</h2>
+        <p>{copy.studioRoom.intro}</p>
+        <TwitchLink channel={twitchChannel()} />
+      </div>
       {/* The room is wide and the pipe a column: the pipe shows as many rows as sit beside the room. */}
       <div className="live-studio-grid">
         <StudioRoom snapshot={snapshot} studio={studio} pulses={pulses} />
@@ -94,8 +98,10 @@ export function LiveStudio({ snapshot }: { snapshot: Snapshot }) {
           hasOlder={feed.hasOlder}
           loadingOlder={feed.loadingOlder}
           onOlder={feed.loadOlder}
-          // On home the studio's label heads the same column, so four rows end near the room's foot.
-          pageSize={4}
+          // On home the pipe sits under the pitch, its foot on the room's foot: the two newest rows, and
+          // the ledger keeps the rest.
+          pageSize={2}
+          paging={false}
         />
       </div>
     </section>

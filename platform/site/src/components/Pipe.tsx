@@ -121,7 +121,10 @@ export function Pipe({ events, live, loading, hasOlder, loadingOlder, onOlder, p
           {copy.pipe.loading}
         </p>
       ) : shown.length === 0 ? (
-        <p className="muted">{copy.pipe.empty}</p>
+        <p className="pipe-empty">
+          <Glyph name="coin-outline" />
+          {copy.pipe.empty}
+        </p>
       ) : (
         <ol className="pipe-rows" ref={list} aria-live="polite" aria-relevant="additions">
           {shown.map((event) => (

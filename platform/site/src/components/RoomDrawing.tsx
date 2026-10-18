@@ -39,7 +39,8 @@ export function box(b: Box, key: string, extra?: { top?: string; left?: string; 
 export function viewBoxOf(plan: RoomPlan): { x: number; y: number; w: number; h: number } {
   const left = -plan.d * TILE - 24;
   const right = plan.w * TILE + 24;
-  const top = -(plan.wall + 1) * TILE;
+  // The back corner's wall top is the room's highest point; nothing is drawn above the walls.
+  const top = -(plan.wall + 0.5) * TILE;
   const bottom = ((plan.w + plan.d) * TILE) / 2 + 28;
   return { x: left, y: top, w: right - left, h: bottom - top };
 }
@@ -84,21 +85,20 @@ function Walls({ plan }: { plan: RoomPlan }) {
   );
 }
 
-/** The pipe coins come down: on the right-hand wall, into a hopper on the floor. */
+/** The pipe coins come down: out of a plate on the right-hand wall, under its top edge, into a hopper on the floor. */
 function Pipe({ plan }: { plan: RoomPlan }) {
   const x = plan.pipeX;
   const r = 0.2;
-  const top = plan.wall + 0.7;
+  const top = plan.wall - 0.75;
   const hop = plan.hopper;
+  const plate = r + 0.16;
   return (
     <g data-station="pipe">
       <polygon className="room-fill" points={pts([[x - r, 0.06, hop.h], [x + r, 0.06, hop.h], [x + r, 0.06, top], [x - r, 0.06, top]])} />
       {line([[x - r, 0.06, hop.h], [x - r, 0.06, top]])}
       {line([[x + r, 0.06, hop.h], [x + r, 0.06, top]])}
-      {line([[x - r - 0.08, 0.06, top], [x + r + 0.08, 0.06, top]])}
-      {[1.8, 2.6].map((z) => (
-        <g key={z}>{line([[x - r - 0.06, 0.06, z], [x + r + 0.06, 0.06, z]], 'room-line')}</g>
-      ))}
+      <polygon className="room-fill room-strong" points={pts([[x - plate, 0.03, top - 0.06], [x + plate, 0.03, top - 0.06], [x + plate, 0.03, top + 0.26], [x - plate, 0.03, top + 0.26]])} />
+      {line([[x - r - 0.06, 0.06, 1.8], [x + r + 0.06, 0.06, 1.8]], 'room-line')}
     </g>
   );
 }

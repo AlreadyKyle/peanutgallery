@@ -79,27 +79,25 @@ function Hero({ studio, live }: { studio: StudioState; live: ReturnType<typeof u
   return (
     <div className="hero hero-home">
       <h1>{copy.pitchTitle}</h1>
-      <div className="hero-side">
-        <p className="lede">{copy.pitchBody}</p>
-        {/* The pitch asks for funding, so its button goes to the cards to fund; Play free follows it, and
-            How it works stays in the top bar (decision 72). */}
-        <p className="hero-actions">
-          <a className="button" href="#fund">
-            <Glyph name="coin-outline" />
-            {copy.fundACard}
+      <p className="lede">{copy.pitchBody}</p>
+      {/* The pitch asks for funding, so its button goes to the cards to fund; Play free follows it, and
+          How it works stays in the top bar (decision 72). */}
+      <p className="hero-actions">
+        <a className="button" href="#fund">
+          <Glyph name="coin-outline" />
+          {copy.fundACard}
+        </a>
+        {env.playUrl === '' ? null : (
+          <a className="target" href={env.playUrl}>
+            {copy.playFree}
           </a>
-          {env.playUrl === '' ? null : (
-            <a className="target" href={env.playUrl}>
-              {copy.playFree}
-            </a>
-          )}
-        </p>
-        {/* The studio's state, under the actions. */}
-        <div className="hero-status">
-          <StatusLine studio={studio} view={live.view} />
-          <StaleNotice studio={studio} />
-          <Announcer message={live.message} />
-        </div>
+        )}
+      </p>
+      {/* The studio's state, under the actions. */}
+      <div className="hero-status">
+        <StatusLine studio={studio} view={live.view} />
+        <StaleNotice studio={studio} />
+        <Announcer message={live.message} />
       </div>
     </div>
   );
@@ -243,8 +241,8 @@ export function Landing() {
     <main className="wide home">
       <div className="band">
         <Hero studio={studio} live={live} />
-        {/* The live studio sits on the first band, beside nothing, so it is in view when the page opens
-            (docs/specs/brand.md, Home). */}
+        {/* The live studio is the plate's picture: the room beside the pitch from 64rem and the pipe
+            under both, so the whole room is in view when the page opens (docs/specs/brand.md, Home). */}
         {view === null ? null : <LiveStudio snapshot={view.snapshot} />}
       </div>
       <div className="band">

@@ -11,7 +11,7 @@ The brand of the studio: the public site, the broadcast overlay, the weekly upda
 The studio has two halves, and the brand is both at once:
 
 - **The table.** A deck of real cards on a white table: big, bold, black and white, short lines that land with a straight face. Anyone can pick up a card and play. This is where the warmth and the jokes live.
-- **The machine.** A well-made instrument: a precise grid, numbered parts, small labels, every figure true to the cent. Nothing is hidden and every measure is deliberate. This is where the trust lives.
+- **The machine.** A well-made instrument: a precise grid, ruled parts, small labels, every figure true to the cent. Nothing is hidden and every measure is deliberate. This is where the trust lives.
 
 The quality bar is the best consumer-product pages: one idea to a screen, the product itself shown large and early (here the live studio), no empty columns, no filler, nothing that looks unfinished.
 
@@ -20,7 +20,7 @@ The quality bar is the best consumer-product pages: one idea to a screen, the pr
 | We are | We are not |
 |---|---|
 | **Deadpan.** We say true things plainly and let them be funny on their own. | Wacky, loud, or mean. No shock, no punching down, nothing an eight-year-old can't read. |
-| **Precise.** Every number is real, labelled and to the cent. Parts are numbered. | Vague, hype-driven, or "AI magic". |
+| **Precise.** Every number is real, labelled and to the cent. Parts are ruled off. | Vague, hype-driven, or "AI magic". |
 | **Generous.** Free games, open books, a seat at the table for anyone. | Pushy. We never beg, guilt or count down. |
 | **Open.** You can watch the agents work and read every ledger line. | Mysterious about how it works or where money goes. |
 
@@ -76,7 +76,7 @@ Headings are bold and sentence case, never shouting. No italic anywhere. Nothing
 
 - **One width.** Everything lines up to a 76rem (1216px) column with a side margin that grows with the screen (20px on a phone, 5% of the width on a tablet or laptop, 64px and up on a desktop), so the top bar, every section and the footer share a left edge.
 - **Bands.** A page is a stack of full-bleed bands: the ink plate first (the top bar shares it), then paper and ink in turn. The change of ground is the only divider.
-- **The index.** Every section after the plate opens on a 2px rule with its number above the heading in the mono face: `01`, `02`, `03`. It is the machine's spec-sheet line. Anything else numbered (steps, lanes, duties) uses the same two-digit mono numerals, so the machine counts one way.
+- **The index.** Every section after the plate opens on a 2px rule over its heading. It is the machine's spec-sheet line; the heading is the label, so no number sits over it. The one numeral that orders things is home's lane rings, `01`, `02`, `03`, two-digit mono, since a card moves through the lanes in that order.
 - **Four layouts**, and nothing else:
   1. **The split** (7:5): a page's plate, its heading on the left and the lede on the right, both from the plate's top.
   2. **The sheet** (5:7): text pages, the ledger, the FAQ. The heading stays in view on the left; the text fills the right.

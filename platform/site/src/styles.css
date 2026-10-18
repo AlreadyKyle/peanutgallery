@@ -509,17 +509,12 @@ nav a.active {
   max-width: var(--measure-text);
 }
 
-/* The index: every section after the first band opens on a 2px rule in the text colour, with its
-   number over the heading in the mono face (01, 02, ...), counted down the page. It is the brand's
+/* The index: every section after the first band opens on a 2px rule in the text colour, the brand's
    spec-sheet line: it gives each section an edge, so a wide band reads as ruled, never as empty
-   ground. The number is decoration: its alternative text is empty, so it is never read out. */
-main:has(> .band) {
-  counter-reset: section;
-}
-
-/* Blocks whose heading is not a section's first child join the same count: how it works' video and
-   steps, home's first game with the explainer (one rule and number over the pair, drawn by the
-   showcase itself, below) and /contribute's two headings, so a page's numbers never skip a block. */
+   ground. No number sits over it (the board, 18 October 2026): the heading under it is the label. */
+/* Blocks whose heading is not a section's first child take the same rule: how it works' video and
+   steps, home's first game with the explainer (one rule over the pair) and /contribute's two
+   headings. */
 main > .band:not(:first-child) .section:has(> h2:first-child:not(.sr-only)),
 main > .band:not(:first-child) .how-watch,
 main > .band:not(:first-child) .how-step,
@@ -528,29 +523,6 @@ main > .band:not(:first-child) .split-slider,
 main > .band:not(:first-child) .contribute > h2 {
   padding-top: var(--space-2);
   border-top: 2px solid currentColor;
-}
-
-main > .band:not(:first-child) .section > h2:first-child:not(.sr-only),
-main > .band:not(:first-child) .how-watch > h2:first-child,
-main > .band:not(:first-child) .how-text > h2:first-child,
-main > .band:not(:first-child) .split-slider > h2:first-child,
-main > .band:not(:first-child) .contribute > h2 {
-  counter-increment: section;
-}
-
-main > .band:not(:first-child) .section > h2:first-child:not(.sr-only)::before,
-main > .band:not(:first-child) .how-watch > h2:first-child::before,
-main > .band:not(:first-child) .how-text > h2:first-child::before,
-main > .band:not(:first-child) .split-slider > h2:first-child::before,
-main > .band:not(:first-child) .contribute > h2::before {
-  content: counter(section, decimal-leading-zero) / '';
-  display: block;
-  margin-bottom: var(--space-2);
-  font-family: var(--font-mono);
-  font-size: var(--size-small);
-  font-weight: var(--weight-strong);
-  letter-spacing: var(--tracking-label);
-  line-height: var(--leading-title);
 }
 
 /* A link to a section (/#fund) lands with its rule and number in view, not cut by the window's top. */
@@ -2418,24 +2390,12 @@ input[type='radio'] {
   margin: var(--space-2) 0;
   padding: 0;
   list-style: none;
-  counter-reset: duty;
 }
 
+/* Each duty on a hairline, no number over it (the board, 18 October 2026). */
 .who-duties li {
-  position: relative;
-  padding-left: var(--space-4);
-  counter-increment: duty;
-}
-
-.who-duties li::before {
-  content: counter(duty, decimal-leading-zero);
-  position: absolute;
-  top: 0;
-  left: 0;
-  font-family: var(--font-mono);
-  font-size: var(--size-small);
-  font-weight: var(--weight-bold);
-  line-height: inherit;
+  border-top: 1px solid var(--hairline);
+  padding-top: var(--space-1);
 }
 
 .who-outro {
@@ -2504,62 +2464,41 @@ input[type='radio'] {
 
 /* Home ---------------------------------------------------------------------- */
 
-/* Play free and the How it works link, side by side, clear of the lede above and the status line
-   below. */
-/* Home's hero (docs/specs/brand.md, Home): the pitch, set at the hero size, and beside it from 64rem
-   the lede, the two actions and the studio's state, bottom-aligned with the pitch; stacked below
-   64rem. Under it, on the same plate, the live studio, so the room is in view when the page opens. */
+/* Home's plate is one picture (docs/specs/brand.md, Home; the board, 18 October 2026): the pitch, its
+   ask, the actions and the studio's state on the left; the live studio on the right, the room whole
+   and in view when the page opens; and the pipe under both, its label under the pitch and its rows
+   under the room. Below 64rem they stack in that order. One headline: the ask is the lede, set at
+   the lead size under the pitch, never a second headline. */
 .hero-home {
   display: grid;
-  gap: var(--space-3);
+  align-content: start;
 }
 
 .hero-home h1 {
   margin: 0;
   font-size: var(--size-hero);
+  text-wrap: balance;
+}
+
+.hero-home .lede {
+  margin: var(--space-2) 0 0;
+  font-size: var(--size-lead);
+  line-height: var(--leading-title);
 }
 
 .hero-home .hero-actions {
   margin-top: var(--space-3);
 }
 
+/* The status line belongs to the actions: close under them, a step before the pipe. */
 .hero-home .hero-status .status-line {
-  margin-top: var(--space-3);
-}
-
-/* The lede is the pitch's ask, so it reads as a second line of the headline, not as body text. */
-.hero-home .lede {
-  margin: 0;
-  font-size: var(--size-h2);
-  font-weight: var(--weight-strong);
-  line-height: var(--leading-heading);
-}
-
-/* From 64rem the plate shares the live studio's columns: the pitch over the room and the lede, the
-   actions and the status line over the studio's ruled column, on its rule and its text edge, so the
-   right-hand column reads as one from the lede down to the pipe (the board, 17 October 2026). */
-@media (min-width: 64rem) {
-  .hero-home {
-    grid-template-columns: minmax(0, 1fr) 24rem;
-    column-gap: var(--space-4);
-    align-items: end;
-  }
-
-  /* The pitch keeps its three lines in the wider column, so it stands as tall as the column beside it. */
-  .hero-home h1 {
-    max-width: 9.5em;
-  }
-
-  .hero-home .hero-side {
-    border-inline-start: 1px solid var(--hairline);
-    padding-inline-start: var(--space-3);
-  }
+  margin-top: var(--space-1);
 }
 
 /* The live studio on the plate: a paper screen in the dark band, its ground and roles paper's, so the
    room, its era label and the role cards draw exactly as they do on paper. */
 .home > .band:first-child > .live-studio {
-  margin-top: var(--space-3);
+  margin-top: var(--space-4);
 }
 
 /* Selected through the hero, not the band's position, so the plate's own rules keep their one amber. */
@@ -2583,71 +2522,163 @@ input[type='radio'] {
   --live-mark: var(--live);
 }
 
-/* The live studio's heading on the plate is a label, not a second headline: the lead size, with a
-   small muted intro. */
-.home .live-studio > h2 {
-  margin-bottom: 0.25rem;
+/* The live studio's heading on the plate is the room's caption, not a second headline: the lead size
+   and, on the same line, how to read the room. */
+.live-studio-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem var(--space-2);
+}
+
+.home .live-studio-head > h2 {
+  margin: 0;
   font-size: var(--size-lead);
   letter-spacing: 0;
 }
 
-.home .live-studio > p:not(.twitch) {
+.home .live-studio-head > p {
+  margin: 0;
+}
+
+.home .live-studio-head > p:not(.twitch) {
   color: var(--text-muted);
   font-size: var(--size-small);
 }
 
-/* From 64rem the label and its intro head the ruled column beside the room, above the pipe, so the
-   room starts right under the pitch and is in view when the page opens. The room spans every row;
-   the column's parts share one rule down its left edge. */
+.home .live-studio-grid {
+  margin-top: var(--space-2);
+}
+
+/* From 64rem the plate is two columns, five parts to seven: on the left the pitch, hung from the
+   room's caption line, and the pipe, its foot on the room's foot; on the right the room. Both columns
+   are live and end on one line, so the plate leaves no hollow beside the room. */
 @media (min-width: 64rem) {
-  .home .live-studio {
+  .home > .band:first-child {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 24rem;
-    grid-template-rows: auto auto auto 1fr;
-    column-gap: var(--space-4);
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    grid-template-rows: auto 1fr auto;
+    align-content: start;
+    column-gap: var(--space-5);
   }
 
-  .home .live-studio > .live-studio-grid {
+  .home > .band:first-child > *,
+  .home .live-studio-grid {
+    margin: 0;
+  }
+
+  .home .live-studio,
+  .home .live-studio-grid {
     display: contents;
   }
 
-  .home .live-studio > .live-studio-grid > .studio {
+  .hero-home {
     grid-column: 1;
-    grid-row: 1 / -1;
+    grid-row: 1 / 3;
   }
 
-  .home .live-studio > h2,
-  .home .live-studio > p,
-  .home .live-studio > .live-studio-grid > .pipe {
+  .home .live-studio-head {
     grid-column: 2;
-    margin-block: 0;
-    border-inline-start: 1px solid var(--hairline);
-    padding-inline-start: var(--space-3);
-  }
-
-  .home .live-studio > h2 {
     grid-row: 1;
-    padding-bottom: 0.25rem;
+    margin-bottom: var(--space-2);
   }
 
-  .home .live-studio > p:not(.twitch) {
-    grid-row: 2;
-    padding-bottom: var(--space-3);
+  /* The room's paper screen fills its rows, so its foot is the pipe's foot whichever column is taller;
+     the drawing sits in the middle of it. */
+  .home .live-studio-grid > .studio {
+    display: flex;
+    flex-direction: column;
+    grid-column: 2;
+    grid-row: 2 / 4;
   }
 
-  .home .live-studio > p.twitch {
+  .home .studio-stage {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .home .live-studio-grid > .pipe {
+    grid-column: 1;
     grid-row: 3;
-    padding-bottom: var(--space-2);
+    align-self: end;
+    margin-top: var(--space-2);
+    border-inline-start: 0;
+    padding: 0;
   }
 
-  .home .live-studio > .live-studio-grid > .pipe {
-    grid-row: 4;
+  /* Beside the room the pipe is a caption line and two compact rows: the kind on the left, the line
+     and its who and when beside it. */
+  .home .pipe {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: var(--space-2);
+  }
+
+  .home .pipe-intro {
+    margin: 0;
+  }
+
+  .home .pipe > :not(.pipe-title, .pipe-intro) {
+    flex-basis: 100%;
+  }
+
+  .home .pipe-rows {
+    margin-top: var(--space-2);
+  }
+
+  .home .pipe-row {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    column-gap: var(--space-2);
+    padding-block: 0.5em;
+  }
+
+  .home .pipe-kind {
+    grid-row: 1 / 3;
+    align-self: start;
+  }
+
+  .home .pipe-text {
+    margin: 0;
+  }
+
+  .home .pipe-meta {
+    grid-column: 2;
+    margin-top: 0.125rem;
   }
 }
 
-/* The plate opens closer under the top bar on home, so the room is in view when the page opens. */
+/* Up to 80rem the pitch's column is too narrow for the pipe under it as well: the pipe runs across
+   the plate's foot instead, its two rows side by side, and the room's screen ends on the pitch's foot. */
+@media (min-width: 64rem) and (max-width: 79.99rem) {
+  .home .live-studio-grid > .studio {
+    grid-row: 2 / 3;
+  }
+
+  .home .live-studio-grid > .pipe {
+    grid-column: 1 / -1;
+    margin-top: var(--space-4);
+  }
+
+  .home .pipe-rows {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-5);
+  }
+
+  .home .pipe-row {
+    border-bottom: 1px solid var(--hairline);
+  }
+}
+
+/* The plate opens closer under the top bar on home and closes closer under the room, so the room is in
+   view when the page opens and the next band's rule and heading show under it. */
 .home > .band:first-child {
   padding-top: var(--space-3);
+  padding-bottom: var(--space-4);
 }
 
 /* The first game and the explainer, side by side from 64rem (the video alone takes the row). */
@@ -2655,19 +2686,6 @@ input[type='radio'] {
   display: grid;
   gap: var(--band-pad) var(--space-5);
   align-items: center;
-}
-
-/* The pair's number over the full-width rule, at its left edge like every section's. */
-main > .band:not(:first-child) .showcase::before {
-  content: counter(section, decimal-leading-zero) / '';
-  counter-increment: section;
-  grid-column: 1 / -1;
-  margin-bottom: calc(var(--space-2) - var(--band-pad));
-  font-family: var(--font-mono);
-  font-size: var(--size-small);
-  font-weight: var(--weight-strong);
-  letter-spacing: var(--tracking-label);
-  line-height: var(--leading-title);
 }
 
 @media (min-width: 64rem) {
@@ -3390,6 +3408,11 @@ ol.timeline {
   }
 }
 
+/* The drawing's own box: role cards are placed in it, in the room's units. */
+.studio-frame {
+  position: relative;
+}
+
 .studio-stage {
   position: relative;
   border: 2px solid var(--ink);
@@ -3693,14 +3716,6 @@ ol.timeline {
   list-style: none;
 }
 
-/* Below 64rem the pipe sits under the room, not beside it: its three newest rows, so the cards to
-   fund stay near the top of a phone's page. Older still reads the rest. */
-@media (max-width: 63.99rem) {
-  .home .pipe-rows > li:nth-child(n + 4) {
-    display: none;
-  }
-}
-
 .pipe-row {
   padding-block: 0.75em;
   border-top: 1px solid var(--hairline);
@@ -3736,6 +3751,18 @@ ol.timeline {
 .pipe-older,
 .list-more {
   margin-top: var(--space-2);
+}
+
+/* Nothing in the pipe yet: one quiet slot where the rows will land, not a blank column. */
+.pipe-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  border: 1px dashed var(--hairline);
+  border-radius: var(--radius);
+  padding: var(--space-2);
+  color: var(--text-muted);
 }
 
 .person-link {

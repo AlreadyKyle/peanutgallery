@@ -641,29 +641,33 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
   return (
     <div className="studio">
       <div className="studio-stage" ref={container} data-era={plan.era}>
-        {/* Named by aria-label, not a <title>: a title shows as the browser's own tooltip over the room. */}
-        <svg
-          className="room"
-          data-variant="live"
-          viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
-          role="group"
-          aria-label={label ?? copy.studioRoom.svgTitle.replace('{era}', eraName)}
-          preserveAspectRatio="xMidYMid meet"
-        >
-          <g className="room-drawing">{layers.back}</g>
-          {standing}
-          {sprites.map((pulse) => (
-            <Sprite key={pulse.id} pulse={pulse} plan={plan} onDone={spriteDone} />
-          ))}
-        </svg>
-        {activePlace !== null && activeAt !== null ? (
-          <RoleCard
-            place={activePlace}
-            at={{ left: ((activeAt.sx - vb.x) / vb.w) * 100, top: ((activeAt.sy - 46 - vb.y) / vb.h) * 100 }}
-            onEnter={() => closeTimer.current !== null && clearTimeout(closeTimer.current)}
-            onLeave={() => hide(activePlace.role.id)}
-          />
-        ) : null}
+        {/* The frame is exactly the drawing's box, so a role card placed in the room's units lands on its
+            agent however tall the stage around it is. */}
+        <div className="studio-frame">
+          {/* Named by aria-label, not a <title>: a title shows as the browser's own tooltip over the room. */}
+          <svg
+            className="room"
+            data-variant="live"
+            viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
+            role="group"
+            aria-label={label ?? copy.studioRoom.svgTitle.replace('{era}', eraName)}
+            preserveAspectRatio="xMidYMid meet"
+          >
+            <g className="room-drawing">{layers.back}</g>
+            {standing}
+            {sprites.map((pulse) => (
+              <Sprite key={pulse.id} pulse={pulse} plan={plan} onDone={spriteDone} />
+            ))}
+          </svg>
+          {activePlace !== null && activeAt !== null ? (
+            <RoleCard
+              place={activePlace}
+              at={{ left: ((activeAt.sx - vb.x) / vb.w) * 100, top: ((activeAt.sy - 46 - vb.y) / vb.h) * 100 }}
+              onEnter={() => closeTimer.current !== null && clearTimeout(closeTimer.current)}
+              onLeave={() => hide(activePlace.role.id)}
+            />
+          ) : null}
+        </div>
         <p className="studio-era">
           <span className="studio-era-word">{copy.studioRoom.eraLabel}</span> {eraName}
         </p>
