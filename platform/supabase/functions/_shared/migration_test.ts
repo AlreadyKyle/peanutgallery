@@ -300,6 +300,8 @@ Deno.test("migrations on PGlite", {
         "20261017220000_board_games_admin.sql",
         // board-moderation-fixes: suspended authors hidden, merge chains to their root.
         "20261017230000_board_moderation_fix.sql",
+        // the pipe's history (docs/specs/community-core.md): the feed lines from before go-live.
+        "20261018000000_feed_backfill.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
