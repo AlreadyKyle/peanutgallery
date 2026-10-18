@@ -74,7 +74,8 @@ Abbreviations: D1, D7 and D30 are the share of a group active again 1, 7 and 30 
 | Card shares per contribution | Card shares / contributions (30d) | 0.5 | 0.1 | | Our own |
 | Seed opens from links | Loads with `?seed=` / seeds shared (30d) | 2 opens per shared seed | 0.5 | Each shared seed reaches someone | Our own |
 | Broadcast reach | Distinct referrers loading /broadcast (30d), and contributions with the broadcast's QR source | 3 streams; 5% of contributions | 1 stream | The QR link carries `?from=broadcast`; `broadcast_load` counts loads of /broadcast and `broadcast_qr` landings from the QR. Distinct referrers and contributions from the QR need a record of a visit, which no counter keeps, so this row is read as loads and landings | Our own |
-| Discord to site | Clicks on Discord post links (aggregate redirect counter) per post | 5% of members | 1% | `discord_click` counts presses on the site's Discord links (site to Discord). Needs: a source tag on the links in Discord posts and a counter for the landings, for clicks the other way | Our own |
+| Discord to site | Clicks on Discord post links (aggregate redirect counter) per post | 5% of members | 1% | `discord_click` counts presses on the site's Discord links (site to Discord). `from_discord` counts landings from links tagged `?from=discord`, which the promo engine's Discord posts carry (`docs/specs/channel-counters.md`); the dispatcher's own ship posts do not carry the tag yet | Our own |
+| Landings per channel | Landings from each channel's tagged links (`from_<channel>`, 30d), and their share of home and Dust loads | Every launch beat's channel above 0 | | Each post's link carries `?from=<channel>`; the site and Dust count a listed tag once and drop it (`docs/specs/channel-counters.md`). A channel whose links are not tagged reads 0, not "not measured" | Our own |
 | New supporters per launch beat | Distinct new payer keys in the 7 days after a beat | 25 | 5 | | Kick-off plan's 7-day kill line |
 | Organic only | Paid acquisition spend | $0 | | The studio has no ad budget | `docs/PLAN.md` §10 decision 35 |
 
@@ -126,4 +127,6 @@ The rows that said "Needs" shared one change: privacy-preserving aggregate count
 2. A home-load count and the dwell buckets (15 and 45 seconds) on the site.
 3. A source tag on the broadcast's QR link with a count of its landings, a count of the broadcast's loads, and a count of presses on the site's Discord links.
 
-One need is left: clicks from links in Discord posts back to the site (Discord to site). Until a row's counter exists, or before it has counted anything, it is read as "not measured" in every review, and nobody estimates it.
+4. A count of landings from each channel's tagged links, on the site and in Dust (`docs/specs/channel-counters.md`), which also counts clicks from tagged links in Discord posts back to the site.
+
+Until a row's counter exists, or before it has counted anything, it is read as "not measured" in every review, and nobody estimates it.

@@ -535,11 +535,12 @@ export const legal = {
         ],
       },
       {
-        // docs/specs/play-counts.md, docs/specs/counter-senders.md
+        // docs/specs/play-counts.md, docs/specs/counter-senders.md, docs/specs/channel-counters.md
         heading: 'Play and share counts',
         paragraphs: [
           'The studio counts how many times a day Dust is opened, Share your run is pressed, a card is shared from the site, and a click goes from Dust to a card.',
           'It also counts, a day at a time: how many times Dust is opened from a save a day or a week old, how many visits to Dust reach 2 and 4 minutes, how many times Save as seed is pressed and a seed link is opened, how many times the home page is shown and stays open 15 and 45 seconds, how many times the broadcast page is loaded and its QR code is followed, and how many clicks go to Discord.',
+          "When a link the studio posted elsewhere brings you to the site or to Dust, the link carries the place it was posted, such as from=reddit, and the studio adds one to that place's total for the day. The tag is then removed from the address, so a reload or a link you share on is not counted again.",
           'Each is one running total for the day and nothing else. Your browser decides whether a count applies, from what it already holds: whether Dust was opened from a save a day or a week old comes from the time your own save records, and that time is never sent.',
           'A count sets no cookie and stores no identifier and no IP address, so it cannot tell who you are, and nothing new is stored in your browser to make one.',
           // docs/specs/daily-dust.md

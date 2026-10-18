@@ -67,6 +67,18 @@ test('a landing from the QR code counts broadcast_qr once and drops the tag from
   await plain(seen.requests);
 });
 
+test("a landing from a channel's tagged link counts from_<channel> once and drops the tag (docs/specs/channel-counters.md)", async ({ page }) => {
+  const seen = countsOf(page);
+  await page.goto('/contribute?from=reddit');
+  await expect.poll(() => new URL(page.url()).search).toBe('');
+  expect(new URL(page.url()).pathname).toBe('/contribute');
+  await expect.poll(() => seen.events).toEqual(['from_reddit']);
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  expect(seen.events).toEqual(['from_reddit']);
+  await plain(seen.requests);
+});
+
 test('a press on the Discord link counts discord_click and still opens Discord', async ({ page }) => {
   await page.route(`${DISCORD_INVITE}**`, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<title>Discord</title>' }));
   const seen = countsOf(page);

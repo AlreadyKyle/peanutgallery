@@ -5,13 +5,23 @@
 // counting never holds up or breaks the page.
 //
 // The benchmarks' counters (docs/strategy/benchmarks.md) are decided here from what the page already
-// knows: the route on show, how long home has been visible, the QR code's source tag in the address,
-// and a press on a Discord link. useSiteCounts wires them into the frame (App.tsx).
+// knows: the route on show, how long home has been visible, the QR code's or a channel's source tag in
+// the address (docs/specs/channel-counters.md), and a press on a Discord link. useSiteCounts wires
+// them into the frame (App.tsx).
 
 import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-export type PlayEvent = 'card_share' | 'home_load' | 'home_dwell_mid' | 'home_dwell_long' | 'broadcast_load' | 'broadcast_qr' | 'discord_click';
+/**
+ * The channels whose links carry a source tag (docs/specs/channel-counters.md): the promo engine's
+ * channels, then the ones a person posts to. A landing with `from=<tag>` counts `from_<tag>`. The same
+ * list is in seed-1/render/count.ts, and its events in card.mts's PLAY_EVENTS and count_play_event.
+ */
+export const CHANNEL_SOURCES = ['x', 'bsky', 'threads', 'mastodon', 'discord', 'yt', 'tiktok', 'ig', 'linkedin', 'reddit', 'hn', 'itch', 'ph', 'creator'] as const;
+export type ChannelSource = (typeof CHANNEL_SOURCES)[number];
+export type ChannelEvent = `from_${ChannelSource}`;
+
+export type PlayEvent = 'card_share' | 'home_load' | 'home_dwell_mid' | 'home_dwell_long' | 'broadcast_load' | 'broadcast_qr' | 'discord_click' | ChannelEvent;
 
 export const COUNT_PATH = '/api/count';
 
@@ -100,6 +110,16 @@ export function fromQr(search: string): boolean {
   return new URLSearchParams(search).get(SOURCE_PARAM) === QR_SOURCE;
 }
 
+/**
+ * The count a landing's source tag makes: `broadcast_qr` for the QR code's, `from_<tag>` for a channel
+ * in CHANNEL_SOURCES, and null for no tag or one not on the list (that address is left as it is).
+ */
+export function sourceEvent(search: string): 'broadcast_qr' | ChannelEvent | null {
+  const tag = new URLSearchParams(search).get(SOURCE_PARAM);
+  if (tag === QR_SOURCE) return 'broadcast_qr';
+  return tag !== null && (CHANNEL_SOURCES as readonly string[]).includes(tag) ? `from_${tag as ChannelSource}` : null;
+}
+
 /** The query without the source tag, '' when nothing is left, so a reload or a copied address does not count again. */
 export function withoutSource(search: string): string {
   const params = new URLSearchParams(search);
@@ -138,7 +158,7 @@ function pageVisible(): boolean {
   return typeof document === 'undefined' || document.visibilityState !== 'hidden';
 }
 
-// The page load's own once-each sender: the broadcast's load and QR landing, and a Discord press,
+// The page load's own once-each sender: the broadcast's load, a tagged landing, and a Discord press,
 // each count once however many times this page load sees them.
 const perPageLoad = onceEach();
 const sendEach = (event: PlayEvent): void => countEvent(event);
@@ -148,7 +168,8 @@ const sendEach = (event: PlayEvent): void => countEvent(event);
  * - each view of home counts home_load once it is shown, and home_dwell_mid and home_dwell_long once the view has been
  *   visible 15 and 45 seconds; leaving home stops the clock;
  * - /broadcast counts broadcast_load once a page load;
- * - an address carrying the QR code's source tag counts broadcast_qr once and drops the tag;
+ * - an address carrying the QR code's source tag counts broadcast_qr once, and a channel's tag counts
+ *   from_<tag> once (docs/specs/channel-counters.md); either tag is then dropped;
  * - a press on a Discord link counts discord_click once a page load; the link opens as before.
  */
 export function useSiteCounts(discordInvite: string, send: (event: PlayEvent) => void = sendEach, once: (event: PlayEvent) => void = perPageLoad): void {
@@ -157,8 +178,9 @@ export function useSiteCounts(discordInvite: string, send: (event: PlayEvent) =>
   const path = routePath(pathname);
 
   useEffect(() => {
-    if (!fromQr(search)) return;
-    once('broadcast_qr');
+    const landing = sourceEvent(search);
+    if (landing === null) return;
+    once(landing);
     navigate({ pathname, search: withoutSource(search), hash }, { replace: true });
   }, [pathname, search, hash, navigate, once]);
 

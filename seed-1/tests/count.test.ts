@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { COUNT_PATH, countEvent, MAX_SESSION_STEP_MS, onceEach, returnEvent, SessionClock, type PlayEvent } from '../render/count';
+import { CHANNEL_SOURCES, COUNT_PATH, countEvent, MAX_SESSION_STEP_MS, onceEach, returnEvent, SessionClock, sourceEvent, withoutSource, type PlayEvent } from '../render/count';
 import { PACKAGE_DIR } from './paths';
 
 // Play and share counts (docs/specs/play-counts.md): the event's name alone, to this origin's
@@ -144,6 +144,32 @@ describe('onceEach', () => {
   });
 });
 
+describe('a channel landing (docs/specs/channel-counters.md)', () => {
+  it("counts a listed channel's tag as from_<tag>, and nothing for no tag or one off the list", () => {
+    expect(sourceEvent('?from=reddit')).toBe('from_reddit');
+    expect(sourceEvent('?seed=abc&from=bsky')).toBe('from_bsky');
+    for (const tag of CHANNEL_SOURCES) expect(sourceEvent(`?from=${tag}`)).toBe(`from_${tag}`);
+    expect(sourceEvent('')).toBeNull();
+    expect(sourceEvent('?from=elsewhere')).toBeNull();
+    expect(sourceEvent('?from=REDDIT')).toBeNull();
+    expect(sourceEvent('?from=broadcast')).toBeNull();
+  });
+
+  it('drops the tag and keeps the rest of the query, so a seed link still opens', () => {
+    expect(withoutSource('?from=reddit')).toBe('');
+    expect(withoutSource('?seed=abc&from=reddit')).toBe('?seed=abc');
+  });
+
+  it("lists the same channels as the site, and every landing is a name the site's counter takes", () => {
+    const repo = join(PACKAGE_DIR, '..');
+    const site = readFileSync(join(repo, 'platform', 'site', 'src', 'lib', 'count.ts'), 'utf8');
+    const list = (text: string) => text.match(/export const CHANNEL_SOURCES = \[([^\]]*)\]/)?.[1];
+    expect(list(site)).toBe(list(readFileSync(join(PACKAGE_DIR, 'render', 'count.ts'), 'utf8')));
+    const card = readFileSync(join(repo, 'platform', 'site', 'netlify', 'functions', 'card.mts'), 'utf8');
+    for (const tag of CHANNEL_SOURCES) expect(card).toContain(`'from_${tag}'`);
+  });
+});
+
 describe('the counters in render/main.ts', () => {
   const main = readFileSync(join(PACKAGE_DIR, 'render', 'main.ts'), 'utf8');
 
@@ -153,6 +179,8 @@ describe('the counters in render/main.ts', () => {
     expect(main).toContain("countOnce('dust_seed_save')");
     expect(main).toContain("if (seedState !== null) countOnce('dust_seed_open')");
     expect(main).toContain('session.advance(Date.now(), !document.hidden)');
+    expect(main).toContain('const landing = sourceEvent(window.location.search);');
+    expect(main).toContain('countOnce(landing);');
   });
 
   it('reads no storage key for counting: the save and the record of the daily run are the only keys it reads', () => {

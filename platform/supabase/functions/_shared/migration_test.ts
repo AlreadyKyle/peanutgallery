@@ -308,6 +308,8 @@ Deno.test("migrations on PGlite", {
         "20261018020000_daily_dust_counters.sql",
         // drafting (docs/specs/unattended-roles.md): no_money holds until the money changes.
         "20261018100000_no_money_holds.sql",
+        // channel-counters (docs/specs/channel-counters.md): landings from a channel's tagged link.
+        "20261018110000_channel_counters.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);

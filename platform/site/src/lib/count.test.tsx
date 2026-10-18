@@ -4,6 +4,7 @@ import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FUND_URL } from '../pages/Broadcast';
 import {
+  CHANNEL_SOURCES,
   countEvent,
   DWELL_MARKS,
   DwellClock,
@@ -13,6 +14,7 @@ import {
   onceEach,
   QR_SOURCE,
   SOURCE_PARAM,
+  sourceEvent,
   useSiteCounts,
   withoutSource,
   withQrSource,
@@ -116,6 +118,17 @@ describe('the QR source tag', () => {
     expect(fromQr('?from=elsewhere')).toBe(false);
     expect(withoutSource('?from=broadcast')).toBe('');
     expect(withoutSource('?a=1&from=broadcast')).toBe('?a=1');
+  });
+});
+
+describe('a channel landing (docs/specs/channel-counters.md)', () => {
+  it("names from_<tag> for a listed channel, broadcast_qr for the QR code's tag, and nothing else", () => {
+    for (const tag of CHANNEL_SOURCES) expect(sourceEvent(`?from=${tag}`)).toBe(`from_${tag}`);
+    expect(sourceEvent('?a=1&from=hn')).toBe('from_hn');
+    expect(sourceEvent('?from=broadcast')).toBe('broadcast_qr');
+    expect(sourceEvent('')).toBeNull();
+    expect(sourceEvent('?from=elsewhere')).toBeNull();
+    expect(sourceEvent('?from=X')).toBeNull();
   });
 });
 
@@ -237,6 +250,20 @@ describe('useSiteCounts', () => {
     expect(view.getByTestId('where').textContent).toBe('/contribute#how');
     fireEvent.click(view.getByText('rerender'));
     expect(sent).toEqual(['broadcast_qr']);
+  });
+
+  it("counts a landing from a channel's tagged link once and drops the tag, keeping the rest", () => {
+    const view = mount('/card/abc?from=reddit&x=1#steps');
+    expect(sent).toEqual(['from_reddit']);
+    expect(view.getByTestId('where').textContent).toBe('/card/abc?x=1#steps');
+    fireEvent.click(view.getByText('rerender'));
+    expect(sent).toEqual(['from_reddit']);
+  });
+
+  it('leaves an address with an unknown tag as it is and counts nothing for it', () => {
+    const view = mount('/team?from=elsewhere');
+    expect(sent).toEqual([]);
+    expect(view.getByTestId('where').textContent).toBe('/team?from=elsewhere');
   });
 
   it('counts a press on a Discord link once a page load, and leaves other links alone', () => {

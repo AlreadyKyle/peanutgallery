@@ -81,6 +81,8 @@ const PLAY_EVENTS = [
   'dust_load', 'dust_share', 'card_share', 'dust_next_card',
   'dust_return_1d', 'dust_return_7d', 'dust_session_2m', 'dust_session_4m', 'dust_seed_save', 'dust_seed_open',
   'home_load', 'home_dwell_mid', 'home_dwell_long', 'broadcast_load', 'broadcast_qr', 'discord_click',
+  'from_x', 'from_bsky', 'from_threads', 'from_mastodon', 'from_discord', 'from_yt', 'from_tiktok', 'from_ig', 'from_linkedin',
+  'from_reddit', 'from_hn', 'from_itch', 'from_ph', 'from_creator',
 ];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SESSION = /^cs_(live|test)_[A-Za-z0-9]{10,250}$/;

@@ -6,8 +6,9 @@
 //
 // The benchmarks' counters (docs/strategy/benchmarks.md) are decided here, on the player's device, from
 // what the page already holds: the age of the save's own savedAt for a return, the time the page has
-// been visible for a session, and a press or a ?seed= link for a seed. Nothing new is stored to decide
-// them, and each is sent at most once per page load.
+// been visible for a session, a press or a ?seed= link for a seed, and a channel's source tag in the
+// address for a landing (docs/specs/channel-counters.md). Nothing new is stored to decide them, and
+// each is sent at most once per page load.
 
 // The daily counters (docs/specs/daily-dust.md): a Daily Dust run started, finished and shared. A server
 // that does not know a name yet answers 400, and the game never reads the answer.
@@ -23,7 +24,33 @@ export type PlayEvent =
   | 'dust_seed_open'
   | 'dust_daily_start'
   | 'dust_daily_finish'
-  | 'dust_daily_share';
+  | 'dust_daily_share'
+  | ChannelEvent;
+
+/**
+ * The channels whose links carry a source tag (docs/specs/channel-counters.md): the promo engine's
+ * channels, then the ones a person posts to. A load with `from=<tag>` counts `from_<tag>`. The same
+ * list is in platform/site/src/lib/count.ts, and its events in the site's PLAY_EVENTS and the
+ * database's count_play_event.
+ */
+export const CHANNEL_SOURCES = ['x', 'bsky', 'threads', 'mastodon', 'discord', 'yt', 'tiktok', 'ig', 'linkedin', 'reddit', 'hn', 'itch', 'ph', 'creator'] as const;
+export type ChannelSource = (typeof CHANNEL_SOURCES)[number];
+export type ChannelEvent = `from_${ChannelSource}`;
+export const SOURCE_PARAM = 'from';
+
+/** The landing count a load's query (`location.search`) makes: `from_<tag>` for a listed channel, else null. */
+export function sourceEvent(search: string): ChannelEvent | null {
+  const tag = new URLSearchParams(search).get(SOURCE_PARAM);
+  return tag !== null && (CHANNEL_SOURCES as readonly string[]).includes(tag) ? `from_${tag as ChannelSource}` : null;
+}
+
+/** The query without the source tag, '' when nothing is left, so a reload or a copied address does not count again. */
+export function withoutSource(search: string): string {
+  const params = new URLSearchParams(search);
+  params.delete(SOURCE_PARAM);
+  const rest = params.toString();
+  return rest === '' ? '' : `?${rest}`;
+}
 
 export const COUNT_PATH = '/api/count';
 
