@@ -52,24 +52,35 @@ function useList(load: Loader) {
   const [items, setItems] = useState<Row[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
   const [error, setError] = useState('');
+  // Each fresh read takes a new number; an answer to an older one (a search typed over, a filter
+  // changed) arrives too late to show, and a page loaded for it is not added.
+  const latest = useRef(0);
   const refresh = useCallback(() => {
+    const read = ++latest.current;
     setError('');
     load(null)
       .then((page) => {
+        if (read !== latest.current) return;
         setItems(page.items);
         setNext(page.next);
       })
-      .catch((reason: unknown) => setError(errorMessage(reason)));
+      .catch((reason: unknown) => {
+        if (read === latest.current) setError(errorMessage(reason));
+      });
   }, [load]);
   useEffect(refresh, [refresh]);
   const more = () => {
     if (next === null) return;
+    const read = latest.current;
     load(next)
       .then((page) => {
+        if (read !== latest.current) return;
         setItems((prev) => [...(prev ?? []), ...page.items]);
         setNext(page.next);
       })
-      .catch((reason: unknown) => setError(errorMessage(reason)));
+      .catch((reason: unknown) => {
+        if (read === latest.current) setError(errorMessage(reason));
+      });
   };
   return { items, next, error, refresh, more };
 }

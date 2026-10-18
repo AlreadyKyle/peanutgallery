@@ -134,7 +134,8 @@ vi.mock('./lib/supabase', async (importOriginal) => {
         board_games: ROSTER_GAMES,
         board_agent_roster: ROSTER_AGENTS,
         board_set_flag: { curator_triage: true, profiles_open: true },
-        board_community_users: { items: [{ userId: 'u1', handle: 'supporter-1', displayName: 'Supporter One', level: 2, xp: 120, suspended: false }], next: null },
+        // A search for "zz" finds no one; any other query finds supporter-1.
+        board_community_users: { items: args?.p_query === 'zz' ? [] : [{ userId: 'u1', handle: 'supporter-1', displayName: 'Supporter One', level: 2, xp: 120, suspended: false }], next: null },
         board_suggestions: { items: COMMUNITY_SUGGESTIONS, next: null },
         board_community_cards: { items: [{ id: 'c-open', title: 'Carts leave dust trails', stage: 'building', suit: 'game', rarity: 'common', computedRarity: 'rare' }], next: null },
         board_seeds: { items: [{ id: 'seed-1', title: 'Big dune', author: 'supporter-1', code: 'dust:v1:AB', up: 3, down: 1, featured: false, unpublished: true }], next: null },
@@ -1049,6 +1050,25 @@ describe('community admin', () => {
       expect(named(action.rpc)[0]!.args).toMatchObject({ p_reason: 'a reason' });
     });
   }
+
+  it('shows the answer to the latest search, not a slower answer to an earlier one', async () => {
+    await openTab('Users', 'a reason');
+    expect(document.querySelector('tr[data-handle="supporter-1"]')).not.toBeNull();
+    const search = community().getByLabelText('Search by handle or name');
+    fake.held = 'board_community_users';
+    fireEvent.change(search, { target: { value: 'z' } });
+    await flush();
+    const releaseEarlier = fake.release!;
+    fake.held = null;
+    fireEvent.change(search, { target: { value: 'zz' } });
+    await flush();
+    expect(community().getByText('No players yet.')).toBeTruthy();
+    releaseEarlier();
+    await flush();
+    expect(named('board_community_users').map((call) => call.args?.p_query)).toEqual([null, 'z', 'zz']);
+    expect(document.querySelector('tr[data-handle="supporter-1"]')).toBeNull();
+    expect(community().getByText('No players yet.')).toBeTruthy();
+  });
 
   it("shows the Curator's flags as words, and nothing for a suggestion with none", async () => {
     await openTab('Suggestions', 'a reason');
