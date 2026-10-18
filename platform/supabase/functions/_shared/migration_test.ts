@@ -298,6 +298,8 @@ Deno.test("migrations on PGlite", {
         "20261017210000_board_roster.sql",
         // board-games-admin (docs/specs/board-games-admin.md): the games table and the board's game and agent admin.
         "20261017220000_board_games_admin.sql",
+        // board-moderation-fixes: suspended authors hidden, merge chains to their root.
+        "20261017230000_board_moderation_fix.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
