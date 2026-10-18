@@ -303,7 +303,7 @@ Deno.test("migrations on PGlite", {
         // the pipe's history (docs/specs/community-core.md): the feed lines from before go-live.
         "20261018000000_feed_backfill.sql",
         // card-follows (docs/specs/card-follows.md): "Tell me when this ships" for any profile.
-        "20261017300000_card_follows.sql",
+        "20261018010000_card_follows.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);

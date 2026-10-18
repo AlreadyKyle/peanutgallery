@@ -10,7 +10,7 @@ import { PGlite } from "npm:@electric-sql/pglite@0.3.7";
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 
 const MIGRATIONS_DIR = new URL("../../migrations/", import.meta.url);
-const MIGRATION = "20261017300000_card_follows.sql";
+const MIGRATION = "20261018010000_card_follows.sql";
 const PGCRYPTO_LINE = "create extension if not exists pgcrypto;";
 const OPTS = { sanitizeOps: false, sanitizeResources: false };
 
