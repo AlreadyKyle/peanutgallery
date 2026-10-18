@@ -247,6 +247,8 @@ function Suggestions({ client, reason, busy, run }: { client: SupabaseClient } &
                   const cluster = typeof s.clusterId === 'string' ? s.clusterId : null;
                   const clusterKey = text(s.clusterKey) || (cluster ?? '').slice(0, 8);
                   const triage = (typeof s.triage === 'object' && s.triage !== null ? s.triage : {}) as Row;
+                  // The Curator's flags are a list: shown as words, and not at all when there are none.
+                  const flags = (Array.isArray(triage.flags) ? triage.flags.map(text) : [text(triage.flags)]).filter((flag) => flag !== '').join(', ');
                   const into = clusters.find((c) => c.id === merges[id] && c.id !== cluster) ?? null;
                   const card = cards.find((c) => text(c.id) === links[id]) ?? null;
                   return (
@@ -261,7 +263,7 @@ function Suggestions({ client, reason, busy, run }: { client: SupabaseClient } &
                         {s.declineReason ? `: ${text(s.declineReason)}` : ''}
                       </td>
                       <td data-label="Curator">
-                        {text(triage.summary)} <span className="muted">{text(triage.flags)} {text(s.clusterKey)}</span>
+                        {text(triage.summary)} <span className="muted">{flags === '' ? '' : `Flags: ${flags}. `}{text(s.clusterKey)}</span>
                       </td>
                       <td className="actions">
                         <div className="act-stack">

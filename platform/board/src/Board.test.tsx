@@ -202,7 +202,7 @@ const startedAt = new Date('2026-10-10T12:00:00Z');
 // Two suggestions in two clusters, as board_suggestions gives them (docs/specs/community-core.md).
 const COMMUNITY_SUGGESTIONS = [
   { id: 's1', area: 'dust', title: 'Night mode', body: 'The sand could glow.', state: 'clustered', held: false, votes: 4, author: 'supporter-1', clusterId: 'k-night', clusterKey: 'night-mode', triage: { summary: 'Glowing sand at night.', flags: [] } },
-  { id: 's2', area: 'dust', title: 'Glow sand', body: '', state: 'clustered', held: true, votes: 1, author: 'supporter-2', clusterId: 'k-glow', clusterKey: 'glow-sand', triage: { summary: 'Sand that glows.', flags: [] } },
+  { id: 's2', area: 'dust', title: 'Glow sand', body: '', state: 'clustered', held: true, votes: 1, author: 'supporter-2', clusterId: 'k-glow', clusterKey: 'glow-sand', triage: { summary: 'Sand that glows.', flags: ['instruction_to_agents', 'too_large'] } },
 ];
 
 // board_games and board_agent_roster as 20261017220000_board_games_admin.sql answers them.
@@ -1049,6 +1049,13 @@ describe('community admin', () => {
       expect(named(action.rpc)[0]!.args).toMatchObject({ p_reason: 'a reason' });
     });
   }
+
+  it("shows the Curator's flags as words, and nothing for a suggestion with none", async () => {
+    await openTab('Suggestions', 'a reason');
+    const curator = (selector: string) => row(selector).getByText(/^Glowing sand|^Sand that glows/).closest('td')!.textContent;
+    expect(curator('tr[data-suggestion="s1"]')).toBe('Glowing sand at night. night-mode');
+    expect(curator('tr[data-suggestion="s2"]')).toBe('Sand that glows. Flags: instruction_to_agents, too_large. glow-sand');
+  });
 
   it('merges and links by picking a loaded cluster or card, never a typed id', async () => {
     await openTab('Suggestions', 'same idea');
