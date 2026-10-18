@@ -234,6 +234,27 @@ describe('the Stripe reader', () => {
     assert.equal(seen[0].Authorization, undefined);
     assert.equal(seen[1].Authorization, 'Bearer legacy-fixture');
   });
+
+  test('retries a Supabase 401 "JWT issued at future" once, and no other 401', async () => {
+    const answers = [
+      new Response('{"message":"JWT issued at future"}', { status: 401 }),
+      new Response('{"ok":true}', { status: 200 }),
+    ];
+    let calls = 0;
+    const db = supabaseClient({ url: 'https://fixture.supabase.local', key: 'sb_secret_fixture', retryMs: 0, fetchFn: async () => answers[calls++] });
+    assert.deepEqual(await db.rpc('ledger_identity'), { ok: true });
+    assert.equal(calls, 2);
+
+    let twice = 0;
+    const skewed = supabaseClient({ url: 'https://fixture.supabase.local', key: 'sb_secret_fixture', retryMs: 0, fetchFn: async () => (twice++, new Response('{"message":"JWT issued at future"}', { status: 401 })) });
+    await assert.rejects(skewed.rpc('ledger_identity'), /http 401 JWT issued at future/);
+    assert.equal(twice, 2, 'one retry only');
+
+    let once = 0;
+    const refused = supabaseClient({ url: 'https://fixture.supabase.local', key: 'sb_secret_fixture', retryMs: 0, fetchFn: async () => (once++, new Response('{"message":"Invalid API key"}', { status: 401 })) });
+    await assert.rejects(refused.rpc('ledger_identity'), /http 401 Invalid API key/);
+    assert.equal(once, 1);
+  });
 });
 
 describe('the Controller reconciliation', () => {

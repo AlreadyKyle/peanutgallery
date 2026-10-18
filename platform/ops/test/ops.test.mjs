@@ -1744,7 +1744,31 @@ describe('the GitHub Actions host', () => {
     assert.equal(redispatch('false false false 600'), 'true', 'after a run of ten minutes');
     assert.equal(redispatch('false false false 599'), 'false', 'a short failed run waits for the schedule');
     assert.match(script, /^EXIT_FATAL=78$/m);
-    assert.match(script, /stop_fatal\(\) \{\n[^}]*output redispatch false\n[^}]*alert "Mob Machine dispatcher stopped on GitHub Actions: fatal startup error"\n\s+exit "\$EXIT_FATAL"/);
+    assert.match(script, /stop_fatal\(\) \{\n[^}]*output redispatch false\n[^}]*alert "Mob Machine dispatcher stopped on GitHub Actions: fatal startup error\$\{2:\+: \$2\}"\n\s+exit "\$EXIT_FATAL"/);
+    assert.match(script, /stop_fatal "the dispatcher exited \$EXIT_FATAL; the encrypted log says why" "\$\(fatal_reason\)"/);
+  });
+
+  test("puts the dispatcher's own fatal reason in the ntfy alert alone, with the env file's values masked", () => {
+    const host = mkdtempSync(path.join(os.tmpdir(), 'actions-host-'));
+    try {
+      mkdirSync(path.join(host, 'logs'));
+      mkdirSync(path.join(host, 'env'));
+      writeFileSync(path.join(host, 'env', 'dispatcher.env'), 'GITHUB_READ_TOKEN=fixture-read-token-value\nNTFY_TOPIC_URL=https://ntfy.sh/fixture\n');
+      writeFileSync(
+        path.join(host, 'logs', 'dispatcher.log'),
+        [
+          JSON.stringify({ ts: 't', level: 'info', scope: 'main', msg: 'dispatcher lease held' }),
+          JSON.stringify({ ts: 't', level: 'error', scope: 'main', msg: 'dispatcher exited with an error', error: 'GITHUB_READ_TOKEN cannot read A/b: GET returned 401 ("Bad credentials") fixture-read-token-value', exitCode: 78 }),
+        ].join('\n'),
+      );
+      const reason = actionsFn('fatal_reason', { ACTIONS_HOST_DIR: host });
+      assert.equal(reason.stdout, 'GITHUB_READ_TOKEN cannot read A/b: GET returned 401 (Bad credentials) ***');
+      assert.equal(actionsFn('fatal_reason', { ACTIONS_HOST_DIR: path.join(host, 'none') }).stdout, '');
+    } finally {
+      rmSync(host, { recursive: true, force: true });
+    }
+    // The reason reaches alert only, never note, so the public log never shows it.
+    assert.doesNotMatch(script, /note[^\n]*fatal_reason/);
   });
 
   test('encrypts the log with age to vars.BACKUP_AGE_RECIPIENT and uploads only the ciphertext, for 14 days', () => {
