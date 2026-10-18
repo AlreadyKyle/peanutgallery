@@ -5,7 +5,10 @@ import { Glyph } from './Glyph';
 // The explainer video (docs/specs/explainer-video.md), made by platform/explainer from this site's
 // own words (legal.explainer), cards and agents. Until the viewer presses it, the poster plays a
 // muted 8-second loop of the Pick a card scene (about 130 KB), or stays a still image under reduced
-// motion; nothing of the full video is fetched before the press (preload none). Below 48rem the phone
+// motion or where the page asks for the still (home, where the frame is small: the loop's white scene
+// read as a blank panel there). The loop shows only once it plays, so a browser that will not autoplay
+// it shows the still, not the loop's empty first frame. Nothing of the full video is fetched before
+// the press (preload none). Below 48rem the phone
 // cut (4:5) plays; from 48rem the wide cut (16:9). Both come as AV1 in WebM for the browsers that
 // take it and H.264 in MP4 for every other.
 
@@ -29,10 +32,11 @@ function useReducedMotion(): boolean {
   return reduced;
 }
 
-export function ExplainerVideo() {
+export function ExplainerVideo({ still = false }: { still?: boolean }) {
   const video = useRef<HTMLVideoElement>(null);
   const [started, setStarted] = useState(false);
-  const reduced = useReducedMotion();
+  const reduced = useReducedMotion() || still;
+  const [playing, setPlaying] = useState(false);
   const preview = useRef<HTMLVideoElement>(null);
   // The viewer can stop the looping preview (WCAG 2.2.2); a paused loop stays paused.
   const [looping, setLooping] = useState(true);
@@ -85,7 +89,18 @@ export function ExplainerVideo() {
               <img src={file('wide', 'jpg')} alt="" width={1920} height={1080} />
             </picture>
             {reduced ? null : (
-              <video ref={preview} className="explainer-loop" autoPlay={looping} muted loop playsInline aria-hidden="true" tabIndex={-1}>
+              <video
+                ref={preview}
+                className="explainer-loop"
+                data-playing={playing ? 'true' : undefined}
+                autoPlay={looping}
+                muted
+                loop
+                playsInline
+                aria-hidden="true"
+                tabIndex={-1}
+                onPlaying={() => setPlaying(true)}
+              >
                 <source media={PHONE} src={loop('tall')} type="video/mp4" />
                 <source src={loop('wide')} type="video/mp4" />
               </video>

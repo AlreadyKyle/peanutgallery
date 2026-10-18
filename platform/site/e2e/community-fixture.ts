@@ -2,7 +2,7 @@ import type { Page, Route } from '@playwright/test';
 import { BUILDING_CARD_ID, LIVE_CARD_ID, OPEN_CARD_ID } from './supporter-studio';
 
 // The community function's answers for the place pages (docs/specs/place.md): the ideas board's top
-// ideas, a signed-in player's profile with cards, ideas and badges, their follows, and the claim. Every
+// ideas, a card's Suggested by (the ideas naming it), a signed-in player's profile with cards, ideas and badges, their follows, and the claim. Every
 // request stays on the site's own origin, as community.mts answers it.
 
 const json = 'application/json; charset=utf-8';
@@ -75,6 +75,8 @@ export async function answerCommunity(page: Page, options: CommunityOptions = {}
     if (request.method() === 'GET') {
       if (url.pathname === '/api/community/suggestions') return reply(200, { items: ideas, next: null });
       if (url.pathname === '/api/community/auth/settings') return reply(200, { signIn: options.signInOpen ?? true });
+      const card = /^\/api\/community\/card\/([^/]+)\/ideas$/.exec(url.pathname);
+      if (card) return reply(200, { items: ideas.filter((item) => (item as { cardId?: string | null }).cardId === card[1]) });
       return reply(503, { error: 'not in the e2e fixtures' });
     }
     const body = request.postData() ? (JSON.parse(request.postData()!) as Record<string, unknown>) : {};

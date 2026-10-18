@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { answerCommunity, IDEAS, signIn } from './community-fixture';
 import { expect, overflowsHorizontally, test } from './fixtures';
-import { LIVE_CARD_ID, OPEN_CARD_ID, SESSIONS, SUPPORTER_STUDIO } from './supporter-studio';
+import { BUILDING_CARD_ID, LIVE_CARD_ID, OPEN_CARD_ID, SESSIONS, SUPPORTER_STUDIO } from './supporter-studio';
 
 // Mob Machine as a place (docs/specs/place.md): the top bar knows who is here, home is the studio's
 // floor with the room's stations as links, Fund first and Ideas beside it, /me is the player's desk, and
@@ -114,6 +114,23 @@ test('a fundable card says what you get on its page, a shipped one does not', as
   await expect(page.locator('.card-face-column .perks')).toBeVisible();
   await page.goto(`/card/${LIVE_CARD_ID}`);
   await expect(page.locator('.card-face-column .perks')).toHaveCount(0);
+});
+
+test('a card names the players whose ideas it came from, and a card from no idea names no one', async ({ page }) => {
+  await answerCommunity(page);
+  await page.goto(`/card/${LIVE_CARD_ID}`);
+  const credits = page.getByRole('region', { name: 'Suggested by' });
+  await expect(credits.getByRole('listitem')).toHaveCount(1);
+  await expect(credits.getByRole('listitem')).toContainText('Player 4');
+  await expect(credits.getByRole('listitem')).toContainText('Faster loading on phones');
+  await expect(credits.getByRole('listitem')).toContainText('21 upvotes');
+  await expect(credits.getByRole('link', { name: 'Player 4' })).toHaveAttribute('href', '/u/player-4');
+  // The credit sits after what changed and before the supporters.
+  const order = await page.locator('main h2:not(.sr-only)').allTextContents();
+  expect(order.indexOf('Suggested by')).toBeLessThan(order.indexOf('Supporters'));
+  await page.goto(`/card/${BUILDING_CARD_ID}`);
+  await expect(page.locator('main [aria-busy="true"]')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Suggested by' })).toHaveCount(0);
 });
 
 test('while sign-in is closed the site offers no profile, and paying still works', async ({ page }) => {
