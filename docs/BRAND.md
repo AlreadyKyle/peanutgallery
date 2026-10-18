@@ -76,13 +76,13 @@ Headings are bold and sentence case, never shouting. No italic anywhere. Nothing
 
 - **One width.** Everything lines up to a 76rem (1216px) column with a side margin that grows with the screen (20px on a phone, 5% of the width on a tablet or laptop, 64px and up on a desktop), so the top bar, every section and the footer share a left edge. Home alone is wider (90rem), top bar and footer included, since the floor is the studio itself.
 - **Bands.** A page is a stack of full-bleed bands: the ink plate first (the top bar shares it), then paper and ink in turn. The change of ground is the only divider.
-- **The index.** Every section after the plate opens on a 2px rule over its heading. It is the machine's spec-sheet line; the heading is the label, so no number sits over it. The one numeral that orders things is home's station numbers, `01` to `04`, two-digit mono, since a card moves through the stations in that order.
+- **The index.** Every section after the plate opens on a 2px rule over its heading. It is the machine's spec-sheet line; the heading is the label, so no number sits over it. Home's stations carry no numbers either (the board, 18 October 2026): each opens on its glyph and where in the room it is, in the order a card moves.
 - **Five layouts**, and nothing else:
   1. **The split** (7:5): a page's plate, its heading on the left and the lede on the right, both from the plate's top.
   2. **The sheet** (5:7): text pages, the ledger, the FAQ. The heading stays in view on the left; the text fills the right.
   3. **The card grid** (3, 2 or 1 equal columns): cards, team boxes, choices. One item to a cell.
   4. **Halves** (1:1): two related blocks side by side, such as the two other ways to fund.
-  5. **The floor** (home only): the room large on the plate with its stations as labelled links, then the stations as numbered parts, Fund first, beside a rail that maps them (3:9). The part in view lights its station; nothing moves.
+  5. **The floor** (home only): the room large on the plate with its stations as labelled links, then the stations as parts in the order a card moves, Fund first and unnumbered, beside a rail that maps them (3:9). The part in view lights its station; nothing moves.
 - **Room to breathe.** Sections sit far apart and a section's parts group by space, not by lines: the heading and its one intro close together, a clear step before the content, and wide margins between bands. Dense is a fault even when nothing is empty (the board, 18 October 2026).
 - **No dead space.** Side-by-side blocks balance or stack. No block leaves an empty column beside it. The site's layout audit checks every page at five widths.
 

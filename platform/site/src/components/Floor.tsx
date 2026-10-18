@@ -124,15 +124,12 @@ export function FloorRail({ snapshot, lit, counts }: { snapshot: Snapshot; lit: 
         <StudioRoom snapshot={snapshot} studio={studio} facts={false} interactive={false} stations={stationTags(snapshot)} lit={lit} />
       </div>
       <ol className="floor-stations">
-        {floorStations(snapshot).map(({ id, glyph }, index) => {
+        {floorStations(snapshot).map(({ id, glyph }) => {
           const words = copy.floor.stations[id];
           const n = counts[id];
           return (
             <li key={id} data-lit={lit === id ? 'true' : undefined}>
               <a href={`#${id}`} aria-current={lit === id ? 'location' : undefined}>
-                <span className="floor-station-number" aria-hidden="true">
-                  {String(index + 1).padStart(2, '0')}
-                </span>
                 <Glyph name={glyph} />
                 <span className="floor-station-name">{words.name}</span>
                 {n === null ? null : <span className="floor-station-count">{n}</span>}
@@ -148,13 +145,16 @@ export function FloorRail({ snapshot, lit, counts }: { snapshot: Snapshot; lit: 
   );
 }
 
-/** A station's part of the floor: its numbered head, its heading and what it is, then its body. */
-export function StationPart({ id, index, title, intro, children }: { id: StationId; index: number; title: string; intro?: ReactNode; children: ReactNode }) {
+/**
+ * A station's part of the floor: its head (glyph and where in the room), its heading and what it is,
+ * then its body. No number is drawn (the board, 18 October 2026: no 01, 02 over sections); `index`
+ * is the station's place on the walk, kept for the callers' order.
+ */
+export function StationPart({ id, title, intro, children }: { id: StationId; index: number; title: string; intro?: ReactNode; children: ReactNode }) {
   const glyph = FLOOR_STATIONS.find((station) => station.id === id)?.glyph ?? 'gear';
   return (
     <section className="section station-part" data-station-part={id} aria-labelledby={id}>
       <p className="station-index" aria-hidden="true">
-        <span className="flow-step-number">{String(index).padStart(2, '0')}</span>
         <Glyph name={glyph} />
         <span>{copy.floor.stations[id].where}</span>
       </p>
