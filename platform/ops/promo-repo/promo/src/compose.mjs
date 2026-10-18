@@ -2,6 +2,7 @@
 // docs/COPY.md in the studio repository). Each kind has a few variants; the playbook picks which
 // one to try, so the machine learns which framing works on which channel.
 import { LIMITS, money, slug } from './lib.mjs';
+import { clipProps, clipTitle } from './clips.mjs';
 import { chooseVariant } from './learn.mjs';
 import { lintText } from './lint.mjs';
 
@@ -76,10 +77,16 @@ export function composeDrafts(moments, config, playbook, existingIds, now = new 
     if (moment.kind === 'weekly_report') {
       moment.facts.weekLabel = new Date(`${moment.facts.weekStart}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' });
     }
+    const clip = moment.facts.video ? null : clipProps(moment);
     for (const [channel, ch] of Object.entries(config.channels)) {
       if (!ch.enabled) continue;
-      if ((ch.videoOnly && !moment.facts.video) || (ch.mediaOnly && !moment.facts.video && !moment.facts.image)) continue;
-      const id = `${slug(moment.kind, 16)}-${slug(moment.ref, 24)}-${channel}`;
+      const hasVideo = Boolean(moment.facts.video || clip);
+      if ((ch.videoOnly && !hasVideo) || (ch.mediaOnly && !hasVideo && !moment.facts.image)) continue;
+      // Only the video channels get the clip; the others keep the card's preview image.
+      const useClip = Boolean(clip && (ch.videoOnly || ch.mediaOnly));
+      // The daily spotlight repeats a card for days; a clip of it goes out once per card.
+      const ref = useClip && moment.kind === 'spotlight' ? moment.facts.id : moment.ref;
+      const id = `${slug(moment.kind, 16)}-${slug(ref, 24)}-${channel}`;
       if (existingIds.has(id)) continue;
       const usable = Object.entries(variants)
         .map(([name, fn]) => [name, fn(moment.facts)])
@@ -102,6 +109,7 @@ export function composeDrafts(moments, config, playbook, existingIds, now = new 
         link,
         image: moment.facts.image ? `${config.site}${moment.facts.image}` : null,
         video: moment.facts.video ?? null,
+        ...(useClip ? { clip, title: clipTitle(moment) } : {}),
       });
     }
   }

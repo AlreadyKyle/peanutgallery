@@ -30,7 +30,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Pick the job
         id: pick
@@ -68,6 +68,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: promo/clips/package-lock.json
+
+      # Clips (promo/clips) render just before they are sent, so the renderer is installed only
+      # when a clip could go out: on harvest days, and whenever the outbox holds a clip draft.
+      - name: Check for clips to render
+        id: clips
+        if: steps.pick.outputs.job != 'metrics'
+        run: |
+          if [ "${{ steps.pick.outputs.job }}" = harvest ] || grep -qs '"clip"' promo/outbox/*.json; then echo 'needed=true' >> "$GITHUB_OUTPUT"; fi
+
+      - name: Install the clip renderer
+        if: steps.clips.outputs.needed == 'true'
+        working-directory: promo/clips
+        run: npm ci --no-audit --no-fund
 
       - name: Run
         env:

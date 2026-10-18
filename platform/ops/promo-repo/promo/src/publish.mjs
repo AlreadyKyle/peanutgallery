@@ -3,6 +3,7 @@
 // apart, highest priority first. A draft is marked sending and committed to disk before the request,
 // so a crash loses a post rather than doubling it (the dispatcher's outbound lane works the same way).
 import { adapterFor } from './channels/index.mjs';
+import { renderClip } from './clips.mjs';
 import { appendSent, dayOf, listOutbox, loadConfig, readSent, removeDraft, ROOT, saveDraft } from './lib.mjs';
 
 const MAX_ATTEMPTS = 3;
@@ -19,7 +20,7 @@ export function expired(draft, now, lookbackHours) {
   return now - Date.parse(draft.moment.at ?? draft.createdAt) > hours * 3_600_000;
 }
 
-export async function publish({ root = ROOT, env = process.env, fetch: f = fetch, now = new Date(), dryRun = false, log = console.log } = {}) {
+export async function publish({ root = ROOT, env = process.env, fetch: f = fetch, now = new Date(), dryRun = false, log = console.log, render = renderClip } = {}) {
   const config = loadConfig(root);
   const sent = readSent(root);
   const today = dayOf(now.toISOString());
@@ -58,7 +59,9 @@ export async function publish({ root = ROOT, env = process.env, fetch: f = fetch
     }
     saveDraft({ ...draft, status: 'sending', attempts: (draft.attempts ?? 0) + 1 }, root);
     try {
-      const result = await adapter.send(draft, { env, fetch: f, root });
+      // A clip draft is rendered here, just before it is sent (clips.mjs).
+      const toSend = draft.clip && !draft.video ? { ...draft, video: render(draft, root) } : draft;
+      const result = await adapter.send(toSend, { env, fetch: f, root });
       const receipt = {
         id: draft.id,
         channel: draft.channel,

@@ -42,7 +42,8 @@ export async function harvest({ root = ROOT, fetch: f = fetch, now = new Date(),
 
 /**
  * Adds hand-written drafts (the marketer routine's launch posts, replies to a moment, a clip):
- * a JSON array of { ref, text, path or url, channels: [...], image?, video?, title? }.
+ * a JSON array of { ref, text, path or url, channels: [...], image?, video?, clip?, title? }.
+ * clip is the props of promo/clips' composition; publish renders it before sending.
  * They go through the same checks and the same review as harvested drafts.
  */
 export function addCustom(items, { root = ROOT, now = new Date() } = {}) {
@@ -72,6 +73,7 @@ export function addCustom(items, { root = ROOT, now = new Date() } = {}) {
         title: item.title ?? null,
         image: item.image ?? null,
         video: item.video ?? null,
+        ...(item.clip ? { clip: item.clip } : {}),
         notBefore: item.notBefore ?? null,
       };
       saveDraft(draft, root);

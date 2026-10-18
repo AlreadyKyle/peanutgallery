@@ -55,7 +55,7 @@ test('every composed draft passes the copy checks and links back with its channe
     assert.deepEqual(d.problems, [], `${d.id}: ${d.text}`);
     assert.match(d.link, new RegExp(`from=${config.channels[d.channel].tag}`));
   }
-  assert.ok(!drafts.some((d) => d.channel === 'youtube' || d.channel === 'tiktok'), 'video channels wait for a clip');
+  assert.ok(drafts.filter((d) => d.channel === 'youtube' || d.channel === 'tiktok').every((d) => d.clip), 'video channels only get moments with a clip');
 });
 
 test('lint catches the studio voice rules', () => {
@@ -136,4 +136,39 @@ test('bluesky link facets index UTF-8 bytes', () => {
   const text = 'Café news\n\nhttps://mobmachine.games/?from=bsky';
   const facet = linkFacet(text, 'https://mobmachine.games/?from=bsky');
   assert.equal(facet.index.byteStart, Buffer.byteLength('Café news\n\n'));
+});
+
+test('a ship becomes a clip draft for the video channels only, and the spotlight clip goes out once per card', () => {
+  const moments = harvestMoments(docs, config, NOW);
+  const drafts = composeDrafts(moments, config, emptyPlaybook(), new Set(), new Date(NOW));
+  const ship = drafts.find((d) => d.moment.kind === 'ship' && d.channel === 'youtube');
+  assert.ok(ship, 'a YouTube draft for the ship');
+  assert.equal(ship.clip.role, 'Builder A');
+  assert.equal(ship.clip.state, 'live');
+  assert.deepEqual(ship.clip.rows[0], { label: 'Agent work', value: '$0.42', money: true });
+  assert.match(ship.title, /^Cheaper first Gatherer/);
+  assert.ok(!drafts.find((d) => d.moment.kind === 'ship' && d.channel === 'bluesky').clip, 'text channels keep the image');
+  const spot = drafts.find((d) => d.moment.kind === 'spotlight' && d.channel === 'tiktok');
+  assert.equal(spot.id, 'spotlight-cccccccc-3333-tiktok');
+  assert.equal(spot.clip.funded, 0.25);
+});
+
+test('publish renders a clip draft before sending it', async () => {
+  const dir = tempRoot();
+  const draft = { id: 'ship-x-youtube', createdAt: new Date(NOW).toISOString(), status: 'approved', problems: [], moment: { kind: 'ship', ref: 'x', priority: 70, at: new Date(NOW).toISOString() }, channel: 'youtube', variant: 'plain', text: 'New in Dust.', link: 'https://mobmachine.games/?from=yt', clip: { title: 'T' } };
+  mkdirSync(join(dir, 'outbox'), { recursive: true });
+  writeFileSync(join(dir, 'outbox', `${draft.id}.json`), JSON.stringify(draft));
+  const rendered = [];
+  const calls = [];
+  const fake = async (url, init) => {
+    calls.push(String(url));
+    if (String(url).endsWith('/integrations')) return new Response(JSON.stringify([{ id: 'yt1', identifier: 'youtube' }]));
+    if (String(url).endsWith('/upload')) return new Response(JSON.stringify({ id: 'm1', path: 'https://uploads.postiz.com/m1.mp4' }));
+    return new Response(JSON.stringify([{ postId: 'p1', integration: 'yt1' }]));
+  };
+  writeFileSync(join(dir, 'clip.mp4'), 'video');
+  const summary = await publish({ root: dir, env: { PROMO_POSTIZ_API_KEY: 'k' }, fetch: fake, now: new Date(NOW), log: () => {}, render: (d) => (rendered.push(d.id), 'clip.mp4') });
+  assert.deepEqual(rendered, ['ship-x-youtube']);
+  assert.equal(summary.sent, 1);
+  assert.ok(calls.some((u) => u.endsWith('/upload')), 'the rendered clip was uploaded');
 });
