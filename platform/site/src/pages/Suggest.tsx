@@ -1,12 +1,13 @@
-import { useId, useState, type FormEvent } from 'react';
+import { useId, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { Glyph, type GlyphName } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
 import { PersonLink } from '../components/Person';
+import { ShowMore } from '../components/ShowMore';
 import { rpc, useSignedIn } from '../lib/account';
-import { CommunityError, relativeTime, useCommunity } from '../lib/community';
-import type { DeclineReason, PageDoc, SuggestionState, SuggestionSummary } from '../lib/community-types';
+import { CommunityError, relativeTime, usePagedCommunity } from '../lib/community';
+import type { DeclineReason, SuggestionState, SuggestionSummary } from '../lib/community-types';
 import { copy } from '../lib/copy';
 import { legal } from '../lib/legal';
 
@@ -44,22 +45,35 @@ function declineWords(reason: DeclineReason | null): string {
   return reason === null ? copy.suggest.decline.none : copy.suggest.decline[reason];
 }
 
-function Suggestion({ item, signedIn, onUpvoted }: { item: SuggestionSummary; signedIn: boolean; onUpvoted: () => void }) {
-  const [upvoted, setUpvoted] = useState(false);
+/** The suggestion's true total from vote_suggestion's answer: the one figure its object holds. */
+export function totalFrom(answer: unknown): number | null {
+  if (typeof answer !== 'object' || answer === null) return null;
+  const figure = Object.values(answer).find((value) => typeof value === 'number');
+  return typeof figure === 'number' && Number.isFinite(figure) ? Math.max(0, Math.round(figure)) : null;
+}
+
+type Pressed = { readonly item: SuggestionSummary; readonly upvoted: boolean; readonly total: number };
+
+function Suggestion({ item, signedIn }: { item: SuggestionSummary; signedIn: boolean }) {
+  // The list is a public, cached document, so it cannot say whether this player upvoted, and its count
+  // may already include them. After a press the count is the total the RPC answered with and the
+  // button shows the press just made. Both belong to the item they were read for: a reload brings a
+  // new item and the list's own count again.
+  const [pressed, setPressed] = useState<Pressed | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const mine = pressed !== null && pressed.item === item ? pressed : null;
+  const upvoted = mine?.upvoted ?? false;
+  const upvotes = mine?.total ?? item.upvotes;
   const upvote = () => {
+    const value = upvoted ? 0 : 1;
     setBusy(true);
     setError('');
-    rpc('vote_suggestion', { id: item.id, value: upvoted ? 0 : 1 })
-      .then(() => {
-        setUpvoted(!upvoted);
-        onUpvoted();
-      })
+    rpc<unknown>('vote_suggestion', { id: item.id, value })
+      .then((answer) => setPressed({ item, upvoted: value === 1, total: totalFrom(answer) ?? upvotes }))
       .catch(() => setError(copy.suggest.upvoteFailed))
       .finally(() => setBusy(false));
   };
-  const upvotes = item.upvotes + (upvoted ? 1 : 0);
   return (
     <li className="suggestion" data-state={item.state}>
       <div className="suggestion-upvotes">
@@ -106,10 +120,19 @@ function SubmitForm({ onSent }: { onSent: () => void }) {
   const [area, setArea] = useState<string>(SUGGESTION_AREAS[0]);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error' | 'limit'>('idle');
+  const [state, setState] = useState<'idle' | 'blank' | 'sending' | 'sent' | 'error' | 'limit'>('idle');
+  const titleRef = useRef<HTMLInputElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const titleBlank = state === 'blank' && title.trim() === '';
+  const bodyBlank = state === 'blank' && body.trim() === '';
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (title.trim() === '' || body.trim() === '') return;
+    // `required` lets a field of only spaces through; the RPC would refuse it, so say so here.
+    if (title.trim() === '' || body.trim() === '') {
+      setState('blank');
+      (title.trim() === '' ? titleRef.current : bodyRef.current)?.focus();
+      return;
+    }
     setState('sending');
     rpc('submit_suggestion', { area, title: title.trim(), body: body.trim() })
       .then(() => {
@@ -135,12 +158,32 @@ function SubmitForm({ onSent }: { onSent: () => void }) {
         ))}
       </select>
       <label htmlFor={`${id}-title`}>{copy.suggest.titleLabel}</label>
-      <input id={`${id}-title`} type="text" value={title} maxLength={TITLE_MAX} required onChange={(event) => setTitle(event.currentTarget.value)} aria-describedby={`${id}-title-count`} />
+      <input
+        id={`${id}-title`}
+        ref={titleRef}
+        type="text"
+        value={title}
+        maxLength={TITLE_MAX}
+        required
+        aria-invalid={titleBlank ? true : undefined}
+        onChange={(event) => setTitle(event.currentTarget.value)}
+        aria-describedby={`${id}-title-count${titleBlank ? ` ${id}-status` : ''}`}
+      />
       <p className="small muted field-count" id={`${id}-title-count`}>
         {copy.suggest.left.replace('{n}', String(TITLE_MAX - title.length))}
       </p>
       <label htmlFor={`${id}-body`}>{copy.suggest.bodyLabel}</label>
-      <textarea id={`${id}-body`} value={body} maxLength={BODY_MAX} rows={5} required onChange={(event) => setBody(event.currentTarget.value)} aria-describedby={`${id}-body-count ${id}-body-hint`} />
+      <textarea
+        id={`${id}-body`}
+        ref={bodyRef}
+        value={body}
+        maxLength={BODY_MAX}
+        rows={5}
+        required
+        aria-invalid={bodyBlank ? true : undefined}
+        onChange={(event) => setBody(event.currentTarget.value)}
+        aria-describedby={`${id}-body-count ${id}-body-hint${bodyBlank ? ` ${id}-status` : ''}`}
+      />
       <p className="small muted field-count" id={`${id}-body-count`}>
         {copy.suggest.left.replace('{n}', String(BODY_MAX - body.length))}
       </p>
@@ -153,8 +196,16 @@ function SubmitForm({ onSent }: { onSent: () => void }) {
           {state === 'sending' ? copy.suggest.sending : copy.suggest.send}
         </button>
       </p>
-      <p role="status" className="small">
-        {state === 'sent' ? copy.suggest.sent : state === 'limit' ? copy.suggest.limit : state === 'error' ? copy.suggest.failed : ''}
+      <p role="status" className="small" id={`${id}-status`}>
+        {state === 'sent'
+          ? copy.suggest.sent
+          : state === 'limit'
+            ? copy.suggest.limit
+            : state === 'error'
+              ? copy.suggest.failed
+              : state === 'blank'
+                ? copy.suggest.blank
+                : ''}
       </p>
     </form>
   );
@@ -165,7 +216,7 @@ export function Suggest() {
   const [sort, setSort] = useState<'top' | 'new'>('top');
   const [area, setArea] = useState<string>('all');
   const query = `/suggestions?sort=${sort}${area === 'all' ? '' : `&area=${encodeURIComponent(area)}`}`;
-  const list = useCommunity<PageDoc<SuggestionSummary>>(query);
+  const list = usePagedCommunity<SuggestionSummary>(query);
   const filterId = useId();
   return (
     <main className="wide sheet">
@@ -223,15 +274,27 @@ export function Suggest() {
               {copy.suggest.loading}
             </p>
           ) : list.state === 'unavailable' ? (
-            <EmptyState line={legal.partUnavailable} next={{ to: '/', label: copy.roadmapLink }} unavailable />
-          ) : list.data.items.length === 0 ? (
+            <EmptyState line={legal.partUnavailable} next={{ to: '/', label: copy.roadmapLink }} unavailable onRetry={list.reload} />
+          ) : list.items.length === 0 ? (
             <EmptyState line={copy.suggest.empty} next={{ to: '#suggest-send', label: copy.emptyState.sendFirst }} />
           ) : (
-            <ol className="suggestions">
-              {list.data.items.map((item) => (
-                <Suggestion key={item.id} item={item} signedIn={signedIn} onUpvoted={() => undefined} />
-              ))}
-            </ol>
+            <>
+              <ol className="suggestions">
+                {list.items.map((item) => (
+                  <Suggestion key={item.id} item={item} signedIn={signedIn} />
+                ))}
+              </ol>
+              {list.hasMore ? (
+                <ShowMore
+                  label={copy.suggest.more}
+                  loadingLabel={copy.suggest.loadingMore}
+                  failedLine={copy.suggest.moreFailed}
+                  loading={list.loadingMore}
+                  failed={list.moreFailed}
+                  onMore={list.loadMore}
+                />
+              ) : null}
+            </>
           )}
         </section>
         <section className="section" aria-labelledby="suggest-how">

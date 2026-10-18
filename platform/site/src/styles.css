@@ -3748,7 +3748,8 @@ ol.timeline {
   font-size: var(--size-small);
 }
 
-.pipe-older {
+.pipe-older,
+.list-more {
   margin-top: var(--space-2);
 }
 
@@ -3994,19 +3995,22 @@ ol.timeline {
   list-style: none;
 }
 
+/* Each milestone is a zero-width point at its share of the track: the tick is centred on it, and the
+   label starts at it and moves back by the same share of its own width, so a label at either end
+   stays inside the track. Labels that would touch another carry data-hidden (lib/ticks.ts). */
 .goals-ticks li {
   position: absolute;
   top: -0.375rem;
   left: var(--at);
-  display: grid;
-  justify-items: center;
-  transform: translateX(-50%);
+  width: 0;
 }
 
 .goals-tick {
+  display: block;
   width: 2px;
   height: 1.75rem;
   background: var(--ink);
+  transform: translateX(-50%);
 }
 
 .collection-counts {
@@ -4021,16 +4025,22 @@ ol.timeline {
   align-items: center;
 }
 
-.goals-ticks li:last-child {
-  justify-items: end;
+.goals-ticks li:last-child .goals-tick {
   transform: translateX(-100%);
 }
 
 .goals-tick-label {
-  margin-top: 0.25rem;
+  position: absolute;
+  top: 2rem;
+  left: 0;
   font-size: var(--size-small);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  transform: translateX(calc(var(--at) * -1));
+}
+
+.goals-tick-label[data-hidden] {
+  visibility: hidden;
 }
 
 .goals-ticks li[data-state='later'] .goals-tick {

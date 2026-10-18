@@ -34,6 +34,8 @@ export const GAME_ADMIN_LINE =
   'Every change to a game needs a reason and is written to the moderation log. A game that takes no new cards gets no new drafts from the card supply; its open cards carry on. The blurb is public and passes the content filter.';
 export const ROLE_SWITCH_LINE = 'Turning a role off stops the jobs it runs until the board turns it on again. Every change needs a reason, recorded with the role.';
 export const PROFILE_LINE = "A role's profile, model, tools and budget share come from its file in platform/agents and change by pull request. The caps are read-only here: they change by SQL.";
+export const ROLE_REASON_NEEDED = 'Type a reason first: turning a role on or off needs one, recorded with the role.';
+export const GAME_REASON_NEEDED = 'Type a reason first: every change to a game needs one, and its buttons stay off until there is one.';
 
 type Loaded<T> = { state: 'loading' } | { state: 'ready'; data: T } | { state: 'error'; message: string };
 
@@ -78,7 +80,12 @@ function useAct(refresh: () => void) {
       .catch((cause: unknown) => setError(`${failed}: ${errorMessage(cause)}`))
       .finally(() => setBusy(null));
   };
-  return { busy, status, error, act };
+  /** Shows a message in the error line without running anything, such as a missing reason. */
+  const say = (message: string) => {
+    setStatus('');
+    setError(message);
+  };
+  return { busy, status, error, act, say };
 }
 
 function shortSha(sha: string): string {
@@ -317,10 +324,19 @@ function Games({ client }: { client: SupabaseClient }) {
         Reason for changes to a game (written to the moderation log)
         <input maxLength={ADMIN_REASON_MAX} value={reason} onChange={(event) => setReason(event.target.value)} />
       </label>
+      {reason.trim() === '' ? <p className="muted">{GAME_REASON_NEEDED}</p> : null}
       {status !== '' ? <p role="status">{status}</p> : null}
-      {error !== '' ? <p className="error">{error}</p> : null}
+      {error !== '' ? (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      ) : null}
       {loaded.state === 'loading' ? <p role="status">Loading the games.</p> : null}
-      {loaded.state === 'error' ? <p className="error">{loaded.message}</p> : null}
+      {loaded.state === 'error' ? (
+        <p className="error" role="alert">
+          {loaded.message}
+        </p>
+      ) : null}
       {loaded.state === 'ready' && loaded.data.length === 0 ? <p className="muted">No games yet.</p> : null}
       {loaded.state === 'ready' && loaded.data.length > 0 ? (
         <ul className="game-grid">
@@ -464,11 +480,14 @@ function Agents({ client }: { client: SupabaseClient }) {
   const { loaded, refresh } = useLoad(load);
   const ref = useArrival(loaded.state === 'ready');
   const [reason, setReason] = useState('');
-  const { busy, status, error, act } = useAct(refresh);
+  const { busy, status, error, act, say } = useAct(refresh);
   const trimmed = reason.trim();
 
   const toggle = (agent: Agent) => {
-    if (trimmed === '') return;
+    if (trimmed === '') {
+      say(ROLE_REASON_NEEDED);
+      return;
+    }
     const on = agent.paused;
     act(agent.id, `${agent.name} turned ${on ? 'on' : 'off'}.`, agent.name, () => setRoleOn(client, agent.id, on, trimmed));
   };
@@ -479,12 +498,27 @@ function Agents({ client }: { client: SupabaseClient }) {
       <p className="muted">{PROFILE_LINE}</p>
       <label>
         Reason for turning a role on or off
-        <input maxLength={ROLE_REASON_MAX} value={reason} onChange={(event) => setReason(event.target.value)} />
+        <input
+          maxLength={ROLE_REASON_MAX}
+          value={reason}
+          onChange={(event) => {
+            setReason(event.target.value);
+            if (error === ROLE_REASON_NEEDED) say('');
+          }}
+        />
       </label>
       {status !== '' ? <p role="status">{status}</p> : null}
-      {error !== '' ? <p className="error">{error}</p> : null}
+      {error !== '' ? (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      ) : null}
       {loaded.state === 'loading' ? <p role="status">Loading the agents.</p> : null}
-      {loaded.state === 'error' ? <p className="error">{loaded.message}</p> : null}
+      {loaded.state === 'error' ? (
+        <p className="error" role="alert">
+          {loaded.message}
+        </p>
+      ) : null}
       {loaded.state === 'ready' && loaded.data.length === 0 ? <p className="muted">No roles yet.</p> : null}
       {loaded.state === 'ready' && loaded.data.length > 0 ? (
         <>

@@ -24,6 +24,7 @@ Three migrations, each idempotent: `20261017100000_community_core.sql`, `2026101
 - `cards.suit` (game, new_game, studio, platform, machine) and `cards.rarity` (common, uncommon, rare, legendary), set on insert from the card's folder and a pure function of its id: the first four bytes of SHA-256 of the id over 2^32 against the published odds, the twin of `platform/site/src/lib/rarity.ts`. XP is `floor(dollars × 10 × rarity multiplier)`, levels and tiers the twin of `xp.ts`. Both are tested on one shared vector file. The Machine is the pool shown as a card: a payment with no card names the Machine.
 - Triggers: a contribution posts to the feed and is claimed at once when its email hash matches a profile; a card opening, moving, shipping or reaching live posts to the feed, moves its suggestions' state and gives each suggester the shipped XP.
 - Every list pages by keyset (`id`, `votes|micros|id`, `score|id`), and each has its index.
+- `20261018000000_feed_backfill.sql` posts the feed lines the triggers would have posted for the cards and payments made before the feed existed (card opened, shipped, payment), at the time each happened and under the triggers' own dedupe keys, so the pipe opens on the studio's real history and no line is doubled.
 
 ### Quarantine
 
@@ -58,6 +59,7 @@ The board's panel gains a Community region under the existing second factor: Use
 - [x] The Curator's session holds no tools and is billed as overhead; an answer outside the schema writes nothing.
 - [x] `draft_card` takes a cluster's structured fields and refuses any other key.
 - [x] Every migration applies twice.
+- [x] The feed backfill posts each earlier card opening, ship and payment once, oldest first, skips rejected cards and never doubles a trigger's line (`feed_backfill_test.ts`).
 - [x] The board's Community admin reads nothing until a tab is chosen and sends the reason with each change (Board.test.tsx, e2e).
 
 ## Verification
@@ -87,3 +89,4 @@ Quoted in the series pull request's report.
 - 2026-10-17: the triage role is named Curator, so no retired role name returns.
 - 2026-10-17: the role rows come from the seed, not the migration, as every role's does; the job takes the Curator's row when the migration runs again after the seed.
 - 2026-10-17: the dispatcher flags injections and money or secrets requests in code before the model, so those texts never reach a session; the model's flags are kept as well.
+- 2026-10-17: amended by `docs/specs/board-moderation-fixes.md` (`20261017230000_board_moderation_fix.sql`): a suspended player's seeds and suggestions leave the public lists, a merged cluster resolves to the root of its merge chain, a merge refuses a cluster that was already merged, and the admin's destructive actions ask a confirm first.

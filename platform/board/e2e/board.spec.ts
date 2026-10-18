@@ -204,6 +204,8 @@ async function answerSupabase(
         return json({ items: [SUGGESTION], next: null });
       case '/rest/v1/rpc/board_decline_suggestion':
         return json({ id: args.p_id, state: 'declined' });
+      case '/rest/v1/rpc/board_community_cards':
+        return json({ items: [{ id: CARD.id, title: 'An e2e card', stage: 'funded', suit: 'game', rarity: 'common', computedRarity: 'rare' }], next: null });
       case '/rest/v1/rpc/board_games':
         return json(GAMES);
       case '/rest/v1/rpc/board_agent_roster':
@@ -489,7 +491,7 @@ for (const [who, role, aal] of [
   });
 }
 
-test('the Community admin reads nothing until a tab is chosen, and declines a suggestion with its reason, at 375 px', async ({ page }) => {
+test('the Community admin reads nothing until a tab is chosen, and declines a suggestion with its reason after the confirm, at 375 px', async ({ page }) => {
   const reports = await watchPolicy(page);
   const seen: string[] = [];
   const bodies: Record<string, unknown>[] = [];
@@ -504,10 +506,32 @@ test('the Community admin reads nothing until a tab is chosen, and declines a su
   await expect(row).toContainText('Night mode');
   await expect(row).toContainText('Glowing sand at night.');
   await expect(row.getByRole('button', { name: 'Decline' })).toBeDisabled();
+  await expect(community.getByText(/^Type a reason first/)).toBeVisible();
+  // Every action sits inside the column, stacked, at a phone's width and a desktop's: the table never
+  // runs past its box.
+  for (const width of [375, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const box = (await community.boundingBox())!;
+    for (const name of ['Decline', 'Draft from cluster', 'Link card', 'Merge into']) {
+      const button = (await row.getByRole('button', { name }).boundingBox())!;
+      expect(button.x + button.width, `${name} at ${width} px`).toBeLessThanOrEqual(box.x + box.width + 1);
+    }
+    expect(await community.locator('.table-scroll').evaluate((el) => el.scrollWidth <= el.clientWidth), `${width} px`).toBe(true);
+  }
+  await page.setViewportSize({ width: 375, height: 812 });
+  // Merge and link pick from what is loaded; no field takes a typed id.
+  await expect(row.getByLabel('Card to link cluster night-mode to')).toContainText('An e2e card (funded)');
+  await expect(row.getByRole('textbox')).toHaveCount(0);
   await community.getByLabel('Decline as').selectOption('duplicate');
   await community.getByLabel(/^Reason for changes/).fill('Same as an open card');
+  const asked: string[] = [];
+  page.once('dialog', (dialog) => {
+    asked.push(dialog.message());
+    void dialog.accept();
+  });
   await row.getByRole('button', { name: 'Decline' }).click();
   await expect(community.getByRole('status')).toHaveText('Decline: done.');
+  expect(asked).toEqual(['Decline the suggestion "Night mode" as duplicate? It leaves the queue, and Release does not bring a declined suggestion back.']);
   expect(bodies).toContainEqual({ path: '/rest/v1/rpc/board_decline_suggestion', body: { p_id: SUGGESTION.id, p_decline_reason: 'duplicate', p_reason: 'Same as an open card' } });
   await community.getByRole('button', { name: 'Flags' }).click();
   await expect(community.locator('tr[data-flag="curator_triage"]')).toContainText('false');

@@ -47,7 +47,7 @@ export const copy = {
   // Where a planned card's page and an empty reports page send the reader: home's cards to fund.
   roadmapLink: 'See the cards to fund',
   // An empty or unloaded list's tile (EmptyState.tsx).
-  emptyState: { retry: 'Try again in a minute.', ledger: 'Open the ledger', sendFirst: 'Send the first suggestion', playDust: 'Play Dust' },
+  emptyState: { retry: 'Try again in a minute.', tryAgain: 'Try again', ledger: 'Open the ledger', sendFirst: 'Send the first suggestion', playDust: 'Play Dust' },
   // The explainer video's labels for a queued and a shipped card (platform/explainer/src/data.ts).
   queued: 'Queued',
   shipped: 'Shipped',
@@ -541,7 +541,11 @@ export const copy = {
     sent: 'Thank you, your suggestion is in the queue for review.',
     limit: 'You have sent three suggestions today. Try again tomorrow.',
     failed: 'The suggestion did not send. Try again in a moment.',
+    blank: 'Write the title and the description in words. Spaces alone do not count.',
     listTitle: 'Suggestions',
+    more: 'Show more suggestions',
+    loadingMore: 'Loading more suggestions.',
+    moreFailed: 'More suggestions did not load. Try again in a moment.',
     sortLabel: 'Sort suggestions',
     sorts: { top: 'Top', new: 'New' },
     areaFilter: 'Area',
@@ -594,6 +598,9 @@ export const copy = {
     sorts: { trending: 'Trending', top_week: 'Top this week', top_all: 'Top all time', new: 'New' },
     loading: 'Loading the seeds.',
     empty: 'No seeds in the gallery yet.',
+    more: 'Show more seeds',
+    loadingMore: 'Loading more seeds.',
+    moreFailed: 'More seeds did not load. Try again in a moment.',
     featured: 'Featured',
     scoreLabel: 'Score for {title}',
     up: 'Upvote',
@@ -602,7 +609,7 @@ export const copy = {
     play: 'Play',
     playNamed: 'Play {title}',
     howTitle: 'Save your own seed',
-    how: 'In the game, open Share your run and choose Save as seed. Signed-in players can publish a seed here with a short title.',
+    how: 'In the game, choose Save to gallery beside Save as seed. The seed joins your profile, and you can then publish it to this gallery with a short title.',
     signIn: 'Sign in to upvote and publish',
     // /seeds?save=<code>: a seed the game linked here, saved to the player's profile.
     save: {
@@ -615,6 +622,14 @@ export const copy = {
       game: 'Game: {game}, version {n}',
       seeProfile: 'See your profile',
       play: 'Play this seed',
+      // After the save: publishing a copy with a title (save_seed needs a title to publish).
+      titleLabel: 'Title for the gallery',
+      titleHint: 'At most 60 characters. A published copy shows in the gallery for anyone to play.',
+      publish: 'Publish to the gallery',
+      publishing: 'Publishing the seed.',
+      published: 'Published to the gallery.',
+      needTitle: 'Give the seed a title to publish it.',
+      publishFailed: 'The seed did not publish. Try another title, or try again later.',
     },
   },
   profile: {
@@ -650,6 +665,9 @@ export const copy = {
     sending: 'Sending the link.',
     sent: 'Check your email for the link. It works once.',
     closed: 'Sign-in is not available right now.',
+    tooMany: 'Too many sign-in emails for now. Wait a minute, then try again.',
+    linkExpired: 'That sign-in link has expired or was already used. Enter your email for a new one.',
+    linkFailed: 'That sign-in link did not work. Enter your email for a new one.',
     optional: 'Contributing never needs an account. Without one, your contributions show as Anonymous.',
     editTitle: 'Edit your profile',
     nameLabel: 'Your name on the site',

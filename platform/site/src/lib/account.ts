@@ -62,6 +62,25 @@ export function adoptSessionFromLocation(): boolean {
   return true;
 }
 
+/** Why a magic link did not sign the player in: it expired (or was used already), or it failed. */
+export type LinkError = 'expired' | 'failed';
+
+/** Reads a failed magic link's fragment (#error=access_denied&error_code=otp_expired&error_description=…). */
+export function linkErrorFromHash(hash: string): LinkError | null {
+  const params = new URLSearchParams(hash.replace(/^#/, ''));
+  const code = params.get('error_code');
+  if (params.get('error') === null && code === null) return null;
+  return code === 'otp_expired' ? 'expired' : 'failed';
+}
+
+/** Takes a failed magic link's error from the address bar, if there is one, and clears it from history. */
+export function adoptLinkErrorFromLocation(): LinkError | null {
+  if (typeof window === 'undefined') return null;
+  const error = linkErrorFromHash(window.location.hash);
+  if (error !== null) history.replaceState(null, '', window.location.pathname + window.location.search);
+  return error;
+}
+
 export function signOut(): void {
   writeSession(null);
 }
