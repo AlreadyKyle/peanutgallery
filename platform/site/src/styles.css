@@ -5096,10 +5096,6 @@ main.home > .band {
   color: var(--paper);
 }
 
-.floor-station-number {
-  display: none;
-}
-
 .floor-station-count {
   font-family: var(--font-mono);
   font-size: var(--size-small);
@@ -5204,13 +5200,6 @@ main.home > .band {
     border-radius: var(--radius);
   }
 
-  .floor-station-number {
-    display: inline;
-    font-family: var(--font-mono);
-    font-size: var(--size-small);
-    font-weight: var(--weight-bold);
-  }
-
   .floor-station-name {
     margin-right: auto;
   }
@@ -5221,7 +5210,7 @@ main.home > .band {
   }
 }
 
-/* A station's part: its rule, then its number, glyph and where in the room it is, small, over the
+/* A station's part: its rule, then its glyph and where in the room it is, small, over the
    heading. Its cards sit in a grid of up to three. */
 .station-part {
   padding-top: var(--space-3);
