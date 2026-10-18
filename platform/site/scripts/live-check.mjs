@@ -12,11 +12,11 @@
 // bands in order (the top bar and band 1 on signal, band 2 on paper, then ink and paper in turn),
 // no dead space (scripts/layout-audit.mjs, the same checks as the layout balance e2e test), the
 // footer's Weekly reports, Terms, Privacy, Refunds and Contact links, no console errors and no Content Security
-// Policy report. The landing's h2 order, read from the page: The studio, live (docs/specs/final-state.md), Pick a card to fund, Play the first game (decision 70), How the cards move,
-// the team (only when there is one) and Where the money goes. Home's cards to fund
+// Policy report. The landing's h2 order, read from the page: The studio, live (docs/specs/final-state.md), Pick a card to fund, Play the first game (decision 70), the stations Ideas,
+// Next up, Building and Shipped (docs/specs/place.md), the team (only when there is one) and Where the money goes. Home's cards to fund
 // (docs/specs/home-flow.md) as full faces, at most three, or the panel that funds the next card in
-// line; then the flow: Next up, Building and Shipped in order, each with at most three cards or its
-// tile, never blank. The status
+// line; then the stations: Ideas with its ideas or tile, and Next up, Building and Shipped in order, each
+// with at most three cards, its tile or (Next up) the Game Designer's line, never blank. The status
 // line, the pool figure, the shipped cards, the fund links and /contribute's choices. /how-it-works carries no Payment Link and no client_reference_id; /team
 // draws every agent in Running, Starts later and Planned, runs at least one, shows claude-opus-5-5 on
 // each running or paused row and no model on the rest; /roadmap answers with home (there is no roadmap page). The
@@ -108,10 +108,11 @@ const FOOTER_LINKS = [
   ['Refunds', '/refunds'],
   ['Contact', '/contact'],
 ];
-const H2_ORDER = ['The studio, live', 'Pick a card to fund', 'Play the first game', 'How the cards move', 'The team', 'Where the money goes'];
+const H2_ORDER = ['The studio, live', 'Pick a card to fund', 'Play the first game', 'Ideas', 'Next up', 'Building', 'Shipped', 'The team', 'Where the money goes'];
 const OPTIONAL_H2 = new Set(['The team']);
-// Home's flow (docs/specs/home-flow.md): three lanes in this order, each with at most three cards or
-// its tile saying what happens next, never blank. The cards to fund sit above them, at most three.
+// Home's floor (docs/specs/place.md): after the ideas, three stations in this order, each with at most
+// three cards, its tile saying what happens next or (Next up) the Game Designer's line, never blank. The
+// cards to fund sit above them, at most three.
 const FLOW_LANES = ['Next up', 'Building', 'Shipped'];
 const FLOW_LANE_CARDS = 3;
 const HOME_FUND_CARDS = 3;
@@ -418,18 +419,25 @@ try {
       `home's cards to fund: ${homeFund.length > 0 ? `${homeFund.length} full faces` : homeFundPanel > 0 ? 'the fund-the-next-card panel' : 'BLANK'}`,
     );
 
-    // The flow is never blank: three lanes in order, each with its cards or its tile.
-    const lanes = main.locator('ol.flow-lanes > li.flow-lane');
-    const laneNames = (await lanes.locator('h3.flow-title').allTextContents()).map((title) => title.replace(/\s+\d[\d,]* cards?$/, '').trim());
+    // The ideas station is never blank: the players' ideas or its tile, once they have loaded.
+    const ideasPart = main.locator('[data-station-part="ideas"]');
+    await ideasPart.locator('[aria-busy="true"]').waitFor({ state: 'detached', timeout: 15000 }).catch(() => undefined);
+    const ideas = await ideasPart.locator('ol.floor-ideas > li.suggestion').count();
+    const ideasTile = await ideasPart.locator('.flow-empty').count();
+    check(ideas + ideasTile > 0, `home ideas station is not blank (${ideas > 0 ? `${ideas} ideas` : ideasTile > 0 ? 'tile' : 'BLANK'})`);
+
+    // The flow is never blank: three stations in order, each with its cards, its tile or the drafting line.
+    const lanes = main.locator('.floor-parts > [data-station-part="next"], .floor-parts > [data-station-part="building"], .floor-parts > [data-station-part="shipped"]');
+    const laneNames = (await lanes.locator(':scope > h2').allTextContents()).map((title) => title.trim());
     check(JSON.stringify(laneNames) === JSON.stringify(FLOW_LANES), `home flow lanes ${JSON.stringify(laneNames)}`);
     const filled = [];
     for (let i = 0; i < (await lanes.count()); i += 1) {
       const cards = await lanes.nth(i).locator('li.card').count();
-      const tiles = await lanes.nth(i).locator('.flow-empty').count();
+      const tiles = (await lanes.nth(i).locator('.flow-empty').count()) + (await lanes.nth(i).locator('.flow-agent').count());
       filled.push(`${laneNames[i]}=${cards > 0 ? `${cards} cards` : tiles > 0 ? 'tile' : 'BLANK'}`);
       check(cards + tiles > 0 && cards <= FLOW_LANE_CARDS, `home flow lane ${laneNames[i]} is not blank (${filled.at(-1)})`);
     }
-    const shippedLane = lanes.filter({ has: page.locator('h3', { hasText: /^Shipped/ }) });
+    const shippedLane = main.locator('.floor-parts > [data-station-part="shipped"]');
     const shippedCards = await shippedLane.locator('li.card').count();
     if (shippedCards === 0) {
       skip('Shipped cards: nothing has shipped yet');
