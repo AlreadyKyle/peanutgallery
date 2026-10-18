@@ -5,13 +5,15 @@
 // region. Each unit button's accessible name is its full label from render/a11y.ts ("Buy Gatherer:
 // costs 10 dust, 0 owned"); what it draws (icon, name, cost, owned, how close it is to affordable) is
 // decoration. Buttons drive the same sim `apply` actions as a tap on the pile, through render/game.ts.
-// The layers add three more: the dust devil's catch button and a fork's options (over the island on a
-// phone, at the top of the panel on a wide screen) while there is one, and the order on the board.
+// The layers add three more: the dust devil's catch button (over the island on a phone, under Strike
+// on a wide screen) while there is one, a fork's options at the top of the shop while one waits, and
+// the order on the board. On a phone everything below Strike scrolls inside a bounded sheet, so the
+// island always keeps a slice of the stage and nothing is pushed off the top of the screen.
 import { canBuyPerk, canPress, costOf, findRow, gemsOpen, hasPerk, ownedCount, unitRate } from '../sim/sim';
 import type { SimAction, SimConfig, SimState } from '../sim/types';
 import { Announcer, controlsView, describeEffect } from './a11y';
 import { describePerk, devilView, forkView, gemsLine, milestoneHint, notEnough, orderView, pressView } from './depth';
-import { fill, formatDust, formatRate } from './format';
+import { fill, formatDust, formatRate, groupThousands } from './format';
 import { unlockSummary } from './goals';
 import { unitIcon } from './icons';
 import type { Strings } from './strings';
@@ -71,6 +73,7 @@ export class AccessibleControls {
   private readonly perkButtons = new Map<string, PerkButton>();
   private readonly perksToggle: HTMLButtonElement;
   private readonly devil: HTMLButtonElement;
+  private readonly shop: HTMLElement;
   private readonly fork: HTMLElement;
   private readonly forkTitle: HTMLElement;
   private readonly forkMore: HTMLElement;
@@ -114,9 +117,9 @@ export class AccessibleControls {
     strikeDescription.id = 'controls-strike-description';
     root.append(this.strike, strikeDescription);
 
-    // While there is one: the dust devil's catch button and the fork waiting for a choice. On a phone
-    // they hang over the island just above the shop, outside its height, so the island never
-    // reframes as they come and go (render/style.css).
+    // While there is one: the dust devil's catch button. On a phone it hangs over the island just above
+    // the shop, outside its height, so the island never reframes as a devil comes and goes
+    // (render/style.css).
     const pops = el('div', 'pops');
     this.devil = el('button', 'devil');
     this.devil.type = 'button';
@@ -134,8 +137,15 @@ export class AccessibleControls {
     this.forkOptions = el('div', 'fork-options');
     this.forkMore = el('p', 'fork-more');
     this.fork.append(forkHead, this.forkOptions, this.forkMore);
-    pops.append(this.devil, this.fork);
+    pops.append(this.devil);
     root.append(pops);
+
+    // The shop below Strike: the fork waiting for a choice first, then the units, the order, the gems
+    // and the unlock list. On a phone it scrolls inside the sheet, which never grows past its share of
+    // the stage; on a wide screen it lays out in the side panel as if it were not there.
+    this.shop = el('div', 'shop');
+    this.shop.append(this.fork);
+    root.append(this.shop);
 
     const grid = el('div', 'units');
     for (const row of config.spawnTable.rows) {
@@ -179,7 +189,7 @@ export class AccessibleControls {
       grid.append(button);
       this.unitButtons.set(row.id, { button, fill: fillBar, owned, cost, badge, rate, next, progress: -1, bumpUntil: 0, shakeAt: -10_000 });
     }
-    root.append(grid);
+    this.shop.append(grid);
 
     // The order on the board, from its unlock: what it asks for, how far along it is, and one button
     // that fills it once it is met (after its rest) or swaps it for another until then. One button, so
@@ -207,7 +217,7 @@ export class AccessibleControls {
       else if (mode === 'swap') this.target?.act({ type: 'swap' });
     });
     this.order.append(orderHeading, orderBody, this.orderButton);
-    root.append(this.order);
+    this.shop.append(this.order);
 
     // Gems: press the pile for a new season, and spend gems on perks. Hidden until its unlock opens.
     this.gems = el('section', 'gems');
@@ -280,7 +290,7 @@ export class AccessibleControls {
       this.perkButtons.set(perk.id, { button, cost });
     }
     this.gems.append(gemsHeading, this.gemsHeld, this.press, this.confirm, this.perksToggle, perksHeading, perks);
-    root.append(this.gems);
+    this.shop.append(this.gems);
 
     // The unlock list: earned unlocks as one count, the next few by name.
     const unlocks = el('section', 'unlocks');
@@ -289,7 +299,7 @@ export class AccessibleControls {
     heading.append(' ', this.unlockCount);
     this.unlockList = el('ul', 'unlocks-list');
     unlocks.append(heading, this.unlockList);
-    root.append(unlocks);
+    this.shop.append(unlocks);
 
     this.live = el('p', 'visually-hidden');
     this.live.setAttribute('aria-live', 'polite');
@@ -352,6 +362,9 @@ export class AccessibleControls {
       if (button.style.transform !== transform) button.style.transform = transform;
     }
     this.updateGems(state);
+    // On a phone, whether the shop has more below what the sheet shows (a wide screen's shop has no box).
+    const more = this.shop.scrollHeight - this.shop.scrollTop - this.shop.clientHeight > 2;
+    if (this.shop.classList.contains('more') !== more) this.shop.classList.toggle('more', more);
     this.updateDevil(state);
     this.updateFork(state);
     this.updateOrder(state);
@@ -374,7 +387,7 @@ export class AccessibleControls {
     const ready = canPress(state, this.config);
     setAttr(this.press, 'aria-disabled', String(!ready));
     if (!ready && !this.confirm.hidden) this.closeConfirm();
-    setText(this.confirmText, fill(this.strings.depth.pressConfirm, { season: String(season + 2), gems: String(press.gems) }));
+    setText(this.confirmText, fill(this.strings.depth.pressConfirm, { season: String(season + 2), gems: groupThousands(press.gems) }));
     const perkRows = this.config.unlocks.gems?.perks ?? [];
     setText(this.perksToggle, fill(this.strings.depth.perksShow, { owned: String(state.perks?.length ?? 0), total: String(perkRows.length) }));
     for (const perk of perkRows) {
@@ -434,6 +447,8 @@ export class AccessibleControls {
       return button;
     });
     this.forkOptions.replaceChildren(...buttons);
+    // A new fork sits at the top of the shop: scroll the sheet back to it so its options are in view.
+    this.shop.scrollTop = 0;
     if (hadFocus) buttons[0]?.focus();
   }
 

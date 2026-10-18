@@ -25,7 +25,7 @@ import {
 } from '../sim/sim';
 import type { ForkEffect, ForkOption, OrderState, PerkRow, SimConfig, SimState, UnlockRow, WeatherKind } from '../sim/types';
 import { formatTimes } from './a11y';
-import { fill, formatDust, formatPercent } from './format';
+import { fill, formatDust, formatPercent, groupThousands } from './format';
 import type { Strings } from './strings';
 
 function unitName(config: SimConfig, unit: string): string {
@@ -140,8 +140,8 @@ export function pressView(state: SimState, config: SimConfig, strings: Strings):
     return {
       gems,
       ready: true,
-      text: fill(strings.depth.press, { gems: String(gems) }),
-      label: fill(strings.depth.pressLabel, { gems: String(gems) }),
+      text: fill(strings.depth.press, { gems: groupThousands(gems) }),
+      label: fill(strings.depth.pressLabel, { gems: groupThousands(gems) }),
     };
   }
   const text = fill(strings.depth.pressNotYet, { amount: formatDust(dustForNextGem(state, config) ?? 0) });
@@ -153,7 +153,7 @@ export function gemsLine(state: SimState, config: SimConfig, strings: Strings): 
   const gems = state.gems ?? 0;
   const bonus = config.unlocks.gems?.bonusPerGem ?? 0;
   if (gems === 0 && (state.season ?? 0) === 0) return fill(strings.depth.gemsIntro, { percent: formatPercent(1 + bonus) });
-  return fill(strings.depth.gemsHeld, { gems: String(gems), percent: formatPercent(1 + bonus * gems) });
+  return fill(strings.depth.gemsHeld, { gems: groupThousands(gems), percent: formatPercent(1 + bonus * gems) });
 }
 
 export interface GemGoal {
@@ -232,8 +232,8 @@ export function forkOpenWords(row: UnlockRow, config: SimConfig, strings: String
 
 /** An order in words: "Own 4 Cart", "Gather 1,200 dust", "Strike 30 times". */
 export function orderWords(order: OrderState, config: SimConfig, strings: Strings): string {
-  if (order.type === 'own') return fill(strings.depth.orderOwn, { count: String(order.target), unit: unitName(config, order.unit ?? '') });
-  if (order.type === 'strikes') return fill(strings.depth.orderStrikes, { count: String(order.target) });
+  if (order.type === 'own') return fill(strings.depth.orderOwn, { count: groupThousands(order.target), unit: unitName(config, order.unit ?? '') });
+  if (order.type === 'strikes') return fill(strings.depth.orderStrikes, { count: groupThousands(order.target) });
   return fill(strings.depth.orderGather, { amount: formatDust(order.target) });
 }
 
@@ -263,7 +263,7 @@ export function orderView(state: SimState, config: SimConfig, strings: Strings):
   const reward = orderReward(state, config);
   const amount = formatDust(reward);
   const have = Math.min(progress.have, progress.need);
-  const show = (n: number): string => (order.type === 'gather' ? formatDust(Math.floor(n)) : String(n));
+  const show = (n: number): string => (order.type === 'gather' ? formatDust(Math.floor(n)) : groupThousands(n));
   return {
     text: orderWords(order, config, strings),
     count: fill(strings.depth.orderProgress, { have: show(have), need: show(progress.need) }),
@@ -273,7 +273,7 @@ export function orderView(state: SimState, config: SimConfig, strings: Strings):
     reward,
     fillText: fill(strings.depth.orderFill, { amount }),
     fillLabel: fill(strings.depth.orderFillLabel, { amount }),
-    filled: fill(strings.depth.ordersCount, { count: String(state.ordersFilled ?? 0), percent: formatPercent(orderBonus(state, config)) }),
+    filled: fill(strings.depth.ordersCount, { count: groupThousands(state.ordersFilled ?? 0), percent: formatPercent(orderBonus(state, config)) }),
   };
 }
 

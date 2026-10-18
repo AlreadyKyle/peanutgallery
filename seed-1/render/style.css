@@ -282,7 +282,10 @@ a:focus-visible {
   color: var(--muted);
 }
 
-/* The shop: Strike and the units, over the bottom of the stage on a phone. */
+/* The shop: Strike and the units, over the bottom of the stage on a phone. The sheet never takes more
+   than its share of the stage, so the island always keeps a slice between the HUD and the sheet (the
+   HUD is about 90px tall; the island keeps at least 30% of the stage), and whatever does not fit
+   scrolls inside the shop below Strike. */
 .controls {
   position: absolute;
   left: 8px;
@@ -291,9 +294,34 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: max(170px, calc(70% - 96px));
+}
+
+/* Everything below Strike. The padding keeps the ink shadows inside the scroll box; the negative
+   margins take it back, so nothing moves. */
+.shop {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  margin: -4px -6px -6px -4px;
+  padding: 4px 6px 6px 4px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+/* More of the shop below the fold: its last row fades out instead of ending on a hard cut. */
+.shop.more {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 30px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 30px), transparent);
+}
+
+.shop > * {
+  flex: none;
 }
 
 .strike {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -998,6 +1026,7 @@ footer {
     right: 18px;
     bottom: 18px;
     left: auto;
+    max-height: none;
     width: 330px;
     padding: 14px;
     gap: 10px;
@@ -1006,6 +1035,11 @@ footer {
     border: 2px solid var(--ink);
     border-radius: 18px;
     box-shadow: 4px 4px 0 var(--ink);
+  }
+
+  /* The side panel scrolls as one; the shop lays out in it as if it were not there. */
+  .shop {
+    display: contents;
   }
 
   .units {
@@ -1144,9 +1178,10 @@ footer {
   }
 }
 
-/* The dust devil's catch button and a fork's options: on a phone they hang over the island just above
-   the shop, outside its height, so the island never reframes as they come and go; on a wide screen
-   they sit at the top of the panel. Moved by nothing but the state: no CSS animation. */
+/* The dust devil's catch button: on a phone it hangs over the island just above the shop, outside its
+   height, so the island never reframes as a devil comes and goes; on a wide screen it sits under
+   Strike. A fork's options open the shop instead (render/controls.ts), so on a phone they scroll with
+   it and are never pushed above the screen. Moved by nothing but the state: no CSS animation. */
 .pops {
   position: absolute;
   left: 0;
@@ -1443,5 +1478,37 @@ footer {
 
   .order-text {
     white-space: normal;
+  }
+}
+
+/* A phone, or any screen too small for the side panel. A short screen keeps the stage at least 560px
+   tall (or the screen's height, if that is less) and lets the page scroll down to the footer, so the
+   island, the HUD and the sheet are never squeezed into what the footer leaves. A tall phone is
+   unchanged: the stage fills what the footer leaves, as before. */
+@media (max-width: 859.98px), (max-height: 519.98px) {
+  body {
+    height: auto;
+    min-height: 100%;
+  }
+
+  #stage {
+    flex: 1 0 auto;
+    min-height: min(560px, 100vh);
+    min-height: min(560px, 100svh);
+  }
+}
+
+/* The studio line on a narrow screen: the funding link takes its own line and the separator before it
+   is not drawn, so no line ends on a dangling dot (render/main.ts marks the separators). */
+@media (max-width: 599.98px) {
+  #studio-line .studio-sep-last {
+    display: none;
+  }
+
+  #studio-line .studio-next {
+    display: flex;
+    justify-content: center;
+    width: fit-content;
+    margin: 0 auto;
   }
 }

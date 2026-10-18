@@ -29,6 +29,14 @@ describe('number formatting', () => {
     expect(formatRate(2e6)).toBe('2.00M');
   });
 
+  it('never prints a raw exponent float for a huge count', () => {
+    expect(groupThousands(4.3088693800637674e98)).toBe('4.31e98');
+    expect(groupThousands(1e21)).toBe('1.00e21');
+    expect(groupThousands(9.99e20)).toBe('999,000,000,000,000,000,000');
+    expect(formatPercent(1 + 4.3e98)).toBe('4.30e100%');
+    expect(formatDust(1e301)).toBe('1.00e301');
+  });
+
   it('renders multipliers as whole percentages', () => {
     expect(formatPercent(1.05)).toBe('5%');
     expect(formatPercent(2)).toBe('100%');

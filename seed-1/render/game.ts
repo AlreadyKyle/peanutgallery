@@ -10,6 +10,9 @@ import type { OrderState, SimAction, SimConfig, SimState, UnlockRow, WeatherKind
 export const SAVE_KEY = 'dust.save';
 // Where a save goes when the player starts from someone's seed instead, so nothing is ever lost.
 export const BACKUP_KEY = 'dust.save.before-seed';
+// Set when the save under SAVE_KEY was started from a seed, so a second seed never copies that run
+// over the player's own game in BACKUP_KEY.
+export const SEED_RUN_KEY = 'dust.save.from-seed';
 export const SAVE_INTERVAL_MS = 5000;
 
 export interface GameListener {
