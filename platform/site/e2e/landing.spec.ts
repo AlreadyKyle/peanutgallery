@@ -218,14 +218,16 @@ for (const size of [
     // One headline: the lede is the lead size, not a second display line.
     await expect(page.locator('main h1')).toHaveCount(1);
     expect(await page.locator('.hero-home .lede').evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeLessThanOrEqual(20);
-    // The pitch starts level with the room's top, beside it; the pipe sits on the pitch's text edge,
-    // its foot on the room's.
+    // The pitch starts level with the room's top, beside it; the pipe sits on the pitch's text edge.
+    // The paper screen keeps the room's own height rather than stretching to the right column, so
+    // the room fills it (the product pass's design review: an empty screen under the room).
     const h1 = await box('.hero-home h1');
     expect(Math.abs(h1.y - stage.y)).toBeLessThanOrEqual(1);
     expect(h1.x).toBeGreaterThan(stage.x + stage.width);
     const pipe = await box('.home .pipe');
     expect(Math.abs(pipe.x - h1.x)).toBeLessThanOrEqual(1);
-    expect(Math.abs(pipe.y + pipe.height - (stage.y + stage.height))).toBeLessThanOrEqual(1);
+    const room = await box('.floor-plate .studio-stage svg.room');
+    expect(room.height).toBeGreaterThan(stage.height * 0.75);
     // The room is the wider side.
     expect(stage.width).toBeGreaterThan(pipe.width);
     // The plate draws no how-to line and no pipe intro: both are read out, not shown (the board,
