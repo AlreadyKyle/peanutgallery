@@ -311,10 +311,13 @@ export function pieceBox(plan: RoomPlan, piece: StationPiece): Box {
   return plan[piece];
 }
 
-/** Where a station's tag stands on screen: over the middle of its piece's top. */
+/** How far over a piece's top its tag floats, in tiles: clear of the agent at a desk or on the sofa. */
+const TAG_LIFT = 1.25;
+
+/** Where a station's tag stands on screen: over the middle of its piece, above whoever works there. */
 export function tagPoint(plan: RoomPlan, piece: StationPiece): { sx: number; sy: number } {
   const box = pieceBox(plan, piece);
-  return iso(box.x + box.w / 2, box.y + box.d / 2, (box.z ?? 0) + box.h, TILE);
+  return iso(box.x + box.w / 2, box.y + box.d / 2, (box.z ?? 0) + box.h + TAG_LIFT, TILE);
 }
 
 /** The outline of a lit station's footprint on the floor, a little wider than the piece. */

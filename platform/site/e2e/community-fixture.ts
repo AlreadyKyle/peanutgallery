@@ -62,7 +62,7 @@ export const PLAYER = {
   publicByDefault: true,
 };
 
-export type CommunityOptions = { profile?: unknown; ideas?: readonly unknown[]; posts?: Post[] };
+export type CommunityOptions = { profile?: unknown; ideas?: readonly unknown[]; posts?: Post[]; signInOpen?: boolean };
 
 /** Answers /api/community: the ideas board, and the player's RPCs under any session. */
 export async function answerCommunity(page: Page, options: CommunityOptions = {}): Promise<Post[]> {
@@ -74,6 +74,7 @@ export async function answerCommunity(page: Page, options: CommunityOptions = {}
     const reply = (status: number, value: unknown) => route.fulfill({ status, contentType: json, body: JSON.stringify(value) });
     if (request.method() === 'GET') {
       if (url.pathname === '/api/community/suggestions') return reply(200, { items: ideas, next: null });
+      if (url.pathname === '/api/community/auth/settings') return reply(200, { signIn: options.signInOpen ?? true });
       return reply(503, { error: 'not in the e2e fixtures' });
     }
     const body = request.postData() ? (JSON.parse(request.postData()!) as Record<string, unknown>) : {};

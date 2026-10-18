@@ -271,13 +271,13 @@ export function Landing() {
       <div className="band floor-band">
         {view === null ? null : <SinceLastVisit cards={view.snapshot.cards} since={since} />}
         {view === null ? (
-          <FundSection studio={studio} live={live} index={2} />
+          <FundSection studio={studio} live={live} index={1} />
         ) : (
           <div className="floor">
             <FloorRail snapshot={view.snapshot} lit={lit} counts={stationCounts(view.snapshot, view.groups, null)} />
             <div className="floor-parts">
-              <IdeasStation snapshot={view.snapshot} groups={view.groups} index={1} />
-              <FundSection studio={studio} live={live} index={2} />
+              <FundSection studio={studio} live={live} index={1} />
+              <IdeasStation snapshot={view.snapshot} groups={view.groups} index={2} />
               <BuildingStation snapshot={view.snapshot} groups={view.groups} index={3} />
               <ShippedStation snapshot={view.snapshot} groups={view.groups} index={4} />
             </div>

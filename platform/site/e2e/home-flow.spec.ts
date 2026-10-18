@@ -4,9 +4,9 @@ import { PAYMENT_LINK } from './fixture-env';
 import { DEFAULT_STUDIO, expect, overflowsHorizontally, test, type StudioFixture } from './fixtures';
 import { DRAFTING_STUDIO, EMPTY_STUDIO, PROD_STUDIO } from './prod-studio';
 
-// Home's card band (docs/specs/home-flow.md), now the studio's floor (docs/specs/place.md): Ideas,
-// where the Game Designer drafts cards, then the cards to fund as full faces or the panel that funds
-// the next card in line, then Building and Shipped, in the order a card moves, and no station is ever
+// Home's card band (docs/specs/home-flow.md), now the studio's floor (docs/specs/place.md): the cards
+// to fund as full faces or the panel that funds the next card in line, then Ideas, where the Game
+// Designer drafts cards, then Building and Shipped, and no station is ever
 // blank, whatever the studio holds. PROD_STUDIO is production as it was when the home page first
 // looked empty: everything shipped, nothing open and the drafts used up.
 
@@ -42,15 +42,15 @@ for (const { label, studio } of CASES) {
   test.describe(`home flow, ${label}`, () => {
     test.use({ studio });
     for (const viewport of VIEWPORTS) {
-      test(`Ideas, the cards to fund, Building and Shipped, none blank, at ${viewport.width}px`, async ({ page }) => {
+      test(`the cards to fund, Ideas, Building and Shipped, none blank, at ${viewport.width}px`, async ({ page }) => {
         await page.setViewportSize(viewport);
         await page.goto('/');
         const h2 = page.getByRole('main').getByRole('heading', { level: 2 });
-        // The live studio is on the plate (docs/specs/final-state.md); Ideas opens the floor and the cards
-        // to fund come next, above the first game's tile (decision 70).
+        // The live studio is on the plate (docs/specs/final-state.md); the cards to fund open the floor
+        // and Ideas come next, above the first game's tile (decision 70).
         await expect(h2.nth(0)).toHaveText('The studio, live');
-        await expect(h2.nth(1)).toHaveText(copy.ideas.title);
-        await expect(h2.nth(2)).toHaveText(copy.flow.fundTitle);
+        await expect(h2.nth(1)).toHaveText(copy.flow.fundTitle);
+        await expect(h2.nth(2)).toHaveText(copy.ideas.title);
         const items = await lanes(page);
         const fund = page.getByRole('region', { name: copy.flow.fundTitle });
         expect((await fund.locator('ul.fund-grid > li.card').count()) + (await fund.locator('.fund-empty').count())).toBeGreaterThan(0);

@@ -7,6 +7,9 @@
 //   GET  /api/community/seeds?sort=&cursor=              community_seeds()        s-maxage 15
 //   GET  /api/community/suggestions?sort=&area=&cursor=  community_suggestions()  s-maxage 15
 //   GET  /api/community/profile/<handle>                 community_profile()      s-maxage 30, 404 if none
+//   GET  /api/community/auth/settings                    {signIn}: whether email sign-in takes new
+//                                     players, from Supabase Auth's public settings  s-maxage 60
+//                                     (docs/specs/place.md: the site hides profile prompts while not)
 //   POST /api/community/auth/otp      {email, redirectTo}  sends the magic link (implicit flow: the link
 //                                     lands on redirectTo with #access_token=...&refresh_token=...)
 //   POST /api/community/auth/refresh  {refresh_token}      -> {access_token, refresh_token, expires_in}
@@ -154,12 +157,37 @@ async function post(req: Request, url: URL): Promise<Response> {
   }
 }
 
+/**
+ * Whether a visitor can make a profile now: Supabase Auth's public settings say email sign-in is on
+ * and sign-ups are open. Read with the publishable key, kept at the edge a minute, and answered only
+ * as one boolean, so nothing else of the project's auth settings leaves the function.
+ */
+async function signInSettings(url: URL): Promise<Response> {
+  if (url.search !== '') return refuse(400, 'No query string is allowed');
+  try {
+    const response = await fetch(`${SUPABASE_URL}/auth/v1/settings`, {
+      headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Accept: 'application/json' },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+    if (!response.ok) return refuse(502, 'The sign-in service did not answer');
+    const settings = (await response.json()) as { external?: { email?: unknown }; disable_signup?: unknown } | null;
+    const signIn = settings?.external?.email === true && settings.disable_signup !== true;
+    return json(200, { signIn }, {
+      'Netlify-CDN-Cache-Control': 'public, durable, s-maxage=60, stale-while-revalidate=300',
+      'Cache-Control': 'public, max-age=0, must-revalidate',
+    });
+  } catch {
+    return refuse(502, 'The sign-in service did not answer');
+  }
+}
+
 // Netlify calls the default export with (request, context); the tests stub globalThis.fetch.
 export default async function community(req: Request): Promise<Response> {
   const url = new URL(req.url);
   if (!url.pathname.startsWith(`${COMMUNITY_PREFIX}/`)) return refuse(404, 'Not found');
   if (req.method === 'GET') {
     const rest = url.pathname.slice(COMMUNITY_PREFIX.length + 1);
+    if (rest === 'auth/settings') return signInSettings(url);
     if (rest.startsWith('auth/') || rest.startsWith('rpc/')) return refuse(405, 'Only POST is allowed', { Allow: 'POST' });
     return getDocument(url);
   }

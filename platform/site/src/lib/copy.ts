@@ -527,7 +527,7 @@ export const copy = {
   },
   suggest: {
     title: 'Ideas',
-    lede: 'Every card starts as an idea. Pitch the change you want, upvote the ideas you back, and the Game Designer turns the top ones into cards to fund.',
+    lede: 'Pitch the change you want and upvote the ideas you back. The Game Designer turns the strongest into cards to fund, beside the studio\'s own plans.',
     sendTitle: 'Pitch an idea',
     safety:
       'A review agent with no tools reads every suggestion and writes a short summary in its own words. The agents that build never see what you wrote, and nothing here is ever an instruction to them.',
@@ -659,6 +659,8 @@ export const copy = {
   me: {
     title: 'Your desk',
     lede: 'An account is optional. It gives you a name, an avatar, and a desk with the cards you helped fund and the ideas you pitched.',
+    closedTitle: 'Profiles are not open yet',
+    closedBody: 'Sign-in is off for now, so there are no profiles yet. You can still fund any card as a guest: paying never needs an account.',
     loading: 'Loading your profile.',
     signInTitle: 'Sign in',
     signInBody: 'Enter your email and the studio sends you a link that signs you in. There is no password.',
@@ -743,6 +745,7 @@ export const copy = {
     yourCards: 'Your cards',
     yourIdeas: 'Your ideas',
     noCards: 'Fund a card and it joins your collection here, with its rarity.',
+    fund: 'Fund a card',
     desk: 'Open your desk',
     pitch: 'Pitch an idea',
     more: '{n} more on your desk',
@@ -750,10 +753,12 @@ export const copy = {
   // Home's Ideas station (docs/specs/place.md): the crowd's top ideas, first in the machine.
   ideas: {
     title: 'Ideas',
-    intro: 'Every card starts as an idea. Players pitch changes and upvote the ones they back, and the Game Designer turns the top ideas into cards.',
+    intro: 'Players pitch changes and upvote the ones they back. The Game Designer turns the strongest into cards, beside the studio\'s own plans.',
+    closed: 'Pitching needs a profile, and profiles are not open yet. Anyone can read the board.',
     pitch: 'Pitch an idea',
     all: 'See every idea',
     empty: 'No ideas on the board yet. Sign in and pitch the first one.',
+    emptyClosed: 'No ideas on the board yet.',
     unavailable: 'The ideas did not load just now. The full board is on the ideas page.',
     loading: 'Loading the ideas.',
     upvoteOne: '1 upvote',
@@ -766,16 +771,17 @@ export const copy = {
   perks: {
     title: 'What you get',
     guestTitle: 'As a guest',
-    guest: ['A Supporter number on the card you fund.', 'An email from the studio when the card ships.'],
+    guest: ['A Supporter number on the card you fund.', "The card's own page, to watch the agents build it."],
     profileTitle: 'With a free profile',
     profile: [
-      '10 XP for every dollar, more on rare cards.',
+      '10 XP for every dollar, more on rarer cards.',
       'The card joins your collection with its rarity.',
       'Badges, like It shipped when a card you funded goes live.',
       'Levels that unlock avatar parts and frames.',
       'Your name on the card, or Anonymous if you prefer.',
     ],
     note: 'Paying never needs an account. Paid as a guest already? Sign in with the email on your receipt and claim it.',
+    noteClosed: 'Paying never needs an account.',
     signIn: 'Make a free profile',
     keepTitle: 'Keep this card',
     keepBody: 'Sign in with the email on your receipt and this card joins your collection, with its XP and badges. There is no password.',

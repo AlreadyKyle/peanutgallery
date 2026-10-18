@@ -3,6 +3,7 @@ import { sendMagicLink, useSignedIn } from '../lib/account';
 import { CommunityError } from '../lib/community';
 import { copy } from '../lib/copy';
 import { clearPendingFollow, followable, followCard, pendingFollow, rememberPendingFollow, unfollowCard, useFollows } from '../lib/follows';
+import { useSignInOpen } from '../lib/sign-in';
 import { Glyph } from './Glyph';
 
 // "Tell me when this ships" on a card's page (docs/specs/card-follows.md). Signed in, it is a toggle
@@ -50,6 +51,7 @@ function SignIn({ cardId }: { cardId: string }) {
 
 export function FollowCard({ cardId, stage }: { cardId: string; stage: string }) {
   const signedIn = useSignedIn();
+  const signInOpen = useSignInOpen();
   const follows = useFollows();
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status>('idle');
@@ -91,6 +93,8 @@ export function FollowCard({ cardId, stage }: { cardId: string; stage: string })
   }, [signedIn, follows.state, listed, cardId]);
 
   if (!followable(stage)) return null;
+  // Following needs a profile; while sign-in is closed a visitor is not offered one.
+  if (!signedIn && !signInOpen) return null;
 
   if (!signedIn) {
     return (

@@ -211,7 +211,7 @@ describe('Site chrome', () => {
       [copy.studioName, '/'],
       // The you slot (docs/specs/place.md): Sign in for a visitor, the player's desk once signed in.
       [copy.you.signIn, '/me'],
-      // The top bar keeps to what a first visit needs, Ideas first since every card starts as one;
+      // The top bar keeps to what a first visit needs, Ideas first in the links since players pitch there;
       // goals and seeds are in the footer (docs/specs/brand.md, the second review).
       [copy.nav.suggest, '/suggest'],
       [copy.teamNav, '/team'],

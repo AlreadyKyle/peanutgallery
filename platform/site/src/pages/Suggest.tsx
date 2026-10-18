@@ -10,6 +10,7 @@ import { CommunityError, relativeTime, usePagedCommunity } from '../lib/communit
 import type { DeclineReason, SuggestionState, SuggestionSummary } from '../lib/community-types';
 import { copy } from '../lib/copy';
 import { legal } from '../lib/legal';
+import { useSignInOpen } from '../lib/sign-in';
 
 // /suggest (docs/specs/final-state.md, Suggestions): the crowd's suggestions, sorted by top or new
 // and filtered by area, each with its upvotes, its state in words and, when declined, the reason from
@@ -213,6 +214,7 @@ function SubmitForm({ onSent }: { onSent: () => void }) {
 
 export function Suggest() {
   const signedIn = useSignedIn();
+  const signInOpen = useSignInOpen();
   const [sort, setSort] = useState<'top' | 'new'>('top');
   const [area, setArea] = useState<string>('all');
   const query = `/suggestions?sort=${sort}${area === 'all' ? '' : `&area=${encodeURIComponent(area)}`}`;
@@ -228,6 +230,14 @@ export function Suggest() {
           <h2 id="suggest-send">{copy.suggest.sendTitle}</h2>
           {signedIn ? (
             <SubmitForm onSent={list.reload} />
+          ) : !signInOpen ? (
+            <>
+              <p>{copy.ideas.closed}</p>
+              <p className="notice-plain">
+                <Glyph name="checklist" />
+                <span>{copy.suggest.safety}</span>
+              </p>
+            </>
           ) : (
             <>
               <p>{copy.suggest.signInFirst}</p>

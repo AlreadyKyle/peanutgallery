@@ -5,7 +5,7 @@ import { expect, overflowsHorizontally, test } from './fixtures';
 import { LIVE_CARD_ID, OPEN_CARD_ID, SESSIONS, SUPPORTER_STUDIO } from './supporter-studio';
 
 // Mob Machine as a place (docs/specs/place.md): the top bar knows who is here, home is the studio's
-// floor with the room's stations as links, Ideas are the first station, /me is the player's desk, and
+// floor with the room's stations as links, Fund first and Ideas beside it, /me is the player's desk, and
 // what a contribution gets you is said where people pay and once they have. Set E2E_PLACE_SHOTS to a
 // folder to also save the pages' frames, signed out and signed in, at 375, 768 and 1440px.
 test.use({ studio: SUPPORTER_STUDIO });
@@ -16,18 +16,18 @@ test('signed out, the top bar offers Sign in and the floor names every station',
   await page.goto('/');
   await expect(page.locator('.you-chip')).toHaveText('Sign in');
   await expect(page.locator('.you-chip')).toHaveAttribute('href', '/me');
-  // The room's tags and the rail's list both go to the five stations, in the machine's order.
+  // The room's tags and the rail's list both go to the five stations, Fund first.
   const tags = page.locator('.station-tags a');
   await expect(tags).toHaveCount(5);
   await expect(page.locator('.floor-stations a')).toHaveCount(5);
   expect(await page.locator('[data-station-part]').evaluateAll((parts) => parts.map((part) => part.getAttribute('data-station-part')))).toEqual([
-    'ideas',
     'fund',
+    'ideas',
     'building',
     'shipped',
     'team',
   ]);
-  // The Ideas station shows the board's top ideas, upvotes and all, before any card.
+  // The Ideas station shows the board's top ideas, upvotes and all.
   const ideas = page.locator('[data-station-part="ideas"]');
   await expect(ideas.getByText(IDEAS[0]!.title)).toBeVisible();
   await expect(ideas.getByText('14 upvotes')).toBeVisible();
@@ -35,7 +35,7 @@ test('signed out, the top bar offers Sign in and the floor names every station',
   // What you get sits with the cards to fund, and paying never asks for an account.
   const perks = page.locator('[data-station-part="fund"] .perks');
   await expect(perks.getByText('As a guest', { exact: true })).toBeVisible();
-  await expect(perks.getByText('10 XP for every dollar, more on rare cards.')).toBeVisible();
+  await expect(perks.getByText('10 XP for every dollar, more on rarer cards.')).toBeVisible();
   // Pressing a station in the room goes to its part of the floor.
   await page.locator('.station-tags a[href="#shipped"]').click();
   await expect(page).toHaveURL(/#shipped$/);
@@ -51,6 +51,7 @@ test('signed in, the top bar shows the player and home welcomes them back with t
   await expect(page.getByRole('heading', { level: 1, name: 'Welcome back, Wren.' })).toBeVisible();
   const panel = page.locator('.here-panel');
   await expect(panel.getByRole('link', { name: 'The live card' })).toBeVisible();
+  await expect(panel.getByRole('link', { name: 'Fund a card' })).toHaveAttribute('href', '#fund');
   await expect(panel.getByRole('link', { name: 'Open your desk' })).toHaveAttribute('href', '/me');
   // A signed-in player is not asked to make a profile.
   await expect(page.locator('[data-station-part="fund"] .perks').getByRole('link', { name: 'Make a free profile' })).toHaveCount(0);
@@ -112,6 +113,29 @@ test('a card the community asked for links the ideas board, and its page says wh
   await expect(page.locator('.card-face-column .perks')).toHaveCount(0);
 });
 
+test('while sign-in is closed the site offers no profile, and paying still works', async ({ page }) => {
+  await answerCommunity(page, { signInOpen: false });
+  await page.goto('/');
+  await expect(page.locator('[data-station-part="fund"] .perks')).toHaveAttribute('data-sign-in', 'closed');
+  await expect(page.locator('.you-chip')).toHaveCount(0);
+  const fund = page.locator('[data-station-part="fund"]');
+  await expect(fund.getByText('With a free profile')).toHaveCount(0);
+  await expect(fund.getByText('Paying never needs an account.', { exact: true })).toBeVisible();
+  await expect(fund.getByRole('link', { name: 'Fund this card' }).first()).toBeVisible();
+  const ideas = page.locator('[data-station-part="ideas"]');
+  await expect(ideas.getByText('Pitching needs a profile, and profiles are not open yet.', { exact: false })).toBeVisible();
+  await expect(ideas.getByRole('link', { name: 'Pitch an idea' })).toHaveCount(0);
+  await page.goto('/me');
+  await expect(page.getByRole('heading', { level: 2, name: 'Profiles are not open yet' })).toBeVisible();
+  await expect(page.getByRole('textbox')).toHaveCount(0);
+  await page.goto('/suggest');
+  await expect(page.locator('[aria-labelledby="suggest-send"]').getByRole('link', { name: 'Sign in', exact: true })).toHaveCount(0);
+  await page.goto(`/thanks?session=${SESSIONS.recorded}`);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.locator('.perks-keep')).toHaveCount(0);
+  expect(await overflowsHorizontally(page)).toBe(false);
+});
+
 const SHOTS = process.env.E2E_PLACE_SHOTS ?? '';
 const PAGES: readonly [string, string, boolean][] = [
   ['home', '/', false],
@@ -123,6 +147,8 @@ const PAGES: readonly [string, string, boolean][] = [
   ['contribute', '/contribute', false],
   ['card-open', `/card/${OPEN_CARD_ID}`, false],
   ['thanks', `/thanks?session=${SESSIONS.recorded}`, false],
+  ['home-closed', '/', false],
+  ['me-closed', '/me', false],
 ];
 
 test.describe('place screenshots', () => {
@@ -131,7 +157,7 @@ test.describe('place screenshots', () => {
     for (const [name, path, signedIn] of PAGES) {
       test(`${name} at ${width}px`, async ({ page }) => {
         mkdirSync(SHOTS, { recursive: true });
-        await answerCommunity(page);
+        await answerCommunity(page, { signInOpen: !name.endsWith('-closed') });
         if (signedIn) await signIn(page);
         await page.emulateMedia({ reducedMotion: 'reduce' });
         await page.setViewportSize({ width, height: 900 });

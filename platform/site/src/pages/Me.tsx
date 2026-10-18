@@ -25,6 +25,7 @@ import { copy } from '../lib/copy';
 import { pendingFollowPath, unfollowCard, useFollows } from '../lib/follows';
 import { legal } from '../lib/legal';
 import { pendingSeedPath } from '../lib/seed-link';
+import { useSignInOpen } from '../lib/sign-in';
 import { useStudio } from '../lib/studio';
 import { TIERS } from '../lib/xp';
 
@@ -318,6 +319,9 @@ function DeskHead({ profile }: { profile: Profile }) {
         </span>
       </p>
       <p className="me-links">
+        <Link className="button" to="/#fund">
+          {copy.here.fund}
+        </Link>
         <Link to={`/u/${encodeURIComponent(profile.handle)}`}>
           {copy.me.seePublic}
           <Glyph name="arrow-right" />
@@ -445,10 +449,13 @@ export function Me() {
   const keep = params.get('keep') === '1';
   const [linkError, setLinkError] = useState<LinkError | null>(null);
   const [claim, setClaim] = useState<'none' | 'wanted' | 'running' | 'done'>('none');
+  const [claimed, setClaimed] = useState(0);
+  const open = useSignInOpen();
   const me = useMyProfile();
   const { reload } = me;
   // /thanks's Keep this card (docs/specs/place.md): signed out, the claim waits for the magic link;
   // signed in, or once the link signs the player in, it runs at once and the desk reloads with the card.
+  // Every new sign-in claims too, so a card paid for on another device joins the collection.
   useEffect(() => {
     if (!keep) return;
     if (me.state === 'signed-out') rememberClaim();
@@ -459,9 +466,11 @@ export function Me() {
     setClaim('running');
     takeClaim();
     rpc<{ claimed: number }>('claim_contributions')
-      .then(() => {
+      .then((result) => {
+        const n = typeof result?.claimed === 'number' ? result.claimed : 0;
+        setClaimed(n);
         setClaim('done');
-        reload();
+        if (n > 0) reload();
       })
       .catch(() => setClaim('none'));
   }, [claim, me.state, reload]);
@@ -473,7 +482,8 @@ export function Me() {
     // signed in to follow a card goes back to the card (docs/specs/card-follows.md); one who signed in
     // from another page (Pitch an idea) goes back to it.
     if (!adoptSessionFromLocation()) return;
-    if (takeClaim()) setClaim('wanted');
+    takeClaim();
+    setClaim('wanted');
     const back = pendingSeedPath() ?? pendingFollowPath() ?? takeReturn();
     if (back !== null) navigate(back, { replace: true });
   }, [navigate]);
@@ -485,11 +495,25 @@ export function Me() {
       <div className="band">
         {me.state === 'signed-out' ? (
           <>
-            {keep ? <KeepNote /> : null}
-            <SignIn linkError={linkError} />
-            <section className="section" aria-label={copy.perks.title}>
-              <Perks signIn={false} />
-            </section>
+            {open ? (
+              <>
+                {keep ? <KeepNote /> : null}
+                <SignIn linkError={linkError} />
+              </>
+            ) : (
+              <section className="section" aria-labelledby="me-closed">
+                <h2 id="me-closed">{copy.me.closedTitle}</h2>
+                <p>{copy.me.closedBody}</p>
+                <p>
+                  <Link className="button" to="/#fund">
+                    {copy.desk.fundOne}
+                  </Link>
+                </p>
+              </section>
+            )}
+            <div className="section">
+              <Perks />
+            </div>
           </>
         ) : me.state === 'loading' ? (
           <p className="muted" aria-busy="true">
@@ -506,7 +530,7 @@ export function Me() {
           </section>
         ) : (
           <>
-            {claim === 'done' ? (
+            {claim === 'done' && claimed > 0 ? (
               <p className="notice-plain" role="status">
                 <Glyph name="check" />
                 <span>{copy.desk.claimed}</span>

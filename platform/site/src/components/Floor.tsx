@@ -8,6 +8,7 @@ import { copy } from '../lib/copy';
 import { formatDate } from '../lib/format';
 import { teamStrip } from '../lib/roster';
 import type { Card, Snapshot } from '../lib/source';
+import { useSignInOpen } from '../lib/sign-in';
 import { Suggestion } from '../pages/Suggest';
 import { CardFace } from './Card';
 import { draftingLine } from './Flow';
@@ -21,15 +22,15 @@ import { StudioRoom, type StationPiece, type StationTag } from './StudioRoom';
 // Home's floor (docs/specs/place.md): the studio is the place, and its stations are the page's map.
 // Each station stands on a piece of the room (the whiteboard, the hopper, the desks, the dock, the
 // lounge's sofa) and is a link to its part of the page; the part in view lights its station, in the
-// room on the plate and in the rail's small map beside the stations. The order is the machine's:
-// ideas first, then funding, building and shipping, so the crowd's ideas read as where cards come
-// from, not as a side room.
+// room on the plate and in the rail's small map beside the stations. Fund comes first, one scroll from
+// the top, because funding is what moves a card; Ideas follows as the other way in (the crowd's pitches
+// beside the studio's own plans), then building and shipping.
 
 export type StationId = 'ideas' | 'fund' | 'building' | 'shipped' | 'team';
 
 export const FLOOR_STATIONS: readonly { id: StationId; piece: StationPiece; glyph: GlyphName }[] = [
-  { id: 'ideas', piece: 'whiteboard', glyph: 'plane' },
   { id: 'fund', piece: 'hopper', glyph: 'coin-outline' },
+  { id: 'ideas', piece: 'whiteboard', glyph: 'plane' },
   { id: 'building', piece: 'desks', glyph: 'gear' },
   { id: 'shipped', piece: 'dock', glyph: 'box' },
   { id: 'team', piece: 'sofa', glyph: 'team' },
@@ -171,6 +172,9 @@ export function useTopIdeas() {
  */
 export function IdeasStation({ snapshot, groups, index }: { snapshot: Snapshot; groups: CardGroups; index: number }) {
   const signedIn = useSignedIn();
+  const signInOpen = useSignInOpen();
+  // While sign-in is closed nobody can pitch, so the station reads the board and says why.
+  const pitching = signedIn || signInOpen;
   const ideas = useTopIdeas();
   const drafts = flowLanes(groups).next;
   const designer = draftingLine(snapshot);
@@ -186,7 +190,7 @@ export function IdeasStation({ snapshot, groups, index }: { snapshot: Snapshot; 
         </div>
       ) : ideas.items.length === 0 ? (
         <div className="flow-empty">
-          <p>{copy.ideas.empty}</p>
+          <p>{pitching ? copy.ideas.empty : copy.ideas.emptyClosed}</p>
         </div>
       ) : (
         <ol className="suggestions floor-ideas">
@@ -195,11 +199,14 @@ export function IdeasStation({ snapshot, groups, index }: { snapshot: Snapshot; 
           ))}
         </ol>
       )}
+      {pitching ? null : <p className="small station-note">{copy.ideas.closed}</p>}
       <p className="hero-actions station-actions">
-        <Link className="button" to="/suggest#suggest-send">
-          <Glyph name="plane" />
-          {copy.ideas.pitch}
-        </Link>
+        {pitching ? (
+          <Link className="button" to="/suggest#suggest-send">
+            <Glyph name="plane" />
+            {copy.ideas.pitch}
+          </Link>
+        ) : null}
         <MoreLink to="/suggest">{copy.ideas.all}</MoreLink>
       </p>
       <p className="small muted station-note">
@@ -296,7 +303,6 @@ export function WelcomePanel({ profile, snapshot, status }: { profile: Profile; 
     <div className="hero hero-home here-panel">
       <p className="here-who">
         <PersonAvatar person={profile} size={40} />
-        <span className="here-name">{profile.displayName}</span>
       </p>
       <h1>{copy.here.welcome.replace('{name}', profile.displayName)}</h1>
       <XpBar profile={profile} />
@@ -304,7 +310,10 @@ export function WelcomePanel({ profile, snapshot, status }: { profile: Profile; 
       <YourCards profile={profile} snapshot={snapshot} limit={3} />
       {more > 0 ? <p className="small muted">{copy.here.more.replace('{n}', String(more))}</p> : null}
       <p className="hero-actions">
-        <Link className="button" to="/me">
+        <a className="button" href="#fund">
+          {copy.here.fund}
+        </a>
+        <Link className="button button-secondary" to="/me">
           {copy.here.desk}
         </Link>
         <Link className="target" to="/suggest#suggest-send">

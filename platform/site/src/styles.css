@@ -456,6 +456,17 @@ nav a.active {
   }
 }
 
+/* Signed in, the avatar takes a place in the row, so below 30rem Play moves into the Menu list. */
+@media (max-width: 29.99rem) {
+  .topbar-row:has(.you-chip[data-you='in']) .nav-play {
+    display: none;
+  }
+
+  .topbar-row:has(.you-chip[data-you='in']) .menu-play {
+    display: block;
+  }
+}
+
 /* Below 32rem the name is read out but not drawn: the mark stands for it. */
 @media (max-width: 31.99rem) {
   .wordmark-text {
@@ -2771,7 +2782,6 @@ input[type='radio'] {
 
   .home .live-studio-grid > .studio > .studio-stage {
     display: flex;
-    flex: 1;
     flex-direction: column;
     justify-content: center;
   }
@@ -4488,6 +4498,7 @@ ol.timeline {
 
 .upvote-count {
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   font-weight: var(--weight-strong);
 }
 
@@ -4927,9 +4938,9 @@ main.home > .band {
   padding-inline: max(var(--gutter), calc((100% - var(--wrap-floor)) / 2));
 }
 
-/* The station tags stand on their pieces of the room: a small pill in the room's ink and paper, its
-   link 44px tall above the piece, so a press lands however small the room is drawn. A lit station's
-   tag is filled ink, and its footprint is outlined on the floor; nothing moves. */
+/* The station tags float over their pieces of the room, clear of the agents: a small pill in the room's
+   ink and paper, its link 44px tall and centred on the pill, so a press lands however small the room is
+   drawn. A lit station's tag is filled ink, and its footprint is outlined on the floor; nothing moves. */
 .station-tags {
   position: absolute;
   inset: 0;
@@ -4941,17 +4952,17 @@ main.home > .band {
 
 .station-tag {
   position: absolute;
-  transform: translate(-50%, -100%);
+  transform: translate(-50%, -50%);
   pointer-events: auto;
 }
 
 .station-tag > a {
   display: inline-flex;
-  align-items: flex-end;
+  align-items: center;
   min-height: var(--target);
   min-width: var(--target);
   justify-content: center;
-  padding: 0 0.25rem 0.375rem;
+  padding: 0 0.25rem;
   text-decoration: none;
 }
 
@@ -5009,12 +5020,11 @@ main.home > .band {
 
 .floor-stations {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-1);
   margin: 0;
   padding: 0;
   list-style: none;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
 
 .floor-stations a {
@@ -5171,13 +5181,13 @@ main.home > .band {
   margin-top: 0;
 }
 
-/* What you get: two columns of plain lines (as a guest, with a free profile) under one heading, on a
-   ruled panel. Nothing in it is money but the word dollar. */
+/* What you get: two columns of plain lines (as a guest, with a free profile) under one heading, between
+   two hairlines, so it reads as notes beside the cards and never as another card. Nothing in it is money
+   but the word dollar. */
 .perks {
   margin-top: var(--space-4);
-  padding: var(--space-3);
-  border: 2px solid var(--ink);
-  border-radius: var(--radius-card);
+  padding-block: var(--space-3);
+  border-block: 1px solid var(--hairline);
   container-type: inline-size;
 }
 
@@ -5221,8 +5231,18 @@ main.home > .band {
   margin-bottom: 0;
 }
 
-/* The signed-in panel on the plate: who, welcome back, the XP bar, the player's cards and the two ways
-   on. The XP bar is ink, never the coin: XP is not money. */
+/* The signed-in panel on the plate: who, welcome back, the XP bar, the player's cards and the ways on.
+   The XP bar is never the coin (XP is not money); on the ink plate it is drawn in paper, so the filled
+   part still reads as what was earned. */
+.here-panel .xp-bar {
+  border-color: currentColor;
+  background: transparent;
+}
+
+.here-panel .xp-bar-fill {
+  background: currentColor;
+}
+
 .here-who {
   display: flex;
   align-items: center;
@@ -5271,7 +5291,9 @@ main.home > .band {
 
 /* An idea's state on the desk: a quiet outlined chip, so the list reads as progress, not as alarms. */
 .state-chip {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   padding: 0 var(--space-1);
   border: 1px solid currentColor;
   border-radius: 999px;
