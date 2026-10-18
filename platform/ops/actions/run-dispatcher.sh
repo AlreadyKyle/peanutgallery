@@ -45,7 +45,7 @@ HOST_DIR=${ACTIONS_HOST_DIR:-${RUNNER_TEMP:-/tmp}/host}
 ENV_FILE=$HOST_DIR/env/dispatcher.env
 LOG=$HOST_DIR/logs/dispatcher.log
 # Only these messages reach the public log, each as a fixed line naming the message and nothing else.
-LIFECYCLE='dispatcher lease held|code root is read-only|containment verified|startup probe passed|dispatcher started|dispatcher drains at|dispatcher draining|dispatcher drained|dispatcher stopped|dispatcher exited with an error|SIGTERM received; stopping|SIGINT received; stopping|another dispatcher holds the lease; waiting for it'
+LIFECYCLE='dispatcher lease held|code root is read-only|containment verified|startup probe passed|dispatcher started|dispatcher drains at|dispatcher draining|dispatcher drained|dispatcher stopped|dispatcher exited with an error|SIGTERM received; stopping|SIGINT received; stopping|another dispatcher holds the lease; waiting for it|stop reason: (configuration refused|git configuration refused|code root writable|role model has no price|github read token refused|github unreachable|anthropic credit balance too low|anthropic usage tier cap reached|anthropic key refused|anthropic permission refused|managed agent or environment not found|managed agent or environment differs|startup probe failed|probe spend not recorded|anthropic api error|unclassified)'
 
 note() { printf 'actions-host: %s\n' "$*"; }
 
