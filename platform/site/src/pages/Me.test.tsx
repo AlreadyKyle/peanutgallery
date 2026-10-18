@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Profile } from '../lib/community-types';
 import { copy } from '../lib/copy';
+import { legal } from '../lib/legal';
 import { resetSignInOpen } from '../lib/sign-in';
 import { Me, nextUnlock, profileUpdate } from './Me';
 
@@ -137,8 +138,8 @@ describe('/me', () => {
   it('says what a profile gives when signed out, and claims at once when Keep this card lands signed in', async () => {
     renderMe('/me?keep=1');
     await settle();
-    expect(screen.getByRole('heading', { name: copy.perks.keepTitle })).toBeTruthy();
-    expect(screen.getByText(copy.perks.profile[0]!)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: legal.perks.keepTitle })).toBeTruthy();
+    expect(screen.getByText(legal.perks.profile[0]!)).toBeTruthy();
     expect(window.localStorage.getItem('mm:pending-claim')).toBe('1');
     cleanup();
     signIn('keep-1');
@@ -165,8 +166,8 @@ describe('/me', () => {
     await settle();
     expect(screen.getByRole('heading', { level: 2, name: copy.me.closedTitle })).toBeTruthy();
     expect(screen.queryByRole('textbox')).toBeNull();
-    expect(screen.queryByRole('heading', { name: copy.perks.keepTitle })).toBeNull();
-    expect(screen.getByText(copy.perks.guest[0]!)).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: legal.perks.keepTitle })).toBeNull();
+    expect(screen.getByText(legal.perks.guest[0]!)).toBeTruthy();
     expect(screen.getByRole('link', { name: copy.desk.fundOne }).getAttribute('href')).toBe('/#fund');
   });
 

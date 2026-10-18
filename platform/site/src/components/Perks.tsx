@@ -1,16 +1,17 @@
 import { Link } from 'react-router-dom';
-import { copy } from '../lib/copy';
+import { legal } from '../lib/legal';
 import { useSignInOpen } from '../lib/sign-in';
 
 // What a contribution gets you (docs/specs/place.md): the perks that exist today, as a guest and with
 // a free profile, said where people decide to pay (home's Fund station, a card's page, /contribute)
 // and once they have (/thanks, as Keep this card). Kernel, so /contribute and /thanks may draw it: it
-// imports only copy.ts, the sign-in probe and the router, and states no money rule. XP is a record of
-// taking part and never money; paying never needs an account. While sign-in is closed the panel keeps
+// imports only legal.ts (its words, kernel too, so no card can change what paying is said to get),
+// the sign-in probe and the router. XP is a record of taking part and never money; paying never needs
+// an account. While sign-in is closed the panel keeps
 // to the guest side and Keep this card hides, so nothing points at a form that cannot work.
 
 export function Perks({ signIn = false }: { signIn?: boolean }) {
-  const words = copy.perks;
+  const words = legal.perks;
   const open = useSignInOpen();
   return (
     <section className="perks" aria-labelledby="perks-title" data-sign-in={open ? 'open' : 'closed'}>
@@ -51,7 +52,7 @@ export function Perks({ signIn = false }: { signIn?: boolean }) {
 
 /** /thanks, once a payment is recorded: keep the card by signing in with the receipt's email. */
 export function KeepThisCard() {
-  const words = copy.perks;
+  const words = legal.perks;
   if (!useSignInOpen()) return null;
   return (
     <section className="perks perks-keep" aria-labelledby="keep-title">

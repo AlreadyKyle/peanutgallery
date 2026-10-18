@@ -37,7 +37,7 @@ Out: prices, perks, XP rates, the split, the reserve, caps and every other money
 - [ ] Signing in from Pitch an idea returns to /suggest#suggest-send, and the sign-in claims guest payments on the way.
 - [ ] A card page whose card is fundable shows the panel; a shipped card's page does not.
 - [ ] No page scrolls sideways at 375, 768 or 1440px.
-- [ ] Perks.tsx and lib/sign-in.ts are kernel; Perks imports only copy.ts, the sign-in probe and the router.
+- [ ] Perks.tsx and lib/sign-in.ts are kernel; Perks imports only legal.ts (its words), the sign-in probe and the router, so no card can change what the pay pages say paying gets.
 
 ## Verification
 

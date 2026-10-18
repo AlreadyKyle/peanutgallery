@@ -161,6 +161,20 @@ describe('Terms, Privacy, Refunds and Contact', () => {
   });
 });
 
+describe('the you slot', () => {
+  // The slot is the card lane's code (routes.tsx), so the kernel's own pages draw the bar without it,
+  // however the address is spelt (docs/specs/place.md).
+  it('is in the top bar on a card page and absent on every kernel page', () => {
+    renderAt('/faq');
+    expect(document.querySelector('.you-slot')).not.toBeNull();
+    for (const path of ['/contribute', '/Contribute/', '/%63ontribute', '/th%61nks?session=x', '/ledger', '/terms', '/privacy', '/refunds', '/contact']) {
+      cleanup();
+      renderAt(path);
+      expect(document.querySelector('.you-slot'), path).toBeNull();
+    }
+  });
+});
+
 describe('Site chrome', () => {
   // docs/specs/final-state.md adds the studio's history and the player's own page to the footer.
   it('links Weekly reports, the feed, the community pages, Terms, Privacy, Refunds and Contact in the footer of every page', () => {

@@ -437,8 +437,8 @@ function DeskBadges({ profile }: { profile: Profile }) {
 function KeepNote() {
   return (
     <section className="section" aria-labelledby="me-keep">
-      <h2 id="me-keep">{copy.perks.keepTitle}</h2>
-      <p>{copy.perks.keepBody}</p>
+      <h2 id="me-keep">{legal.perks.keepTitle}</h2>
+      <p>{legal.perks.keepBody}</p>
     </section>
   );
 }

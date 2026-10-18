@@ -764,26 +764,6 @@ export const copy = {
     upvoteMany: '{n} upvotes',
     safety: 'A review agent with no tools reads every idea. The agents that build never see your words.',
   },
-  // What a contribution gets you (docs/specs/place.md): the perks that exist today, as a guest and
-  // with a free profile. Paying never needs an account. XP is a record of taking part, not money.
-  perks: {
-    title: 'What you get',
-    guestTitle: 'As a guest',
-    guest: ['A Supporter number on the card you fund.', "The card's own page, to watch the agents build it."],
-    profileTitle: 'With a free profile',
-    profile: [
-      '10 XP for every dollar, more on rarer cards.',
-      'The card joins your collection with its rarity.',
-      'Badges, like It shipped when a card you funded goes live.',
-      'Levels that unlock avatar parts and frames.',
-    ],
-    note: 'Paying never needs an account. Paid as a guest already? Sign in with the email on your receipt and claim it.',
-    noteClosed: 'Paying never needs an account.',
-    signIn: 'Make a free profile',
-    keepTitle: 'Keep this card',
-    keepBody: 'Sign in with the email on your receipt and this card joins your collection, with its XP and badges. There is no password.',
-    keep: 'Add it to my collection',
-  },
   // /me signed in: the player's desk (docs/specs/place.md).
   desk: {
     title: 'Your desk',

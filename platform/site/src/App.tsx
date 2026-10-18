@@ -182,7 +182,15 @@ function TopBar() {
   // The you slot is the card lane's code (routes.tsx), so the kernel's own pages (Contribute, /thanks,
   // the ledger and the legal pages) draw the bar without it: nothing a card changes stands on the way
   // to paying.
-  const first = pathname.replace(/^\/+/, '').split('/')[0]?.toLowerCase() ?? '';
+  // The address is read as the router matches it: decoded (so /%63ontribute is /contribute) and
+  // without regard to case.
+  const raw = pathname.replace(/^\/+/, '').split('/')[0] ?? '';
+  let first = raw.toLowerCase();
+  try {
+    first = decodeURIComponent(raw).toLowerCase();
+  } catch {
+    // A malformed escape is not a kernel path; the router draws its not found page.
+  }
   const kernelPage = KERNEL_SEGMENTS.includes(first);
   return (
     <header className="topbar">

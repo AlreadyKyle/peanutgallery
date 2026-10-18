@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { copy } from '../lib/copy';
+import { legal } from '../lib/legal';
 import { RARITY_XP_MULTIPLIER } from '../lib/rarity';
 import { resetSignInOpen } from '../lib/sign-in';
 import { XP_PER_DOLLAR } from '../lib/xp';
@@ -28,7 +28,7 @@ function signInIs(open: boolean) {
 
 describe('Perks', () => {
   it('states the XP rate the XP rules use, and that rarer cards give more', () => {
-    expect(copy.perks.profile[0]).toBe(`${XP_PER_DOLLAR} XP for every dollar, more on rarer cards.`);
+    expect(legal.perks.profile[0]).toBe(`${XP_PER_DOLLAR} XP for every dollar, more on rarer cards.`);
     expect(RARITY_XP_MULTIPLIER.rare).toBeGreaterThan(RARITY_XP_MULTIPLIER.common);
   });
 
@@ -39,10 +39,10 @@ describe('Perks', () => {
         <Perks signIn />
       </MemoryRouter>,
     );
-    for (const line of [...copy.perks.guest, ...copy.perks.profile]) expect(screen.getByText(line)).toBeTruthy();
-    expect(screen.getByText(copy.perks.note)).toBeTruthy();
-    expect(screen.getByRole('link', { name: copy.perks.signIn }).getAttribute('href')).toBe('/me');
-    expect(screen.getByRole('region', { name: copy.perks.title })).toBeTruthy();
+    for (const line of [...legal.perks.guest, ...legal.perks.profile]) expect(screen.getByText(line)).toBeTruthy();
+    expect(screen.getByText(legal.perks.note)).toBeTruthy();
+    expect(screen.getByRole('link', { name: legal.perks.signIn }).getAttribute('href')).toBe('/me');
+    expect(screen.getByRole('region', { name: legal.perks.title })).toBeTruthy();
   });
 
   it('leaves out the profile link by default, as on the pages where people pay', () => {
@@ -62,9 +62,9 @@ describe('Perks', () => {
         <Perks signIn />
       </MemoryRouter>,
     );
-    await waitFor(() => expect(screen.getByText(copy.perks.noteClosed)).toBeTruthy());
-    for (const line of copy.perks.guest) expect(screen.getByText(line)).toBeTruthy();
-    for (const line of copy.perks.profile) expect(screen.queryByText(line)).toBeNull();
+    await waitFor(() => expect(screen.getByText(legal.perks.noteClosed)).toBeTruthy());
+    for (const line of legal.perks.guest) expect(screen.getByText(line)).toBeTruthy();
+    for (const line of legal.perks.profile) expect(screen.queryByText(line)).toBeNull();
     expect(screen.queryByRole('link')).toBeNull();
   });
 
@@ -75,8 +75,8 @@ describe('Perks', () => {
         <KeepThisCard />
       </MemoryRouter>,
     );
-    expect(screen.getByRole('heading', { name: copy.perks.keepTitle })).toBeTruthy();
-    expect(screen.getByRole('link', { name: copy.perks.keep }).getAttribute('href')).toBe('/me?keep=1');
+    expect(screen.getByRole('heading', { name: legal.perks.keepTitle })).toBeTruthy();
+    expect(screen.getByRole('link', { name: legal.perks.keep }).getAttribute('href')).toBe('/me?keep=1');
   });
 
   it('draws no Keep this card while sign-in is closed', async () => {
