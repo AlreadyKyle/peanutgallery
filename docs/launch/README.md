@@ -8,6 +8,10 @@ The board posts these now (`docs/PLAN.md` §10 decision 64).
 
 1. Every link points at https://mobmachine.games or https://play.mobmachine.games (PLAN.md §10 decision 59).
 2. Each subreddit's current rules and flair are read before its post goes up.
+3. What the rules said in October 2026, from the scan in the project's shared folder:
+   - r/incremental_games removes any post without an "AI disclosure:" line and allows a post about your own game once per 30 days; its draft carries the line.
+   - r/ClaudeAI allows a project post with full disclosure of who made it, and keeps a weekly "Show us what you've created" thread; if a top-level post is removed, the draft goes in that thread.
+   - r/indiegames and r/IndieGaming were reported to refuse posts about games made with generative AI. Neither gets a post.
 
 ## Posting order
 
@@ -47,7 +51,7 @@ Measured on the drafts as written, with the current domain.
 |---|---|---|
 | `reddit-claudeai.md` | title 300, body 40,000 | title 101, body 2,231 |
 | `reddit-artificial.md` | title 300, body 40,000 | title 109, body 1,816 |
-| `reddit-incremental-games.md` | title 300, body 40,000 | title 102, body 1,570 |
+| `reddit-incremental-games.md` | title 300, body 40,000 | title 102, body 1,753 |
 | `show-hn.md` | title 80; the first comment held under 2,000 | title 77, comment 1,695 |
 | `x-thread.md` | 280 a post, a link counted as 23 | 8 posts, the longest 248 counted in full |
 | `backlash-line.md` | fits any of the above | 144 |
