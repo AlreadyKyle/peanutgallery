@@ -1287,9 +1287,13 @@ button.link:hover:not(:disabled) {
     grid-row: 1;
   }
 
-  .contribute > .contribute-next + h2 {
-    margin-top: var(--space-5);
-  }
+}
+
+/* The page's three parts (the split with the next card in line, the cards, the Machine) sit as far
+   apart as any two sections in a band. */
+.contribute > h2,
+.contribute > .machine-card {
+  margin-top: var(--band-pad);
 }
 
 /* The split slider (docs/specs/split-slider.md): a native range input at full touch height, the
@@ -1755,11 +1759,13 @@ button.link:hover:not(:disabled) {
   margin-bottom: var(--space-2);
 }
 
+/* Each step is a section of its own, so the steps sit a band's step apart, like any two sections. */
 .how-steps {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--band-pad);
   max-width: var(--measure);
-  margin: 0;
+  margin-inline: 0;
+  margin-bottom: 0;
   padding: 0;
 }
 
@@ -2921,9 +2927,9 @@ input[type='radio'] {
   gap: var(--band-pad) var(--space-4);
 }
 
-/* Sections stacked in one cell of a pair sit a heading's gap apart. */
+/* Sections stacked in one cell of a pair sit as far apart as any two sections in a band. */
 .pair > div > .section + .section {
-  margin-top: var(--space-5);
+  margin-top: var(--band-pad);
 }
 
 /* The guide's Do and Don't lists are one section's two halves, so they stack closer. */
