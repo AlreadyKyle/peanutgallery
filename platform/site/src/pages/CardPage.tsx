@@ -210,7 +210,14 @@ export function CardPage() {
           </Link>
         </p>
         <PageHeader title={title} />
-        {state.state === 'ready' ? <ShareCard title={title} url={`${window.location.origin}/card/${state.detail.card.id}`} /> : null}
+        {state.state === 'ready' ? (
+          <ShareCard title={title} url={`${window.location.origin}/card/${state.detail.card.id}`} />
+        ) : state.state === 'loading' ? (
+          // The share line's room while the card loads, so the body below does not drop when it arrives.
+          <p className="share-card" aria-hidden="true">
+            <span className="share-card-room" />
+          </p>
+        ) : null}
       </div>
       <div className="band">
         {state.state === 'loading' ? (

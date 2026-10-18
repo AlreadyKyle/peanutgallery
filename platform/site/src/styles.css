@@ -287,6 +287,13 @@ main.title-stays > .band:last-child {
   flex-grow: 1;
 }
 
+/* A band that holds nothing yet but its loading line (/card/:id, /thanks, /reports, /team) reaches to
+   the foot of the window while it waits, so what follows it, the rest of the page and the footer,
+   waits below the fold rather than showing and then being pushed down when the body arrives. */
+main:is(.title-stays, .team-page) > .band:has(> [aria-busy='true']) {
+  min-height: calc(100vh - var(--bar));
+}
+
 /* A page that is not wide keeps each band's blocks to the reading measure; a sheet lays them out on
    the index's two columns instead (The sheet, below). */
 main:not(.wide, .sheet, .card-page) > .band > * {
@@ -3309,6 +3316,12 @@ input[type='radio'] {
   align-items: center;
   gap: var(--space-1) var(--space-2);
   margin-top: var(--space-3);
+}
+
+/* The share line's room while a card loads: one target's height, nothing drawn. */
+.share-card-room {
+  display: block;
+  min-height: var(--target);
 }
 
 .share-card > button {
