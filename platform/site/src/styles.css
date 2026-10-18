@@ -2803,14 +2803,15 @@ input[type='radio'] {
   padding-bottom: var(--space-5);
 }
 
-/* The first game and the explainer, side by side from 64rem (the video alone takes the row). */
+/* The first game and the explainer, side by side from 80rem, where the floor's parts column is wide
+   enough for the pair (the video alone takes the row); stacked below that. */
 .showcase {
   display: grid;
   gap: var(--band-pad) var(--space-5);
   align-items: center;
 }
 
-@media (min-width: 64rem) {
+@media (min-width: 80rem) {
   /* The game's half is the wider, so its heading keeps to one line beside the box art. */
   .showcase:has(> .game-tile) {
     grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
@@ -5018,9 +5019,11 @@ main.home > .band {
   display: none;
 }
 
+/* Under 64rem the strip is a grid of equal chips, so six stations wrap into full rows and never leave
+   one alone on a line. */
 .floor-stations {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
   gap: var(--space-1);
   margin: 0;
   padding: 0;
@@ -5078,6 +5081,11 @@ main.home > .band {
     margin: 0;
   }
 
+  /* The parts keep the right column while the rail waits for the snapshot. */
+  .floor-parts {
+    grid-column: 2;
+  }
+
   .floor-map {
     display: block;
     margin-bottom: var(--space-3);
@@ -5092,9 +5100,9 @@ main.home > .band {
   }
 
   .floor-stations {
+    display: flex;
     flex-direction: column;
     gap: 0;
-    overflow: visible;
   }
 
   .floor-stations li + li {

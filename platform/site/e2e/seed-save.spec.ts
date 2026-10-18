@@ -83,7 +83,8 @@ test('a signed-out player signs in by email and the save completes when the link
   await page.goto('/me#access_token=e2e-link-access&refresh_token=e2e-link-refresh&expires_in=3600');
   await expect(page).toHaveURL(/\/seeds$/);
   await expect(page.getByRole('region', { name: 'Save this seed' }).getByRole('status')).toHaveText('Saved to your profile.');
-  expect(posts.slice(1)).toEqual([{ path: '/api/community/rpc/save_seed', body: { game: 'dust', code: 'dust:v3:abc', title: null, publish: false }, auth: 'Bearer e2e-link-access' }]);
+  // The sign-in also claims any guest payments (docs/specs/place.md); the save is the one other post.
+  expect(posts.slice(1).filter((post) => post.path !== '/api/community/rpc/claim_contributions')).toEqual([{ path: '/api/community/rpc/save_seed', body: { game: 'dust', code: 'dust:v3:abc', title: null, publish: false }, auth: 'Bearer e2e-link-access' }]);
   expect(await page.evaluate(() => window.localStorage.getItem('mm:pending-seed'))).toBeNull();
   expect(reports).toEqual([]);
 });

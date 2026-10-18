@@ -271,25 +271,24 @@ export function Landing() {
           64rem; then the first game. */}
       <div className="band floor-band">
         {view === null ? null : <SinceLastVisit cards={view.snapshot.cards} since={since} />}
-        {view === null ? (
-          <>
+        {/* Fund and the first game hold their place while the snapshot loads, so neither is drawn
+            twice and a link to #fund lands where it stays. */}
+        <div className="floor">
+          {view === null ? null : <FloorRail snapshot={view.snapshot} lit={lit} counts={stationCounts(view.snapshot, view.groups, null)} />}
+          <div className="floor-parts">
             <FundSection studio={studio} live={live} index={1} />
+            {/* The first game follows the cards to fund, above how the cards move (decision 70). */}
             <ShowcaseSection />
-          </>
-        ) : (
-          <div className="floor">
-            <FloorRail snapshot={view.snapshot} lit={lit} counts={stationCounts(view.snapshot, view.groups, null)} />
-            <div className="floor-parts">
-              <FundSection studio={studio} live={live} index={1} />
-              {/* The first game follows the cards to fund, above how the cards move (decision 70). */}
-              <ShowcaseSection />
-              <IdeasStation index={2} />
-              <NextStation snapshot={view.snapshot} groups={view.groups} index={3} />
-              <BuildingStation snapshot={view.snapshot} groups={view.groups} index={4} />
-              <ShippedStation snapshot={view.snapshot} groups={view.groups} index={5} />
-            </div>
+            {view === null ? null : (
+              <>
+                <IdeasStation index={2} />
+                <NextStation snapshot={view.snapshot} groups={view.groups} index={3} />
+                <BuildingStation snapshot={view.snapshot} groups={view.groups} index={4} />
+                <ShippedStation snapshot={view.snapshot} groups={view.groups} index={5} />
+              </>
+            )}
           </div>
-        )}
+        </div>
       </div>
       {view === null ? null : <TeamSection view={view} />}
       <div className="band">

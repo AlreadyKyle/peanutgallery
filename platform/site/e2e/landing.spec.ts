@@ -62,11 +62,11 @@ for (const viewport of WIDTHS) {
         'The unlock list fits any number of unlocks',
         'Save progress and resume on reload',
       ]);
-      // Ideas' drafted cards: only approved agent cards waiting to open; the fixture's planned cards are
-      // backlog entries and board work, which never show (docs/specs/always-open.md). The Game
-      // Designer's line says what it is doing instead.
-      await expect(station('ideas').getByRole('heading', { level: 4 })).toHaveCount(0);
-      await expect(station('ideas').locator('.flow-agent')).toBeVisible();
+      // Next up: only approved agent cards waiting to open; the fixture's planned cards are backlog
+      // entries and board work, which never show (docs/specs/always-open.md). The Game Designer's line
+      // says what it is doing instead.
+      await expect(station('next').getByRole('heading', { level: 4 })).toHaveCount(0);
+      await expect(station('next').locator('.flow-agent')).toBeVisible();
 
       const money = page.getByRole('region', { name: 'Where the money goes' });
       await expect(money.locator('.pool-line')).toHaveText('$12.34 in the pool');
