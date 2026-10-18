@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { CoinMark, FundingBar } from '../components/Funding';
 import { PageHeader } from '../components/PageHeader';
+import { KeepThisCard } from '../components/Perks';
 import { ShareCard } from '../components/ShareCard';
 import { LinkedText } from '../components/TextPage';
 import { copy } from '../lib/copy';
@@ -158,6 +159,11 @@ function RecordedBody({ answer, snapshot }: { answer: Recorded; snapshot: Snapsh
   return (
     <>
       {reversed || watch === null ? null : <RewardBand id={watch} answer={answer} snapshot={snapshot} />}
+      {reversed ? null : (
+        <section className="section" aria-label={copy.perks.keepTitle}>
+          <KeepThisCard />
+        </section>
+      )}
       <section className="section" aria-labelledby="reached">
         <h2 id="reached">{words.reachedHeading}</h2>
         {reversed ? (

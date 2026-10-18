@@ -4939,7 +4939,7 @@ main.home > .band {
 
 .station-pill {
   display: inline-block;
-  padding: 0.125rem 0.625rem;
+  padding: 0.125rem var(--space-1);
   border: 2px solid var(--ink);
   border-radius: 999px;
   background: var(--paper);
@@ -5002,7 +5002,7 @@ main.home > .band {
 .floor-stations a {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-1);
   min-height: var(--target);
   padding: 0 var(--space-2);
   border: 2px solid var(--ink);
@@ -5160,6 +5160,7 @@ main.home > .band {
   padding: var(--space-3);
   border: 2px solid var(--ink);
   border-radius: var(--radius-card);
+  container-type: inline-size;
 }
 
 .perks-title {
@@ -5171,7 +5172,8 @@ main.home > .band {
   gap: var(--space-3);
 }
 
-@media (min-width: 48rem) {
+/* Two columns only where the panel itself is wide: a card's face column keeps them stacked. */
+@container (min-width: 34rem) {
   .perks-columns {
     grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
   }
@@ -5184,7 +5186,7 @@ main.home > .band {
 
 .perks-list {
   margin: 0;
-  padding-left: 1.25rem;
+  padding-left: var(--space-3);
 }
 
 .perks-list li + li {
@@ -5234,4 +5236,38 @@ main.home > .band {
   gap: 0 var(--space-2);
   padding-block: 0.375rem;
   border-top: 1px solid var(--hairline);
+}
+
+/* Your desk (/me signed in): what the next level opens, under the XP bar. */
+.desk-next {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-2);
+  max-width: var(--measure-text);
+}
+
+.desk-next-label {
+  font-weight: var(--weight-strong);
+}
+
+/* An idea's state on the desk: a quiet outlined chip, so the list reads as progress, not as alarms. */
+.state-chip {
+  display: inline-block;
+  padding: 0 var(--space-1);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: var(--ink);
+}
+
+.state-chip[data-state='declined'] {
+  color: var(--muted);
+}
+
+/* A card the crowd asked for, on its page under the face. */
+.card-from-ideas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem var(--space-1);
+  margin-top: var(--space-3);
 }

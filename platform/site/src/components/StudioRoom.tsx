@@ -349,7 +349,7 @@ export type StudioRoomProps = {
   lit?: string | null;
   /**
    * False draws a picture of the room only (home's rail map): the agents still move, but nothing in
-   * it takes focus or a press, and the drawing is hidden from screen readers, since the room beside
+   * it takes focus or a press, it carries no station tags, and the drawing is hidden from screen readers, since the room beside
    * the pitch already carries every fact.
    */
   interactive?: boolean;
@@ -726,7 +726,7 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label,
               <Sprite key={pulse.id} pulse={pulse} plan={plan} onDone={spriteDone} />
             ))}
           </svg>
-          {stations.length === 0 ? null : (
+          {stations.length === 0 || !interactive ? null : (
             <ul className="station-tags" aria-label={copy.floor.mapLabel}>
               {stations.map((station) => {
                 const p = tagPoint(plan, station.piece);

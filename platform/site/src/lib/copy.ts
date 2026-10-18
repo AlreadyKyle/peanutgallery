@@ -230,6 +230,8 @@ export const copy = {
     shipped: 'Shipped, and its page shows how it was built.',
   },
   cardPage: {
+    fromIdeas: 'This card started as an idea from the community.',
+    seeIdeas: 'See the ideas board',
     back: 'All cards',
     cardTitle: 'A card',
     // The card's Share button; its link preview is docs/specs/card-preview.md.
@@ -538,7 +540,7 @@ export const copy = {
     left: '{n} characters left',
     send: 'Pitch it',
     sending: 'Sending the suggestion.',
-    sent: 'Thank you. Your idea is in the queue for review, and your desk shows where it goes next.',
+    sent: 'Thanks for the idea. It is in the queue for review, and your desk shows where it goes next.',
     limit: 'You have sent three suggestions today. Try again tomorrow.',
     failed: 'The suggestion did not send. Try again in a moment.',
     blank: 'Write the title and the description in words. Spaces alone do not count.',
@@ -738,7 +740,6 @@ export const copy = {
   // The plate's panel beside the room: who you are to the studio today.
   here: {
     welcome: 'Welcome back, {name}.',
-    welcomeLede: 'Here is your corner of the studio.',
     yourCards: 'Your cards',
     yourIdeas: 'Your ideas',
     noCards: 'Fund a card and it joins your collection here, with its rarity.',
@@ -757,7 +758,7 @@ export const copy = {
     loading: 'Loading the ideas.',
     upvoteOne: '1 upvote',
     upvoteMany: '{n} upvotes',
-    drafts: 'Drafted cards waiting to open',
+    drafts: 'From idea to card',
     safety: 'A review agent with no tools reads every idea. The agents that build never see your words.',
   },
   // What a contribution gets you (docs/specs/place.md): the perks that exist today, as a guest and
@@ -783,6 +784,7 @@ export const copy = {
   // /me signed in: the player's desk (docs/specs/place.md).
   desk: {
     title: 'Your desk',
+    lede: 'Your level, your cards and where each one is, and the ideas you pitched.',
     cardsTitle: 'Your cards',
     cardsLede: 'The cards you helped fund, and where each one is now.',
     noCards: 'No cards yet. Fund one and it lands here with its rarity and XP.',

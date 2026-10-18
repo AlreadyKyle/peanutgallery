@@ -10,7 +10,7 @@ import { copy } from '../lib/copy';
 export function Perks({ signIn = true }: { signIn?: boolean }) {
   const words = copy.perks;
   return (
-    <aside className="perks" aria-labelledby="perks-title">
+    <div className="perks" aria-labelledby="perks-title">
       <h3 id="perks-title" className="perks-title">
         {words.title}
       </h3>
@@ -40,7 +40,7 @@ export function Perks({ signIn = true }: { signIn?: boolean }) {
           </Link>
         </p>
       ) : null}
-    </aside>
+    </div>
   );
 }
 
@@ -48,7 +48,7 @@ export function Perks({ signIn = true }: { signIn?: boolean }) {
 export function KeepThisCard() {
   const words = copy.perks;
   return (
-    <aside className="perks perks-keep" aria-labelledby="keep-title">
+    <div className="perks perks-keep" aria-labelledby="keep-title">
       <h3 id="keep-title" className="perks-title">
         {words.keepTitle}
       </h3>
@@ -63,6 +63,6 @@ export function KeepThisCard() {
           {words.keep}
         </Link>
       </p>
-    </aside>
+    </div>
   );
 }

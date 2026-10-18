@@ -10,6 +10,7 @@ import { teamStrip } from '../lib/roster';
 import type { Card, Snapshot } from '../lib/source';
 import { Suggestion } from '../pages/Suggest';
 import { CardFace } from './Card';
+import { draftingLine } from './Flow';
 import { Glyph, type GlyphName } from './Glyph';
 import { MoreLink } from './MoreLink';
 import { PersonAvatar } from './Person';
@@ -172,6 +173,7 @@ export function IdeasStation({ snapshot, groups, index }: { snapshot: Snapshot; 
   const signedIn = useSignedIn();
   const ideas = useTopIdeas();
   const drafts = flowLanes(groups).next;
+  const designer = draftingLine(snapshot);
   return (
     <StationPart id="ideas" index={index} title={copy.ideas.title} intro={copy.ideas.intro}>
       {ideas.state === 'loading' ? (
@@ -204,12 +206,13 @@ export function IdeasStation({ snapshot, groups, index }: { snapshot: Snapshot; 
         <Glyph name="checklist" />
         <span>{copy.ideas.safety}</span>
       </p>
-      {drafts.length === 0 ? null : (
-        <>
-          <h3 className="rows-heading">{copy.ideas.drafts}</h3>
-          <StationCards cards={drafts} snapshot={snapshot} planned empty={null} />
-        </>
-      )}
+      {/* The Game Designer turns the top ideas into cards: what it is doing now, then its drafts. */}
+      <h3 className="rows-heading">{copy.ideas.drafts}</h3>
+      <p className="flow-who flow-agent" data-drafting={designer.drafting ? 'true' : undefined}>
+        <Glyph name="pencil" />
+        <span>{designer.text}</span>
+      </p>
+      {drafts.length === 0 ? null : <StationCards cards={drafts} snapshot={snapshot} planned empty={null} />}
     </StationPart>
   );
 }
@@ -255,7 +258,7 @@ export function stageWords(card: Card | undefined): string {
   if (card.stage === 'building') return words.building;
   if (card.stage === 'gated') return words.gated;
   if (card.stage === 'funded') return words.funded;
-  if (card.stage === 'open') return words.open;
+  if (card.stage === 'proposed' || card.stage === 'designing' || card.stage === 'voted') return words.open;
   return words.other;
 }
 

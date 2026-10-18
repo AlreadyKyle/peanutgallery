@@ -108,7 +108,11 @@ describe('Contribute', () => {
     expect(links()[0]?.getAttribute('href')).toBe(`${STRIPE}?client_reference_id=split20`);
     await waitFor(() => expect(links()[0]?.textContent).toBe(`${legal.pickForMe}${legal.nextInLine.replace('{title}', 'Refunded below its target')}`));
 
-    const choices = screen.getAllByRole('listitem').map((item) => within(item).getByRole('link'));
+    // The card choices: the What you get panel's lists hold no links to checkout.
+    const choices = screen
+      .getAllByRole('listitem')
+      .filter((item) => item.closest('.perks') === null)
+      .map((item) => within(item).getByRole('link'));
     expect(choices.map((a) => a.getAttribute('href'))).toEqual([
       `${STRIPE}?client_reference_id=refunded_split20`,
       `${STRIPE}?client_reference_id=s1_split20`,

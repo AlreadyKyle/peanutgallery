@@ -5,7 +5,7 @@ import { Glyph, type GlyphName } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
 import { PersonLink } from '../components/Person';
 import { ShowMore } from '../components/ShowMore';
-import { rpc, useSignedIn } from '../lib/account';
+import { rememberReturn, rpc, useSignedIn } from '../lib/account';
 import { CommunityError, relativeTime, usePagedCommunity } from '../lib/community';
 import type { DeclineReason, SuggestionState, SuggestionSummary } from '../lib/community-types';
 import { copy } from '../lib/copy';
@@ -236,7 +236,7 @@ export function Suggest() {
                 <span>{copy.suggest.safety}</span>
               </p>
               <p>
-                <Link className="button" to="/me">
+                <Link className="button" to="/me" onClick={() => rememberReturn('/suggest#suggest-send')}>
                   {copy.suggest.signIn}
                 </Link>
               </p>

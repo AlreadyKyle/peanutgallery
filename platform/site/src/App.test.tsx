@@ -209,13 +209,17 @@ describe('Site chrome', () => {
         .map((link) => [link.textContent, link.getAttribute('href')]),
     ).toEqual([
       [copy.studioName, '/'],
-      [copy.howItWorksNav, '/how-it-works'],
-      [copy.teamNav, '/team'],
-      // The top bar keeps to what a first visit needs; goals, seeds and the player's page are in the
-      // footer (docs/specs/brand.md, the second review).
+      // The you slot (docs/specs/place.md): Sign in for a visitor, the player's desk once signed in.
+      [copy.you.signIn, '/me'],
+      // The top bar keeps to what a first visit needs, Ideas first since every card starts as one;
+      // goals and seeds are in the footer (docs/specs/brand.md, the second review).
       [copy.nav.suggest, '/suggest'],
+      [copy.teamNav, '/team'],
+      [copy.howItWorksNav, '/how-it-works'],
       [copy.nav.faq, '/faq'],
       [legal.ledger, '/ledger'],
+      // The menu's own way to the desk, shown on phones where the slot keeps to the avatar.
+      [copy.nav.me, '/me'],
     ]);
     expect(screen.getByText(copy.pitchBody)).toBeTruthy();
     expect(within(screen.getByRole('contentinfo')).getByText(`${copy.footer} ${legal.allAges}`)).toBeTruthy();

@@ -2,6 +2,7 @@ import { FundingBar, fundingCaption } from '../components/Funding';
 import { Guarded } from '../components/Guarded';
 import { MachineCard } from '../components/MachineCard';
 import { PageHeader } from '../components/PageHeader';
+import { Perks } from '../components/Perks';
 import { StaleNotice } from '../components/StaleNotice';
 import { LinkedText } from '../components/TextPage';
 import { siteEnv } from '../lib/env';
@@ -151,6 +152,8 @@ export function Contribute() {
             </Guarded>
             {/* The Machine card (docs/specs/final-state.md): the same checkout as Fund the next card in line. */}
             <MachineCard studioPct={studioPct} headingLevel={2} />
+            {/* What a contribution gets you (docs/specs/place.md): paying never needs an account. */}
+            <Perks />
             <p className="muted small">{legal.split}</p>
             <p className="muted small">{legal.usdNote}</p>
           </div>
