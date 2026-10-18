@@ -148,6 +148,7 @@ export function shipPost(overrides: Partial<ShipPost> = {}): ShipPost {
     id: '7d1e2f3a-4b5c-4d6e-8f90-a1b2c3d4e5f6',
     title: 'Gatherers cost one more',
     live_at: '2026-09-14T14:30:00.000Z',
+    started_at: null,
     role_name: 'Builder A',
     cost_usd: 0.29,
     supporters: [
