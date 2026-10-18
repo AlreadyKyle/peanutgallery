@@ -82,6 +82,7 @@ Headings are bold and sentence case, never shouting. No italic anywhere. Nothing
   2. **The sheet** (5:7): text pages, the ledger, the FAQ. The heading stays in view on the left; the text fills the right.
   3. **The card grid** (3, 2 or 1 equal columns): cards, team boxes, choices. One item to a cell.
   4. **Halves** (1:1): two related blocks side by side, such as the two other ways to fund.
+- **Room to breathe.** Sections sit far apart and a section's parts group by space, not by lines: the heading and its one intro close together, a clear step before the content, and wide margins between bands. Dense is a fault even when nothing is empty (the board, 18 October 2026).
 - **No dead space.** Side-by-side blocks balance or stack. No block leaves an empty column beside it. The site's layout audit checks every page at five widths.
 
 ## The objects

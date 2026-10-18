@@ -213,6 +213,12 @@ for (const size of [
     expect(Math.abs(pipe.x - h1.x)).toBeLessThanOrEqual(1);
     expect(Math.abs(pipe.y + pipe.height - (stage.y + stage.height))).toBeLessThanOrEqual(1);
     expect(pipe.x + pipe.width).toBeLessThan(stage.x);
+    // The plate draws no how-to line and no pipe intro: both are read out, not shown (the board,
+    // 18 October 2026: the plate read as wordy).
+    for (const quiet of ['.live-studio-head > p:not(.twitch)', '.home .pipe-intro']) {
+      expect((await box(quiet)).height).toBeLessThanOrEqual(1);
+    }
+    await expect(page.locator('.home .pipe .pipe-row')).toHaveCount(1);
     const facts = studio.getByRole('list', { name: 'What each agent is doing' });
     await expect(facts).toHaveCount(1);
     expect((await facts.boundingBox())!.height).toBeLessThanOrEqual(1);
@@ -224,7 +230,7 @@ test('tells the snapshot in the pipe while the feed is empty', async ({ page }) 
   await page.route(/\/api\/community\/feed/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ events: [], next: null }) }));
   await page.goto('/');
   const pipe = page.locator('.home .pipe');
-  await expect(pipe.locator('.pipe-row')).toHaveCount(2);
+  await expect(pipe.locator('.pipe-row')).toHaveCount(1);
   await expect(pipe.locator('.pipe-empty')).toHaveCount(0);
 });
 
