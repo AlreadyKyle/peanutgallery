@@ -634,7 +634,9 @@ footer {
   overflow: hidden;
 }
 
+/* A span: without display block its width (set from the card's funding) is ignored and no fill draws. */
 #next-card-fill {
+  display: block;
   width: 0;
   height: 100%;
   background: var(--magenta);
@@ -1653,6 +1655,17 @@ footer {
     min-height: min(560px, 100vh);
     min-height: min(560px, 100svh);
   }
+
+  /* Room for the goal's label and a whole unlock name on one line. */
+  .hud-goal {
+    flex-basis: 248px;
+  }
+
+  /* The banner hangs just under the HUD, over the first steps and the weather chip: they fade out as
+     it fades in (render/hud.ts sets --banner-cover from the banner's own fade, every frame). */
+  .hud-below {
+    opacity: calc(1 - var(--banner-cover, 0));
+  }
 }
 
 /* The studio line on a narrow screen: the funding link takes its own line and the separator before it
@@ -1660,6 +1673,23 @@ footer {
 @media (max-width: 599.98px) {
   #studio-line .studio-sep-last {
     display: none;
+  }
+
+  /* A phone has no room for both on one line: the goal's label sits over its name, so the name is read
+     whole ("Sturdy brooms", not "Sturdy bro..."). */
+  .hud-goal {
+    flex-basis: 176px;
+  }
+
+  .hud-goal-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  .hud-goal-name {
+    max-width: 100%;
+    text-align: left;
   }
 
   #studio-line .studio-next {

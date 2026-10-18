@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { loadConfigFromDir } from '../bots/config';
-import { fill, formatDust, formatPercent, formatRate, groupThousands } from '../render/format';
+import { fill, formatDust, formatPercent, formatRate, groupThousands, pluralName } from '../render/format';
+import { welcomeCount, WELCOME_COUNT_SECONDS } from '../render/hud';
 import { parseStrings } from '../render/strings';
 import { LIVE_CONFIG_DIR, LIVE_CONTENT_DIR } from './paths';
 
@@ -20,6 +21,20 @@ describe('number formatting', () => {
     expect(formatDust(2450026)).toBe('2.45M');
     expect(formatDust(1.5e9)).toBe('1.50B');
     expect(formatDust(3e12)).toBe('3.00T');
+  });
+
+  it('names a count of units in the plural, and one unit in the singular', () => {
+    expect(pluralName('Gatherer', 1)).toBe('Gatherer');
+    expect(pluralName('Gatherer', 15)).toBe('Gatherers');
+    expect(pluralName('Gatherer', 0)).toBe('Gatherers');
+    expect(pluralName('Foundry', 3)).toBe('Foundries');
+    expect(pluralName('Press', 2)).toBe('Presses');
+    expect(pluralName('Dust Mill', 4)).toBe('Dust Mills');
+    expect(pluralName('Relay', 2)).toBe('Relays');
+    expect(pluralName('', 2)).toBe('');
+    // Every unit in the live config reads right in the plural.
+    const units = loadConfigFromDir(LIVE_CONFIG_DIR).spawnTable.rows.map((unit) => pluralName(unit.name, 2));
+    expect(units).toEqual(['Gatherers', 'Carts', 'Mills', 'Forges', 'Foundries']);
   });
 
   it('shows one decimal for small rates and whole numbers for large ones', () => {
@@ -96,5 +111,25 @@ describe('content/strings.json', () => {
     const broken = JSON.parse(JSON.stringify(raw)) as { labels: Record<string, string> };
     delete broken.labels['strike'];
     expect(() => parseStrings(broken)).toThrow('"strike"');
+  });
+});
+
+describe('the welcome back count', () => {
+  it('counts up from the total before the time away to the total now, easing out and never past it', () => {
+    expect(WELCOME_COUNT_SECONDS).toBeGreaterThan(1);
+    expect(welcomeCount(1000, 5000, 0)).toBe(1000);
+    let last = 1000;
+    for (const k of [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]) {
+      const shown = welcomeCount(1000, 5000, k);
+      expect(shown).toBeGreaterThan(last);
+      expect(shown).toBeLessThan(5000);
+      last = shown;
+    }
+    // Eases out: more than half the gain is shown by a quarter of the way through.
+    expect(welcomeCount(1000, 5000, 0.25)).toBeGreaterThan(3000);
+    expect(welcomeCount(1000, 5000, 1)).toBe(5000);
+    expect(welcomeCount(1000, 5000, 7)).toBe(5000);
+    expect(welcomeCount(6000, 5000, 0.5)).toBe(5000);
+    expect(welcomeCount(1000, 5000, Number.NaN)).toBe(5000);
   });
 });

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   barFraction,
@@ -11,6 +13,7 @@ import {
   showNextCard,
   type NextCardElements,
 } from '../render/next-card';
+import { PACKAGE_DIR } from './paths';
 
 function liveCard(over: Record<string, unknown> = {}): Record<string, unknown> {
   return { stage: 'open', horizon: 'now', funding_target_usd: 40, funded_usd: 12.5, ...over };
@@ -119,6 +122,13 @@ describe('the line', () => {
     expect(elements.fill.style.width).toBe('31%');
     showNextCard(elements, null);
     expect(elements.root.hidden).toBe(true);
+  });
+
+  it('draws the fill: the span is a block, so the width it is given takes effect', () => {
+    // index.html makes the fill a <span>; an inline box ignores width, and the bar stayed empty.
+    const css = readFileSync(join(PACKAGE_DIR, 'render', 'style.css'), 'utf8');
+    const rule = css.match(/#next-card-fill\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(rule).toMatch(/display:\s*block/);
   });
 });
 

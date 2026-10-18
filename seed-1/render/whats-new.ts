@@ -1,5 +1,5 @@
 // What shipped for Dust since the player's last visit, shown under the canvas beside the studio line.
-// Phaser-free and read only, like render/next-card.ts: it reads the site's public /api/cards
+// Three-free and read only, like render/next-card.ts: it reads the site's public /api/cards
 // document (proxied by netlify.toml, so connect-src 'self' holds) and lists the seed-1 cards at stage
 // live whose live_at is after the last visit. The last visit is its own localStorage key, apart from
 // the sim save, so SimState and its hash are untouched. Only a returning player (a save exists and a
