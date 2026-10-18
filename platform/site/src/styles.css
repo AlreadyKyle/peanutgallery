@@ -305,6 +305,11 @@ main > .band {
   margin-top: var(--band-pad);
 }
 
+/* A page's plate is its title, not a section: it takes less room than the bands under it. */
+main > .band:first-child {
+  padding-block: var(--plate-pad);
+}
+
 main > .band:nth-child(even),
 .page:has(> main > .band:last-child:nth-child(odd)) > .site-footer {
   background: var(--paper);
@@ -1410,6 +1415,14 @@ button.link:hover:not(:disabled) {
 .fund-empty > .button,
 .fund-next > .button {
   margin-top: auto;
+}
+
+/* On a phone the tile keeps a card's inset, so its lines keep the width. */
+@media (max-width: 29.99rem) {
+  .fund-empty,
+  .fund-next {
+    padding: var(--space-3);
+  }
 }
 
 /* Paired with the Machine card, the tile's title is a card title, the same size as its neighbour's. */
@@ -2524,7 +2537,6 @@ input[type='radio'] {
 /* The status line belongs to the actions: close under them. */
 .hero-home .hero-status .status-line {
   margin-top: var(--space-2);
-  color: var(--text-muted);
 }
 
 /* The live studio on the plate: a paper screen in the dark band, its ground and roles paper's, so the
@@ -2619,6 +2631,25 @@ input[type='radio'] {
 .home .pipe-meta {
   grid-column: 2;
   margin-top: 0.125rem;
+}
+
+/* On a phone the row stacks: the kind over the line, so the line keeps the width. */
+@media (max-width: 29.99rem) {
+  .home .pipe-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home .pipe-kind {
+    grid-row: auto;
+  }
+
+  .home .pipe-text {
+    margin-top: 0.25rem;
+  }
+
+  .home .pipe-meta {
+    grid-column: 1;
+  }
 }
 
 /* From 64rem the plate is two columns, five parts to seven: on the left the pitch, hung from the
@@ -4635,16 +4666,20 @@ ol.timeline {
 
 .faq-item {
   max-width: var(--measure-text);
-  padding-block: var(--space-2);
+  padding-block: var(--space-3);
   border-top: 1px solid var(--hairline);
 }
 
 .faq-item h3 {
-  margin-bottom: var(--space-1);
+  margin-bottom: var(--space-2);
 }
 
 .faq-item p {
-  margin: var(--space-1) 0 0;
+  margin: var(--space-2) 0 0;
+}
+
+.faq-item h3 + p {
+  margin-top: 0;
 }
 
 /* The broadcast overlay: one 1920 by 1080 frame, zoomed to fit a smaller window. */
