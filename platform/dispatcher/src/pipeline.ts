@@ -64,6 +64,7 @@ import {
   PULL_HEAD_INTERVAL_MS,
   PULL_HEAD_TIMEOUT_MS,
   pushBranch,
+  failedGateSteps,
   revertMerge,
   treeModes,
   waitForGate,
@@ -73,6 +74,7 @@ import {
   type PollOptions,
 } from './github.js';
 import { fetchFrames, FramesError, type Frames } from './frames.js';
+import { GATE_REPAIR_STEP, repairAddendum } from './gate-repair.js';
 import { applyStoredPatch, type PatchStore } from './patch.js';
 import { haltDispatcher, haltReason } from './halt.js';
 import { mergeLock } from './lock.js';
@@ -371,8 +373,9 @@ export async function runCardPipeline(card: Card, deps: PipelineDeps): Promise<v
       if (error instanceof StageMoved) error.pr = built.prNumber;
       throw error;
     });
-    await waitForGatePass(card, role, built, deps);
-    const commit = await visualReview({ card, role, worktree, before, allowed, checks, maker }, built, deps);
+    const building: Building = { card, role, worktree, before, allowed, checks, maker };
+    const gated = await gateWithRepair(building, built, deps);
+    const commit = await visualReview(building, gated, deps);
     pull.number = commit.prNumber;
     // No further session runs for the card, so the rest of its budget is no longer held from others.
     deps.budgets?.close(card.id);
@@ -826,10 +829,10 @@ async function visualReview(building: Building, first: CommitInfo, deps: Pipelin
         });
         return commit;
       }
-      await revisionMayStart(building, deps);
+      await revisionMayStart(building, deps, 'visual revision');
       rounds = await deps.db.recordReviewRound(card.id);
       commit = await revise(building, commit, revisionAddendum(verdict, rounds), deps);
-      await waitForGatePass(card, role, commit, deps);
+      commit = await gateWithRepair(building, commit, deps);
     } finally {
       await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     }
@@ -863,15 +866,42 @@ async function reviewBudget(card: Card, deps: PipelineDeps): Promise<number> {
 // fault), and not once the claim's throttle budget is spent (back to funded, so the tick sizes a new
 // budget from the money there is then). Each stop comes before the round is counted, and the card
 // keeps its first change's stored patch, so a later claim re-gates it with no session.
-async function revisionMayStart(building: Building, deps: PipelineDeps): Promise<void> {
+async function revisionMayStart(building: Building, deps: PipelineDeps, what: 'visual revision' | 'gate repair'): Promise<void> {
   const { card, role } = building;
-  if ((await deps.db.getStudioState()).paused) throw new CardStop('paused', 'paused_by_board', 'the board paused agents, so the visual revision did not start');
+  if ((await deps.db.getStudioState()).paused) throw new CardStop('paused', 'paused_by_board', `the board paused agents, so the ${what} did not start`);
   if ((await deps.db.roleState(role.id)).paused) {
-    throw new Requeue(['gated'], 'role_paused', `the executor role ${role.name} is paused, so the visual revision did not start`, false);
+    throw new Requeue(['gated'], 'role_paused', `the executor role ${role.name} is paused, so the ${what} did not start`, false);
   }
   const left = deps.budgets?.remaining().get(card.id);
   if (left !== undefined && left <= 0) {
-    throw new Requeue(['gated'], 'insufficient_balance', "the claim's session budget is spent, so the visual revision did not start", false);
+    throw new Requeue(['gated'], 'insufficient_balance', `the claim's session budget is spent, so the ${what} did not start`, false);
+  }
+}
+
+// The gate, with one repair round per card (docs/specs/gate-repair.md). A gate that rejects the card's
+// own change (waitForGatePass: not infrastructure, not a red main, and past the one flake retry)
+// sends it back to its builder once, as a revision whose feedback is the failed jobs and steps by
+// their workflow names; the repaired commit is gated again, and a second rejection stands. The round
+// starts only as a revision would (revisionMayStart), and is recorded before its session so a restart
+// never repairs twice.
+async function gateWithRepair(building: Building, commit: CommitInfo, deps: PipelineDeps): Promise<CommitInfo> {
+  const { card, role } = building;
+  try {
+    await waitForGatePass(card, role, commit, deps);
+    return commit;
+  } catch (error) {
+    if (!(error instanceof CardStop) || error.stage !== 'rejected' || error.failingCheck !== 'gate') throw error;
+    if ((await deps.db.findEvent(card.id, GATE_REPAIR_STEP)) !== null) throw error;
+    await revisionMayStart(building, deps, 'gate repair');
+    const failed = await requesting(deps, () => failedGateSteps(githubOptions(deps), commit.sha)).catch((readError: unknown) => {
+      deps.log.warn('pipeline', `card ${card.id} failed gate steps could not be read: ${errorMessage(readError)}`, { sha: commit.sha });
+      return [];
+    });
+    await deps.db.insertEvent(card.id, role.id, 'message', { step: GATE_REPAIR_STEP, sha: commit.sha, pr: commit.prNumber, detail: error.message, failed });
+    deps.log.info('pipeline', `card ${card.id} gate repair round`, { sha: commit.sha, failed: failed.length });
+    const repaired = await revise(building, commit, repairAddendum(failed, card.folder, card.lane), deps);
+    await waitForGatePass(card, role, repaired, deps);
+    return repaired;
   }
 }
 
@@ -886,7 +916,7 @@ async function revise(building: Building, commit: CommitInfo, addendum: string, 
   const { card, role, worktree, before, allowed, checks, maker } = building;
   if (!(await deps.db.updateCardIf(card.id, ['gated'], { stage: 'building', failing_check: null }))) {
     const current = await deps.db.getCard(card.id).catch(() => null);
-    const moved = new StageMoved(`the card is ${current?.stage ?? 'gone'}, not gated, so its visual revision did not start; the dispatcher left it as it is.`);
+    const moved = new StageMoved(`the card is ${current?.stage ?? 'gone'}, not gated, so its revision did not start; the dispatcher left it as it is.`);
     moved.pr = commit.prNumber;
     throw moved;
   }

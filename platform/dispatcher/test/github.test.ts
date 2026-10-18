@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   closePullRequest,
   compareRange,
+  failedGateSteps,
   findPullForBranch,
   gateStatus,
   mainHead,
@@ -297,6 +298,52 @@ describe('revertMerge', () => {
       ok: false,
       reason: 'merge commit merge-sha has 2 parents; only a squash merge is reverted',
     });
+    expect(calls).toHaveLength(1);
+  });
+});
+
+describe('failedGateSteps', () => {
+  const RUNS = 'https://api.github.com/repos/owner/repo/actions/runs?head_sha=abc&per_page=50';
+  it("names the failed jobs and steps of the sha's newest failed gate run, and never the gate job", async () => {
+    const { fetchFn, calls } = routeFetch((_method, url) => {
+      if (url === RUNS) {
+        return {
+          status: 200,
+          json: {
+            workflow_runs: [
+              { id: 7, path: '.github/workflows/gate.yml', status: 'completed', conclusion: 'failure' },
+              { id: 9, path: '.github/workflows/gate.yml', status: 'completed', conclusion: 'failure' },
+              { id: 11, path: '.github/workflows/other.yml', status: 'completed', conclusion: 'failure' },
+              { id: 12, path: '.github/workflows/gate.yml', status: 'completed', conclusion: 'cancelled' },
+            ],
+          },
+        };
+      }
+      if (url.endsWith('/actions/runs/9/jobs?per_page=100')) {
+        return {
+          status: 200,
+          json: {
+            jobs: [
+              { name: 'build', conclusion: 'failure', steps: [{ name: 'Build seed-1 and scan the build', conclusion: 'success' }, { name: 'Headless bot', conclusion: 'failure' }] },
+              { name: 'frames', conclusion: 'failure' },
+              { name: 'detect', conclusion: 'success', steps: [] },
+              { name: 'gate', conclusion: 'failure', steps: [{ name: 'Require detect and every job it selected to pass', conclusion: 'failure' }] },
+            ],
+          },
+        };
+      }
+      return undefined;
+    });
+    expect(await failedGateSteps({ ...base, fetchFn }, 'abc')).toEqual([
+      { job: 'build', step: 'Headless bot' },
+      { job: 'frames', step: null },
+    ]);
+    expect(calls).toHaveLength(2);
+  });
+
+  it('is empty with no failed gate run, and reads no jobs', async () => {
+    const { fetchFn, calls } = routeFetch(() => ({ status: 200, json: { workflow_runs: [{ id: 3, path: '.github/workflows/gate.yml', status: 'completed', conclusion: 'success' }] } }));
+    expect(await failedGateSteps({ ...base, fetchFn }, 'abc')).toEqual([]);
     expect(calls).toHaveLength(1);
   });
 });

@@ -138,7 +138,10 @@ interface Remote {
   created?: Answer;
   existing?: Answer;
   pull?: Answer;
-  gate?: Reply;
+  // Called with the sha the gate is read for.
+  gate?: Answer;
+  // The jobs of any gate run (failedGateSteps); none when unset.
+  jobs?: Reply;
   // The gate at the card's base, main's head when the card was claimed; green when unset.
   baseGate?: Reply;
   merge?: Answer;
@@ -193,9 +196,11 @@ function remote(over: Remote = {}) {
     }
     if (method === 'GET' && CHECK_RUNS.test(url)) {
       const green = { status: 200, json: { workflow_runs: [{ path: '.github/workflows/gate.yml', status: 'completed', conclusion: 'success' }] } };
-      if (CHECK_RUNS.exec(url)?.[1] === initialSha) return over.baseGate ?? green;
-      return over.gate ?? green;
+      const sha = CHECK_RUNS.exec(url)?.[1] ?? '';
+      if (sha === initialSha) return over.baseGate ?? green;
+      return answer(over.gate, sha, green);
     }
+    if (method === 'GET' && /\/actions\/runs\/\d+\/jobs/.test(url)) return over.jobs ?? { status: 200, json: { jobs: [] } };
     const git = github(method, url);
     if (git) return git;
     const main = over.main ? answer(over.main, state.head, { status: 500 }) : mainRoute(method, url);
@@ -478,13 +483,17 @@ describe('runCardPipeline', () => {
     );
   });
 
-  it('rejects on a failed gate without merging', async () => {
+  it('rejects on a gate that fails again after its one repair round, without merging', async () => {
     const c = platformCard();
     db.cards = [{ ...c, stage: 'building' }];
     const { fetchFn, calls } = remote({ gate: { status: 200, json: { workflow_runs: [{ path: '.github/workflows/gate.yml', status:'completed', conclusion: 'failure' }] } } });
-    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn));
+    const adapter = new FakeAdapter(editSite);
+    await runCardPipeline(c, deps(db, adapter, fetchFn));
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'gate', commit_sha: null });
-    expect(db.events.map((e) => e.type)).toEqual(['start', 'gate_fail']);
+    expect(db.events.map((e) => e.type)).toEqual(['start', 'gate_fail', 'message', 'start', 'gate_fail']);
+    expect(db.events.find((e) => e.payload.step === 'gate_repair')?.payload).toMatchObject({ detail: 'gate concluded failure', failed: [] });
+    expect(adapter.specs).toHaveLength(2);
+    expect(adapter.specs[1]?.prompt).toContain('Gate repair: the gate failed your change, and this is its one repair round.');
     expect(urls(calls)).not.toContain(`PUT ${GITHUB}/pulls/5/merge`);
     expect(urls(calls).some((call) => call.includes('/git/'))).toBe(false);
     expect(db.deploys).toEqual([]);
@@ -1377,7 +1386,8 @@ describe('runCardPipeline', () => {
     let seen = '';
     const adapter = new FakeAdapter(async (spec, emit) => {
       await emit(startEvent());
-      seen = await readFile(path.join(spec.worktree, 'seed-1', 'config', 'spawn-table.json'), 'utf8');
+      // The first session's view; the gate repair round's session sees the change already made.
+      seen ||= await readFile(path.join(spec.worktree, 'seed-1', 'config', 'spawn-table.json'), 'utf8');
       await editSpawnTable(spec.worktree, 11);
       await emit(usageEvent(1, 10));
     });
@@ -1629,7 +1639,7 @@ describe('a paid card and an infrastructure failure', () => {
     expect(alert.messages[0]).toMatch(/It has no stored patch to re-gate, so it is paused with its money rather than starting a new session/);
   });
 
-  it("gates a stored patch once more after its own change fails on a green base, then rejects it", async () => {
+  it("gates a stored patch once more after its own change fails on a green base, then repairs it once and rejects it", async () => {
     const { db, c, patches, adapter, sessions } = await withPatch('eeeeeeee-0000-4000-8000-000000000015');
     const first = remote({ gate: RUN('completed', 'failure') });
     await runCardPipeline(c, { ...deps(db, adapter, first.fetchFn), timings: SLOW, patches, infraStops: new Map() });
@@ -1642,16 +1652,70 @@ describe('a paid card and an infrastructure failure', () => {
     expect(db.events.find((e) => e.payload.step === 'gate_retry')).toMatchObject({ type: 'message', payload: { detail: 'gate concluded failure' } });
     expect(urls(first.calls).filter((call) => CHECK_RUNS.exec(call.slice(4))?.[1] === initialSha)).toHaveLength(1);
 
-    // The second failure rejects it, and no session ever ran.
+    // The second failure starts the one repair round, the only session; its failure rejects the card.
     db.cards[0]!.stage = 'building';
     await git(['update-ref', 'refs/heads/main', initialSha], origin);
     const second = remote({ gate: RUN('completed', 'failure') });
     await runCardPipeline(c, { ...deps(db, adapter, second.fetchFn), timings: SLOW, patches, infraStops: new Map() });
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'gate' });
-    expect(db.events.filter((e) => e.type === 'gate_fail')).toHaveLength(2);
-    expect(sessions()).toBe(0);
+    expect(db.events.filter((e) => e.type === 'gate_fail')).toHaveLength(3);
+    expect(db.events.filter((e) => e.payload.step === 'gate_repair')).toHaveLength(1);
+    expect(sessions()).toBe(1);
+    expect(patches.rows).toHaveLength(0);
     // The rejection closes the pull request the retry kept open.
     expect(urls(second.calls).filter((call) => call === `PATCH ${GITHUB}/pulls/5`)).toHaveLength(1);
+  });
+
+  it('a gate repair that passes carries the card on, with the failed steps and their local commands in the prompt', async () => {
+    const { db, c, patches } = await withPatch('eeeeeeee-0000-4000-8000-000000000017');
+    await db.insertEvent(c.id, null, 'message', { step: 'gate_retry' });
+    const adapter = new FakeAdapter(editSite);
+    let failedSha = '';
+    const failing = { status: 200, json: { workflow_runs: [{ id: 41, path: '.github/workflows/gate.yml', status: 'completed', conclusion: 'failure' }] } };
+    const jobs = {
+      status: 200,
+      json: {
+        jobs: [
+          { name: 'detect', conclusion: 'success', steps: [{ name: 'Scan the change before any card code runs', conclusion: 'success' }] },
+          { name: 'platform', conclusion: 'failure', steps: [{ name: 'Typecheck and tests', conclusion: 'failure' }, { name: 'Gate tests', conclusion: 'skipped' }] },
+          { name: 'gate', conclusion: 'failure', steps: [{ name: 'Require detect and every job it selected to pass', conclusion: 'failure' }] },
+        ],
+      },
+    };
+    // The stored patch's commit fails; the repaired commit passes.
+    const { fetchFn } = remote({
+      gate: (sha) => {
+        failedSha ||= sha;
+        return sha === failedSha ? failing : RUN('completed', 'success');
+      },
+      jobs,
+    });
+    await runCardPipeline(c, { ...deps(db, adapter, fetchFn), timings: SLOW, patches, infraStops: new Map() });
+    expect(db.cards[0]).toMatchObject({ stage: 'live', commit_sha: MERGE_SHA });
+    expect(db.events.find((e) => e.payload.step === 'gate_repair')?.payload).toMatchObject({ sha: failedSha, failed: [{ job: 'platform', step: 'Typecheck and tests' }] });
+    expect(adapter.specs).toHaveLength(1);
+    const prompt = adapter.specs[0]?.prompt ?? '';
+    expect(prompt).toContain('- job platform, step "Typecheck and tests": bash platform/gate/ship-gate.sh --folder platform --lane code --phase checks --dry-run');
+    expect(prompt).not.toContain('Require detect');
+  });
+
+  it('repairs a card once only, and starts no repair while its executor role is paused', async () => {
+    const once = await withPatch('eeeeeeee-0000-4000-8000-000000000018');
+    await once.db.insertEvent(once.c.id, null, 'message', { step: 'gate_retry' });
+    await once.db.insertEvent(once.c.id, null, 'message', { step: 'gate_repair' });
+    await runCardPipeline(once.c, { ...deps(once.db, once.adapter, remote({ gate: RUN('completed', 'failure') }).fetchFn), timings: SLOW, patches: once.patches, infraStops: new Map() });
+    expect(once.db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'gate' });
+    expect(once.sessions()).toBe(0);
+
+    const paused = await withPatch('eeeeeeee-0000-4000-8000-000000000019');
+    await paused.db.insertEvent(paused.c.id, null, 'message', { step: 'gate_retry' });
+    paused.db.roles[0]!.paused = true;
+    await runCardPipeline(paused.c, { ...deps(paused.db, paused.adapter, remote({ gate: RUN('completed', 'failure') }).fetchFn), timings: SLOW, patches: paused.patches, infraStops: new Map() });
+    expect(paused.db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'role_paused' });
+    expect(paused.db.events.some((e) => e.payload.step === 'gate_repair')).toBe(false);
+    expect(paused.sessions()).toBe(0);
+    // The stored patch is kept, so a later claim gates it again with no session.
+    expect(paused.patches.rows).toHaveLength(1);
   });
 
   it('a retried gate that passes carries the card on', async () => {

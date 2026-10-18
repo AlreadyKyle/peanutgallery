@@ -556,6 +556,8 @@ export interface RunJob {
   name: string;
   conclusion: string | null;
   htmlUrl: string | null;
+  // The job's steps in order, with their conclusions (null while a step has not finished).
+  steps: { name: string; conclusion: string | null }[];
 }
 
 export async function runJobs(opts: GitHubOptions, runId: number): Promise<RunJob[]> {
@@ -567,7 +569,38 @@ export async function runJobs(opts: GitHubOptions, runId: number): Promise<RunJo
     name: String(job.name ?? ''),
     conclusion: typeof job.conclusion === 'string' ? job.conclusion : null,
     htmlUrl: typeof job.html_url === 'string' ? job.html_url : null,
+    steps: (Array.isArray(job.steps) ? job.steps : []).filter(isRecord).map((step) => ({
+      name: String(step.name ?? ''),
+      conclusion: typeof step.conclusion === 'string' ? step.conclusion : null,
+    })),
   }));
+}
+
+export interface FailedStep {
+  job: string;
+  // null when the job failed with no failed step listed.
+  step: string | null;
+}
+
+// The jobs and steps that failed in the newest gate workflow run on the sha that completed with a
+// failure. Job and step names come from the gate workflow, a kernel path, so they carry no text the
+// change wrote; logs are never read. An empty list when there is no such run.
+export async function failedGateSteps(opts: GitHubOptions, sha: string): Promise<FailedStep[]> {
+  const result = await request(opts, 'GET', `/repos/${opts.repo}/actions/runs?head_sha=${sha}&per_page=50`);
+  if (result.status !== 200 || !isRecord(result.json)) {
+    throw new Error(`github workflow runs: http ${result.status} ${apiMessage(result.json)}`.trim());
+  }
+  const all = Array.isArray(result.json.workflow_runs) ? result.json.workflow_runs.filter(isRecord) : [];
+  const failed = all.filter((run) => isGateWorkflowRun(run) && run.status === 'completed' && run.conclusion === 'failure' && typeof run.id === 'number');
+  if (failed.length === 0) return [];
+  const newest = failed.reduce((a, b) => ((b.id as number) > (a.id as number) ? b : a));
+  const jobs = await runJobs(opts, newest.id as number);
+  return jobs
+    .filter((job) => job.conclusion === 'failure' && job.name !== 'gate')
+    .flatMap((job): FailedStep[] => {
+      const steps = job.steps.filter((step) => step.conclusion === 'failure');
+      return steps.length > 0 ? steps.map((step) => ({ job: job.name, step: step.name })) : [{ job: job.name, step: null }];
+    });
 }
 
 export interface IssueComment {
