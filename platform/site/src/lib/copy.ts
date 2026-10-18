@@ -658,6 +658,7 @@ export const copy = {
   me: {
     title: 'Your desk',
     lede: 'Your desk holds the cards you helped fund and the ideas you pitched, under your own name and avatar.',
+    ledeClosed: 'Once profiles open, your desk will hold the cards you helped fund and the ideas you pitched, under your own name and avatar.',
     closedTitle: 'Profiles are not open yet',
     closedBody: 'Sign-in is off for now, so there are no profiles yet. You can still fund any card as a guest: paying never needs an account.',
     loading: 'Loading your profile.',
