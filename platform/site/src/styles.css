@@ -78,7 +78,7 @@ h1 {
 }
 
 h2 {
-  font-size: var(--size-h2);
+  font-size: var(--size-section);
   letter-spacing: var(--tracking-heading);
   margin-bottom: var(--space-3);
 }
@@ -622,6 +622,23 @@ main > .band:not(:first-child) .contribute > h2 {
   margin-bottom: var(--space-4);
 }
 
+/* The intro reads as a lede (the production pass): one line under the heading at the lede's size, so
+   the heading, the intro and the body step down in three clear sizes. Only an intro is a lede: the
+   one paragraph between a heading and what it introduces (a grid, a list, a form). A paragraph that
+   is the section's whole text, a muted note and a sheet's text column keep the body size. */
+main:not(.sheet) .section > h2 + p:not(.muted, .small):has(+ :not(p, h3, h4)) {
+  font-size: var(--size-lede);
+  line-height: var(--leading-title);
+}
+
+/* A sheet's headings label its reading column (from 64rem they stand in its left five twelfths), and
+   a framed panel's heading titles a part: both take the part size, so a clause never breaks into a
+   word a line. */
+main.sheet h2,
+.how-rules > h2 {
+  font-size: var(--size-h2);
+}
+
 /* A link to a section (/#fund) lands with its rule and number in view, not cut by the window's top. */
 h2[id] {
   scroll-margin-top: var(--space-5);
@@ -674,6 +691,20 @@ main.sheet > .band:not(:first-child) > .section > h2:first-child + .faq-item {
 @media (min-width: 64rem) and (max-width: 79.99rem) {
   main.sheet .rows.rail li {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The ledger's funding figures load into the page's first screen: while they load, their line holds
+   about the room the figures take, so the note and the band under them do not jump when the figures
+   arrive (the board, 18 October 2026: the ledger shifted as it loaded). The room is a little under the
+   figures' height at each width, so a short list never leaves a gap. */
+.section:has(> #funding) > p[aria-busy='true'] {
+  min-height: calc(50rem - 40vw);
+}
+
+@media (min-width: 64rem) {
+  .section:has(> #funding) > p[aria-busy='true'] {
+    min-height: calc(58rem - 32vw);
   }
 }
 
@@ -776,7 +807,7 @@ main.card-page > .band:nth-child(2) {
 }
 
 .lede {
-  font-size: var(--size-lead);
+  font-size: var(--size-lede);
 }
 
 .rules {
@@ -1456,6 +1487,14 @@ button.link:hover:not(:disabled) {
 
 .game-text > h2 {
   margin-top: 0;
+}
+
+/* Headings that title a part, not a section, keep the part size (the production pass): the first
+   game's heading sits in a column between the box art and the video, and the Machine card's title is
+   a card's, so at the section size either would stack a word to a line. */
+.game-text > h2,
+.machine-card h2 {
+  font-size: var(--size-h2);
 }
 
 .game-text > p {
@@ -4993,11 +5032,12 @@ main.broadcast > .band > * {
 
 /* The floor (docs/specs/place.md) -------------------------------------------
    Home is the studio as a place: the room's stations are the page's map. The floor is wider than the
-   reading pages (--wrap-floor), and the top bar and footer widen with it on home, so the page keeps
-   one left edge. */
+   reading pages (--wrap-floor). The top bar and footer take the floor's width on every page, so the
+   wordmark, the nav and the buttons never move from one page to the next (the board, 18 October
+   2026: leaving home moved the whole bar 48px), and home keeps one left edge. */
 
-.page:has(> main.home) > .topbar > .wrap,
-.page:has(> main.home) > .site-footer > .wrap {
+.topbar > .wrap,
+.site-footer > .wrap {
   max-width: var(--wrap-floor);
 }
 
