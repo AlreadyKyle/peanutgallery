@@ -247,6 +247,9 @@ export function HowItWorks() {
               ))}
             </ul>
             <p>{legal.artPolicy}</p>
+            {/* Who made what (copy.whoMadeWhat): the agents, the code they wrote and the board. */}
+            <h3 className="who-made">{copy.whoMadeWhat.heading}</h3>
+            <p>{copy.whoMadeWhat.body.join(' ')}</p>
           </section>
         </div>
       </div>

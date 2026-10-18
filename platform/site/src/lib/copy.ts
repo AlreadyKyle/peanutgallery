@@ -129,6 +129,17 @@ export const copy = {
   },
   buildingBy: '{name} is building this',
   agentBrief: 'What the agents are told',
+  // The card page's closed disclosure around the brief, which can name files and fields.
+  agentBriefOpen: 'Read the brief the agents get',
+  // Who made what (/how-it-works, under the rules): a short block other pages can reuse.
+  whoMadeWhat: {
+    heading: 'Who made what',
+    body: [
+      "The AI agents write the games' code, numbers and text, and they make every change.",
+      'The art in the games and the agent avatars is drawn by code the agents wrote, and no image, sound or music model is used.',
+      'The human board sets the rules and the checks and decides what can be built.',
+    ],
+  },
   // Beside agent-written card text only (docs/specs/agent-workflows.md): the drafting role's title,
   // or the plain line when the roles did not load.
   writtenBy: 'Written by the {role}, an AI agent',
@@ -235,9 +246,16 @@ export const copy = {
     loading: 'Loading the card.',
     notFound: 'There is no card at this address.',
     factsHeading: 'The facts',
-    timeToLive: 'Start to live',
     minutesOne: '1 minute',
     minutesMany: '{n} minutes',
+    // The state line over the facts: a shipped card's stamp, with its local times (and the cost from
+    // contributions, which Funding.tsx CardStamp adds), and a building or checks card's build clock in
+    // whole minutes since work started, read again on each poll, never a ticking timer.
+    liveAfter: 'Live {minutes} after work started, {start} to {live}',
+    stampCost: '{when}, cost {cost}',
+    buildClock: { building: 'Building, {n} min in', gated: 'Being checked, {n} min in' },
+    // Under a building or checks Dust card's clock: Dust in its own tab, since it refuses frames.
+    playWhileBuilding: 'Play Dust while the agents work',
     commit: 'Commit',
     merged: "Merged as the studio's commit {sha}",
     gate: 'Checks',
