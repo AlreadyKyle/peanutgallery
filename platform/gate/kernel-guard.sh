@@ -9,7 +9,7 @@
 # and .mts before .ts, so it replaces the kernel file and still passes the typecheck), and a
 # kernel name when any segment of its path matches the name as a glob. It matches a design path, one
 # of the kernel design files that set the look (docs/specs/design-review.md), the same way as a kernel
-# path. Both matches ignore case, because a
+# path, a shadowing module included. Both matches ignore case, because a
 # case-insensitive checkout (macOS) loads claude.md as CLAUDE.md. A line that begins with a double
 # quote (a path git quoted) or holds a tab or other control character fails too: it cannot be
 # matched reliably. The workflow runs this on card/* branches only, in the detect job before any
@@ -36,11 +36,13 @@ while IFS= read -r line || [ -n "$line" ]; do
 done < "$GATE_DIR/design-paths.txt"
 shopt -s nocasematch
 
-# True when the path equals a design path or lies under one.
+# True when the path equals a design path, lies under one, or shadows a design source file (routes.ts
+# beside routes.tsx, which the kernel App.tsx imports).
 is_design_path() {
   local design
   for design in ${DESIGN_PATHS[@]+"${DESIGN_PATHS[@]}"}; do
     case "$1" in "$design"|"$design"/*) return 0 ;; esac
+    gate_shadows_kernel_file "$1" "$design" && return 0
   done
   return 1
 }
