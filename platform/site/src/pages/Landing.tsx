@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { CardsStatus } from '../components/CardsStatus';
 import { EventList } from '../components/EventList';
 import { ExplainerVideo } from '../components/ExplainerVideo';
@@ -21,6 +22,7 @@ import { siteEnv } from '../lib/env';
 import { useLastVisit } from '../lib/last-visit';
 import { legal } from '../lib/legal';
 import { useLiveHome, type HomeView } from '../lib/live';
+import { useStudioMorph } from '../lib/studio-morph';
 import { teamStrip } from '../lib/roster';
 import { unavailableLine, useStudio, type StudioState } from '../lib/studio';
 
@@ -246,8 +248,11 @@ export function Landing() {
   const since = useLastVisit();
   const player = useSignedInPanel();
   const lit = useLitStation(STATION_IDS, view !== null);
+  const main = useRef<HTMLElement>(null);
+  // From 64rem the plate's room shrinks onto the rail's map as the page scrolls (lib/studio-morph.ts).
+  useStudioMorph(main, view !== null);
   return (
-    <main className="wide home">
+    <main className="wide home" ref={main}>
       {/* The floor's plate (docs/specs/place.md): the room large, its stations as links, and beside it
           who you are to the studio today: the pitch on a first visit, your level and your cards once
           signed in. The pipe sits under the panel. */}
