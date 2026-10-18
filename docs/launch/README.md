@@ -52,6 +52,6 @@ Measured on the drafts as written, with the current domain.
 | `reddit-claudeai.md` | title 300, body 40,000 | title 101, body 2,231 |
 | `reddit-artificial.md` | title 300, body 40,000 | title 109, body 1,816 |
 | `reddit-incremental-games.md` | title 300, body 40,000 | title 102, body 1,753 |
-| `show-hn.md` | title 80; the first comment held under 2,000 | title 77, comment 1,695 |
+| `show-hn.md` | title 80; the first comment held under 2,000 | title 77, comment 1,821 |
 | `x-thread.md` | 280 a post, a link counted as 23 | 8 posts, the longest 248 counted in full |
 | `backlash-line.md` | fits any of the above | 144 |

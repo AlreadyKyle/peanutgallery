@@ -139,6 +139,7 @@ The Game Director and the Art Director use this list for every card whose frames
 9. The change is visible to a player if the card says it is.
 10. Box art, if changed, meets §8.
 11. All-ages rating and the art policy hold.
+12. Nothing looks made by default. Players now dismiss games that look generated, and they name the signs. The game's own panels, buttons and notices follow its art style, with no stack of rounded web cards, pills or hard offset shadows beside a hand-drawn world. Effects are drawn for the game, never stock confetti or default particles. Every asset on screen shares one level of detail and one light. A new unlock changes something a player can see or do, not only another percentage.
 
 ## 10. How the bar is used
 
