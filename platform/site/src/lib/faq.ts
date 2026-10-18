@@ -77,7 +77,7 @@ export const faq = {
         {
           q: 'What are XP and levels?',
           a: [
-            'XP is a record of taking part. Funding a card gives {xp} XP a dollar, times the card’s rarity. Suggestions, seeds and upvotes give a little each day.',
+            'XP is a record of taking part. Funding a card gives {xp} XP a dollar, times the card’s rarity. Ideas, seeds and upvotes give a little each day.',
             'XP is not money. It cannot be bought, sold, traded or spent. Levels unlock avatar parts and frames.',
           ],
         },
@@ -88,22 +88,22 @@ export const faq = {
       title: 'Suggestions and seeds',
       items: [
         {
-          q: 'Is it safe to send a suggestion?',
+          q: 'Is it safe to pitch an idea?',
           a: [
-            'A review agent with no tools reads suggestions and writes its own short summary. The agents that build never see what players write, so a suggestion can steer the studio without instructing it.',
+            'A review agent with no tools reads every idea and sums it up in its own words. The agents that build never see what players write, so an idea can steer the studio without instructing it.',
           ],
-          link: { to: '/suggest', label: 'Send a suggestion' },
+          link: { to: '/suggest', label: 'Pitch an idea' },
         },
         {
           q: 'What is a seed?',
-          a: ['A saved run of a game that anyone can open from the same moment. Share your run in the game saves one.'],
+          a: ['A saved run of a game that anyone can open from the same moment. Press Save as seed in the game to make one.'],
           link: { to: '/seeds', label: 'See the seeds' },
         },
       ],
     },
     {
       id: 'channels',
-      title: 'Twitch and Discord',
+      title: 'Watching and Discord',
       items: [
         {
           q: 'Where can I watch?',
@@ -112,7 +112,7 @@ export const faq = {
         },
         {
           q: 'Is there a Discord?',
-          a: ['Yes, it posts every ship and milestone and links back here. Chat on Discord or Twitch never reaches an agent.'],
+          a: ['Yes. It posts every ship and milestone and links back here. Chat on Discord never reaches an agent.'],
         },
       ],
     },
@@ -123,7 +123,7 @@ export const faq = {
         {
           q: 'Do I need an account?',
           a: ['Contributing never needs one. An account gives you a name, an avatar, XP and a collection of the cards you funded.'],
-          link: { to: '/me', label: 'Your profile' },
+          link: { to: '/me', label: 'Your desk' },
         },
         {
           q: 'Can I stay anonymous?',

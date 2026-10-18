@@ -312,6 +312,8 @@ describe('FundNow', () => {
     expect(next.textContent).toContain(legal.fundNextBody);
     expect(next.querySelector('a[href="/contribute"]')).not.toBeNull();
     expect(document.querySelectorAll('a[href="/contribute"]')).toHaveLength(1);
+    // Next up says what the Game Designer is doing, so the panel does not repeat it.
+    expect(next.querySelector('.fund-empty-agent')).toBeNull();
   });
 
   it('keeps the next card in line under a single open card, so there are always two ways to fund', () => {

@@ -257,12 +257,7 @@ export function HowItWorks() {
         <section className="section" aria-labelledby="how-code">
           <h2 id="how-code">{page.codeHeading}</h2>
           <div className="prose">
-            <p>{page.codeIntro}</p>
-            <ul className="rules">
-              {page.code.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
+            <p>{page.code}</p>
             <p>{page.agents}</p>
           </div>
         </section>

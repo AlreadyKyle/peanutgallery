@@ -217,10 +217,10 @@ describe('How it works', () => {
     expect(text).toMatch(/need no board/);
     expect(within(who).getByRole('link', { name: legal.contactEmail }).getAttribute('href')).toBe(`mailto:${legal.contactEmail}`);
     const code = screen.getByRole('region', { name: page.codeHeading });
-    expect(within(code).getAllByRole('listitem').map((li) => li.textContent)).toEqual([...page.code]);
-    expect(code.textContent).toMatch(/scheduler hands out the cards/);
-    expect(code.textContent).toMatch(/runs through the tests and the other automated checks/);
-    expect(code.textContent).toMatch(/goes live only when it passes/);
+    // One paragraph: the rules and the steps above already say each check in full.
+    expect(within(code).queryAllByRole('listitem')).toHaveLength(0);
+    expect(code.textContent).toMatch(/hands out the cards/);
+    expect(code.textContent).toMatch(/runs the checks/);
     // Inside terms stay off the page (docs/COPY.md): the dispatcher and the gate are named plainly.
     expect(code.textContent).not.toMatch(/dispatcher|the gate/i);
     expect(code.textContent).toMatch(/rolled back/);
