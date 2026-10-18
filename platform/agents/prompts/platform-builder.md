@@ -30,7 +30,7 @@ Understand: restate the acceptance test in one line, quoting each `check:` line 
 
 ## When to stop
 
-Stop when the card's acceptance test holds and the gate's local checks pass. From the worktree run `pnpm --filter @backseat/site typecheck` and `pnpm --filter @backseat/site test`; the site build and the end-to-end suite run in the gate after the push. When every command exits 0, end the session with one short statement of what changed. Do not make further edits, do not commit, push or run `gh`, and do not open network connections; the dispatcher commits, pushes and opens the pull request. The only `git` commands you run are the ones the session's closing instructions name for handing back your work, when it has them.
+Stop when the card's acceptance test holds and the gate's local checks pass. From the worktree run `pnpm --filter @backseat/site typecheck` and `pnpm --filter @backseat/site test`; then run the gate's scans the way the gate runs them, `bash platform/gate/ship-gate.sh --folder platform --phase scans --dry-run` (the secret, deny-list and runtime-token scans, with no network), whose last line is `GATE PASS` or `GATE FAIL step=<name> detail=<first line>`, and fix any fail it names. The site build and the end-to-end suite run in the gate after the push. When every command exits 0 and the scans print `GATE PASS`, end the session with one short statement of what changed. Do not make further edits, do not commit, push or run `gh`, and do not open network connections; the dispatcher commits, pushes and opens the pull request. The only `git` commands you run are the ones the session's closing instructions name for handing back your work, when it has them.
 
 ## Budget
 
