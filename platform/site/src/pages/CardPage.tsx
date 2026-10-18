@@ -9,6 +9,7 @@ import { Perks } from '../components/Perks';
 import { Replay } from '../components/Replay';
 import { ShareCard } from '../components/ShareCard';
 import { StoppedFacts } from '../components/Stopped';
+import { SuggestedBy } from '../components/SuggestedBy';
 import { Supporters } from '../components/Supporters';
 import { Timeline } from '../components/Timeline';
 import { parseChecks, useCardDetail, type CardDetail } from '../lib/card-source';
@@ -24,7 +25,7 @@ import { useStudio } from '../lib/studio';
 // through kernel components (CardFacts, Supporters, StoppedFacts), as home's does. The title on the
 // signal plate; then on paper, stacked at the reading measure at every width, the face with Play (or
 // a planned card's roadmap state) and Tell me when this ships (docs/specs/card-follows.md), the facts,
-// what changed, why it stopped, the supporters and what the agents did. Stacked, because the face and the facts have heights that have nothing to do with
+// what changed, who suggested it, why it stopped, the supporters and what the agents did. Stacked, because the face and the facts have heights that have nothing to do with
 // each other: side by side, one column always ended far above the other (DESIGN.md, No dead space).
 
 const words = copy.cardPage;
@@ -157,6 +158,7 @@ function Detail({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }
       </section>
       <Facts detail={detail} />
       <Changed detail={detail} />
+      <SuggestedBy cardId={detail.card.id} />
       {detail.stopped === null ? null : (
         <section className="section" aria-labelledby="card-stopped">
           <h2 id="card-stopped">{words.stoppedHeading}</h2>
@@ -208,7 +210,14 @@ export function CardPage() {
           </Link>
         </p>
         <PageHeader title={title} />
-        {state.state === 'ready' ? <ShareCard title={title} url={`${window.location.origin}/card/${state.detail.card.id}`} /> : null}
+        {state.state === 'ready' ? (
+          <ShareCard title={title} url={`${window.location.origin}/card/${state.detail.card.id}`} />
+        ) : state.state === 'loading' ? (
+          // The share line's room while the card loads, so the body below does not drop when it arrives.
+          <p className="share-card" aria-hidden="true">
+            <span className="share-card-room" />
+          </p>
+        ) : null}
       </div>
       <div className="band">
         {state.state === 'loading' ? (

@@ -16,6 +16,7 @@ export type Parsed<T> = { ok: true; value: T } | { ok: false; status: number; er
 
 const CURSOR = /^[A-Za-z0-9.+|-]{1,80}$/;
 const HANDLE = /^[a-z0-9-]{3,24}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const SEED_SORTS = ['trending', 'top_week', 'top_all', 'new'];
 const SUGGESTION_SORTS = ['top', 'new'];
 const AREAS = ['dust', 'new_game', 'studio', 'site'];
@@ -84,6 +85,15 @@ export function documentRoute(pathname: string, params: URLSearchParams): Parsed
     const handle = decodeURIComponent(profile[1]!);
     if (!HANDLE.test(handle)) return { ok: false, status: 404, error: 'Not found' };
     return { ok: true, value: { rpc: 'community_profile', args: { p_handle: handle }, seconds: 30, staleSeconds: 60 } };
+  }
+  // A card's Suggested by credit (docs/specs/place.md): the ideas in the clusters linked to it.
+  const cardIdeas = /^card\/([^/]+)\/ideas$/.exec(rest);
+  if (cardIdeas) {
+    const bad = only(params, []);
+    if (bad) return refuse(bad);
+    const card = cardIdeas[1]!.toLowerCase();
+    if (!UUID.test(card)) return { ok: false, status: 404, error: 'Not found' };
+    return { ok: true, value: { rpc: 'community_card_ideas', args: { p_card: card }, seconds: 30, staleSeconds: 60 } };
   }
   return { ok: false, status: 404, error: 'Not found' };
 }

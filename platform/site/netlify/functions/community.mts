@@ -7,6 +7,8 @@
 //   GET  /api/community/seeds?sort=&cursor=              community_seeds()        s-maxage 15
 //   GET  /api/community/suggestions?sort=&area=&cursor=  community_suggestions()  s-maxage 15
 //   GET  /api/community/profile/<handle>                 community_profile()      s-maxage 30, 404 if none
+//   GET  /api/community/card/<uuid>/ideas                community_card_ideas()   s-maxage 30 (Suggested by,
+//                                     docs/specs/place.md)
 //   GET  /api/community/auth/settings                    {signIn}: whether email sign-in takes new
 //                                     players, from Supabase Auth's public settings  s-maxage 60
 //                                     (docs/specs/place.md: the site hides profile prompts while not)

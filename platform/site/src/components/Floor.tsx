@@ -54,32 +54,43 @@ export function stationTags(snapshot: Snapshot): StationTag[] {
 }
 
 /**
- * Which station's part of the page is in view: the one whose section crosses the band a little above
- * the window's middle. Null while none is (the plate at the top). Reading the page lights a station;
- * nothing moves (DESIGN.md, Motion).
+ * Which station's part of the page the reader is at: the last one whose top has passed a line a little
+ * above the window's middle. It holds through what sits between two stations (the first game, after
+ * Fund), so the rail always shows where the reader is once they reach the first station, and none
+ * before it (the plate at the top). Reading the page lights a station; nothing moves (DESIGN.md, Motion).
  */
+export function litStation(parts: readonly { id: string; top: number }[], line: number): string | null {
+  let lit: string | null = null;
+  for (const part of parts) if (part.top <= line) lit = part.id;
+  return lit;
+}
+
 export function useLitStation(ids: readonly string[], ready: boolean): string | null {
   const [lit, setLit] = useState<string | null>(null);
   const key = ids.join(' ');
   useEffect(() => {
-    if (typeof IntersectionObserver === 'undefined') return;
-    const seen = new Map<string, boolean>();
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) seen.set(entry.target.getAttribute('data-station') ?? '', entry.isIntersecting);
-        const first = ids.find((id) => seen.get(id) === true) ?? null;
-        setLit(first);
-      },
-      { rootMargin: '-35% 0px -60% 0px' },
-    );
-    for (const id of ids) {
-      const el = document.querySelector(`[data-station-part="${id}"]`);
-      if (el !== null) {
-        el.setAttribute('data-station', id);
-        observer.observe(el);
+    let frame = 0;
+    const read = () => {
+      frame = 0;
+      const parts: { id: string; top: number }[] = [];
+      for (const id of ids) {
+        const box = document.querySelector(`[data-station-part="${id}"]`)?.getBoundingClientRect();
+        // A part that is not laid out (not drawn yet, or no layout at all) lights nothing.
+        if (box !== undefined && box.height > 0) parts.push({ id, top: box.top });
       }
-    }
-    return () => observer.disconnect();
+      setLit(litStation(parts, window.innerHeight * 0.4));
+    };
+    const schedule = () => {
+      if (frame === 0) frame = requestAnimationFrame(read);
+    };
+    read();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      if (frame !== 0) cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+    };
     // The ids are read through their joined key; the parts mount once the snapshot is drawn.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, ready]);
@@ -113,15 +124,12 @@ export function FloorRail({ snapshot, lit, counts }: { snapshot: Snapshot; lit: 
         <StudioRoom snapshot={snapshot} studio={studio} facts={false} interactive={false} stations={stationTags(snapshot)} lit={lit} />
       </div>
       <ol className="floor-stations">
-        {floorStations(snapshot).map(({ id, glyph }, index) => {
+        {floorStations(snapshot).map(({ id, glyph }) => {
           const words = copy.floor.stations[id];
           const n = counts[id];
           return (
             <li key={id} data-lit={lit === id ? 'true' : undefined}>
               <a href={`#${id}`} aria-current={lit === id ? 'location' : undefined}>
-                <span className="floor-station-number" aria-hidden="true">
-                  {String(index + 1).padStart(2, '0')}
-                </span>
                 <Glyph name={glyph} />
                 <span className="floor-station-name">{words.name}</span>
                 {n === null ? null : <span className="floor-station-count">{n}</span>}
@@ -137,13 +145,16 @@ export function FloorRail({ snapshot, lit, counts }: { snapshot: Snapshot; lit: 
   );
 }
 
-/** A station's part of the floor: its numbered head, its heading and what it is, then its body. */
-export function StationPart({ id, index, title, intro, children }: { id: StationId; index: number; title: string; intro?: ReactNode; children: ReactNode }) {
+/**
+ * A station's part of the floor: its head (glyph and where in the room), its heading and what it is,
+ * then its body. No number is drawn (the board, 18 October 2026: no 01, 02 over sections); `index`
+ * is the station's place on the walk, kept for the callers' order.
+ */
+export function StationPart({ id, title, intro, children }: { id: StationId; index: number; title: string; intro?: ReactNode; children: ReactNode }) {
   const glyph = FLOOR_STATIONS.find((station) => station.id === id)?.glyph ?? 'gear';
   return (
     <section className="section station-part" data-station-part={id} aria-labelledby={id}>
       <p className="station-index" aria-hidden="true">
-        <span className="flow-step-number">{String(index).padStart(2, '0')}</span>
         <Glyph name={glyph} />
         <span>{copy.floor.stations[id].where}</span>
       </p>
@@ -318,7 +329,7 @@ export function useSignedInPanel(): Profile | null {
   return me.state === 'ready' ? me.profile : null;
 }
 
-export function WelcomePanel({ profile, snapshot, status }: { profile: Profile; snapshot: Snapshot | null; status: ReactNode }) {
+export function WelcomePanel({ profile, snapshot, status }: { profile: Profile; snapshot: Snapshot | null; status?: ReactNode }) {
   const more = profile.collection.length - 3;
   return (
     <div className="hero hero-home here-panel">
@@ -341,7 +352,7 @@ export function WelcomePanel({ profile, snapshot, status }: { profile: Profile; 
           {copy.here.pitch}
         </Link>
       </p>
-      <div className="hero-status">{status}</div>
+      {status === undefined ? null : <div className="hero-status">{status}</div>}
     </div>
   );
 }

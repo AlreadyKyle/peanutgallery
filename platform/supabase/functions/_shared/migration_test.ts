@@ -310,6 +310,8 @@ Deno.test("migrations on PGlite", {
         "20261018100000_no_money_holds.sql",
         // channel-counters (docs/specs/channel-counters.md): landings from a channel's tagged link.
         "20261018110000_channel_counters.sql",
+        // Suggested by (docs/specs/place.md): the ideas in the clusters linked to a card, a public read.
+        "20261018120000_card_suggested_by.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -4178,7 +4180,7 @@ Deno.test("migrations on PGlite", {
         // documents run for anon and authenticated, a player's RPCs for authenticated, and the board's
         // community admin for authenticated (each checks the board and the second factor); none of
         // them for the service role, so the dispatcher's key reads no player text but the Curator's batch.
-        const communityDocs = ["community_feed", "community_goals", "community_profile", "community_seeds", "community_studio", "community_suggestions"];
+        const communityDocs = ["community_card_ideas", "community_feed", "community_goals", "community_profile", "community_seeds", "community_studio", "community_suggestions"];
         const player = [
           "claim_contributions", "my_profile", "save_seed", "set_contribution_public", "submit_suggestion", "update_profile", "vote_seed", "vote_suggestion",
           // card-follows (docs/specs/card-follows.md): a player's follows.

@@ -15,6 +15,18 @@ The studio has two halves, and the brand is both at once:
 
 The quality bar is the best consumer-product pages: one idea to a screen, the product itself shown large and early (here the live studio), no empty columns, no filler, nothing that looks unfinished.
 
+### The production bar
+
+Checks a reviewer can make on any page or frame (the production pass, 18 October 2026):
+
+1. **Scale.** On a laptop a section heading is at least three times the body text, and a page heading about five times. If a page reads like a form, the headings are too small.
+2. **Three steps of type.** A section steps down heading, lede, body, with nothing in between competing; the small muted line is for meta only.
+3. **One idea to a screen.** A section is one label, one heading, at most one intro and one block of content. A second idea is a second section.
+4. **Room.** Bands sit far apart (144px on a wide screen); a section's parts group by space, not by lines.
+5. **The product large.** The room, the cards and the games are shown at a size you could read across a table, never as thumbnails beside text.
+6. **Motion leads the eye**, in reading order, and settles fast. If you notice the animation before the content, it is too much.
+7. **Finished edges.** Every corner, edge and gap is a token; nothing is off by a pixel at any of the five audited widths.
+
 ## Personality
 
 | We are | We are not |
@@ -63,10 +75,11 @@ One family: **Atkinson Hyperlegible Next**, weights 400 to 700 (SIL OFL), chosen
 
 | Role | Size | Set |
 |---|---|---|
-| Home's pitch | 38 to 60px | 700, tracking −0.03em, leading 1.04 |
-| Page heading (h1) | 38 to 72px | 700, tracking −0.03em, leading 1.04 |
-| Section heading (h2) | 26 to 40px | 700, tracking −0.015em, leading 1.15 |
-| Lead, card titles, figures | 20px | 700 for titles, 400 for the lede |
+| Home's pitch | 38 to 52px | 700, tracking −0.03em, leading 1.04 |
+| Page heading (h1) | 40 to 96px | 700, tracking −0.03em, leading 1.04 |
+| Section heading (h2) | 28 to 56px | 700, tracking −0.015em, leading 1.15 |
+| Lede (a plate's and a section's intro) | 20 to 24px | 400, leading 1.35 |
+| Card titles, figures | 20px | 700 for titles |
 | Body | 17px | 400, leading 1.6, about 72 characters a line |
 | Small, labels | 14px | 400; labels 600 in the mono face, tracking +0.04em |
 
@@ -76,13 +89,13 @@ Headings are bold and sentence case, never shouting. No italic anywhere. Nothing
 
 - **One width.** Everything lines up to a 76rem (1216px) column with a side margin that grows with the screen (20px on a phone, 5% of the width on a tablet or laptop, 64px and up on a desktop), so the top bar, every section and the footer share a left edge. Home alone is wider (90rem), top bar and footer included, since the floor is the studio itself.
 - **Bands.** A page is a stack of full-bleed bands: the ink plate first (the top bar shares it), then paper and ink in turn. The change of ground is the only divider.
-- **The index.** Every section after the plate opens on a 2px rule over its heading. It is the machine's spec-sheet line; the heading is the label, so no number sits over it. The one numeral that orders things is home's station numbers, `01` to `04`, two-digit mono, since a card moves through the stations in that order.
+- **The index.** Every section after the plate opens on a 2px rule over its heading. It is the machine's spec-sheet line; the heading is the label, so no number sits over it. Home's stations carry no numbers either (the board, 18 October 2026): each opens on its glyph and where in the room it is, in the order a card moves.
 - **Five layouts**, and nothing else:
   1. **The split** (7:5): a page's plate, its heading on the left and the lede on the right, both from the plate's top.
   2. **The sheet** (5:7): text pages, the ledger, the FAQ. The heading stays in view on the left; the text fills the right.
   3. **The card grid** (3, 2 or 1 equal columns): cards, team boxes, choices. One item to a cell.
   4. **Halves** (1:1): two related blocks side by side, such as the two other ways to fund.
-  5. **The floor** (home only): the room large on the plate with its stations as labelled links, then the stations as numbered parts, Fund first, beside a rail that maps them (3:9). The part in view lights its station; nothing moves.
+  5. **The floor** (home only): the room large on the plate with its stations as labelled links, then the stations as parts in the order a card moves, Fund first and unnumbered, beside a rail that maps them (3:9). The part in view lights its station; nothing moves.
 - **Room to breathe.** Sections sit far apart and a section's parts group by space, not by lines: the heading and its one intro close together, a clear step before the content, and wide margins between bands. Dense is a fault even when nothing is empty (the board, 18 October 2026).
 - **No dead space.** Side-by-side blocks balance or stack. No block leaves an empty column beside it. The site's layout audit checks every page at five widths.
 
@@ -98,7 +111,7 @@ The brand has a small cast of objects. Everything else is type on the table.
 
 ## Motion
 
-Motion sets the scene, records a real change, or answers a press. The studio's agents walk and type; a coin drops when money arrives; a card flips when it is funded. Nothing a reader might press moves under the pointer. Under reduced motion everything is drawn still.
+Motion sets the scene, records a real change, or answers a press. The studio's agents walk and type; a coin drops when money arrives; a card flips when it is funded. As a section scrolls into view its heading rises into place and its intro follows a beat later, and the cards of a grid are dealt one after another, so the eye is led in reading order. Motion is calm and quick to settle: one long, soft ease-out for the scene, short ones for a press, never a bounce. Nothing a reader might press moves under the pointer. Under reduced motion everything is drawn still.
 
 ## Imagery
 
