@@ -3392,6 +3392,32 @@ input[type='radio'] {
   margin-top: var(--space-1);
 }
 
+/* Suggested by on a card's page: one row per idea, its player, its title and its upvotes, ruled like
+   the facts. */
+.idea-credits {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--size-small);
+}
+
+.idea-credits > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding: 0.375rem 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.idea-credits > li:first-child {
+  border-top: 1px solid var(--hairline);
+}
+
+.idea-credit-title {
+  flex: 1 1 12rem;
+}
+
 .timeline-earlier {
   margin-bottom: var(--space-1);
 }

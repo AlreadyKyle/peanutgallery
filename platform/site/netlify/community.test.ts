@@ -51,6 +51,7 @@ describe('the community documents', () => {
       ['/api/community/seeds?sort=top_week&cursor=1.5|00000000-0000-4000-8000-000000000001', 'community_seeds', { p_sort: 'top_week', p_cursor: '1.5|00000000-0000-4000-8000-000000000001' }, 15],
       ['/api/community/suggestions?sort=new&area=dust', 'community_suggestions', { p_sort: 'new', p_area: 'dust', p_cursor: null }, 15],
       ['/api/community/profile/supporter-12', 'community_profile', { p_handle: 'supporter-12' }, 30],
+      ['/api/community/card/44AD6D1E-6D7F-4F16-B8D6-5DF66BFB157C/ideas', 'community_card_ideas', { p_card: '44ad6d1e-6d7f-4f16-b8d6-5df66bfb157c' }, 30],
     ];
     for (const [path, rpc, args, seconds] of cases) {
       const calls = stubFetch([{ body: { items: [] } }]);
@@ -77,6 +78,9 @@ describe('the community documents', () => {
       ['/api/community/feed?cursor=%27%3B%20drop', 400],
       ['/api/community/profile/Not_A_Handle', 404],
       ['/api/community/profile/a/b', 404],
+      ['/api/community/card/not-a-card/ideas', 404],
+      ['/api/community/card/44ad6d1e-6d7f-4f16-b8d6-5df66bfb157c/ideas?x=1', 400],
+      ['/api/community/card/44ad6d1e-6d7f-4f16-b8d6-5df66bfb157c', 404],
       ['/api/community/secrets', 404],
     ] as const) {
       const response = await get(path);
