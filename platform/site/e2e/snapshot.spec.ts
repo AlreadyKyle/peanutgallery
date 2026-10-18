@@ -32,8 +32,9 @@ function apiRequests(page: Page): string[] {
   page.on('request', (request) => {
     const url = new URL(request.url());
     // The community documents (docs/specs/final-state.md: the pipe, the studio's era) keep their own
-    // schedule; this file checks the snapshot documents' reads.
-    if (url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/community/')) seen.push(url.pathname);
+    // schedule, and /api/count takes the counters' beacons (docs/specs/counter-senders.md); this file
+    // checks the snapshot documents' reads.
+    if (url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/community/') && url.pathname !== '/api/count') seen.push(url.pathname);
   });
   return seen;
 }

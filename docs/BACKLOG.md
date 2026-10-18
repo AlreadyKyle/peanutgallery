@@ -50,20 +50,11 @@ game stages), and the news section (the feed). What it leaves for later is filed
 - intent: platform/agents/evals holds the draft set's nine cases, but no run has been recorded: there is no results folder and no baseline.json, so every prompt or rubric change passes with the advisory line that the baseline is missing. The board runs pnpm eval:replay -- --set draft --k 3 at the Mac on the founder's login (the runner refuses the studio key and CI) and files the result and the first baseline in a kernel pull request. It is not built yet.
 - kernel: yes
 
-### Aggregate counters for the benchmarks
-- bucket: platform
-- folder: platform
-- horizon: next
-- rank: 3
-- summary: Send the new daily counters from the site and the game: returning players, session length, home visits, dwell and where shares come from.
-- intent: The database side is built (docs/specs/operations.md): /api/count and count_play_event take the counters docs/strategy/benchmarks.md lists under Needs (a load from a save 1 or 7 days old, a session reaching 2 or 4 minutes, a seed saved or opened from a link, a home load and its dwell buckets, the broadcast's load and its QR source, a click on a Discord link), and public.daily_metrics keeps daily totals for the benchmark review. What is left is the senders: the game posts its returning, session and seed counters, the site posts the home load and dwell buckets and tags the broadcast's QR link and Discord links, each a beacon with no cookie, identifier or address, and the Privacy page names them. Until then those rows read not measured. It is not built yet.
-- kernel: no
-
 ### The review team on events
 - bucket: agents
 - folder: platform
 - horizon: next
-- rank: 4
+- rank: 3
 - summary: More of the review team joins the benchmark review: finance, product, games, art, upkeep and community each read their own areas.
 - intent: The benchmark review runs (docs/specs/operations.md): on events, a code-built scoreboard of every row docs/strategy/benchmarks.md can measure from the daily counts, and a Studio Head session only when a row is below its floor, whose likely cause and proposed adjustment land as findings the board lists. docs/strategy/operating-system.md designs a fuller team: the Head of Finance, Head of Product, Game Director, Art Director, Janitor, Community and HR each reviewing their own areas with their own inputs (rubric scores, frames, gate results, scorecards), a report stored in the repository, and the board's panel showing the scoreboard. It is not built yet.
 - kernel: yes
@@ -72,7 +63,7 @@ game stages), and the news section (the feed). What it leaves for later is filed
 - bucket: platform
 - folder: platform
 - horizon: next
-- rank: 5
+- rank: 4
 - summary: Download everything your profile holds, or delete it, from the profile page.
 - intent: Profiles arrive with docs/specs/final-state.md. A signed-in player can download their profile, suggestions, seeds, votes and badges as a file, and delete the profile; contributions stay on the ledger as Supporter n or Anonymous, because the ledger is the record. Until this exists, requests go to the contact address. It is not built yet.
 - kernel: yes
@@ -81,7 +72,7 @@ game stages), and the news section (the feed). What it leaves for later is filed
 - bucket: agents
 - folder: platform
 - horizon: next
-- rank: 6
+- rank: 5
 - summary: The Studio Head turns planned items into draft cards that are checked and opened for funding.
 - intent: The Studio Head picks planned cards from this backlog, the ledger and the shipped cards for the Game Designer to draft, each graded by the Game Director and meeting the definition of ready. Under docs/PLAN.md §10 decision 66 the dispatcher drafts the next seed-1 backlog card by rank and age whenever the card supply is short, and no model ranks (docs/specs/unattended-roles.md); the Studio Head choosing which planned card to draft, from the ledger and the shipped cards, is what is left. It is not built yet.
 - kernel: yes
@@ -90,7 +81,7 @@ game stages), and the news section (the feed). What it leaves for later is filed
 - bucket: agents
 - folder: platform
 - horizon: next
-- rank: 7
+- rank: 6
 - summary: The Studio Head reads each note from the board and turns it into a draft card, a scheduled item or a discard, with a reason.
 - intent: Board notes are the one free text a role with write access may read. Triage runs at the top of every hour and at planning, links the note to its outcome, and shows the reason only on /board; a discarded note stays discarded unless the board files it as a directive. Notes are stored today and nothing reads them, and the board's panel has no note form since docs/PLAN.md §10 decision 66, so this also waits on one. It is not built yet.
 - kernel: yes

@@ -48,7 +48,8 @@ export async function mockStudio(page: Page, studio: StudioFixture): Promise<voi
     if (new URL(route.request().url()).search !== '') return route.fulfill({ status: 400, contentType: json, body: '{"error":"No query string is allowed"}' });
     return route.fulfill({ status: 200, contentType: json, body: JSON.stringify({ reports: studio.reports ?? [] }) });
   });
-  // /api/count (docs/specs/play-counts.md): a known event answers 204, anything else 400.
+  // /api/count (docs/specs/play-counts.md, docs/specs/operations.md): a known event answers 204,
+  // anything else 400. The list is card.mts's PLAY_EVENTS.
   await page.route(/\/api\/count(\?.*)?$/, async (route) => {
     if (route.request().method() !== 'POST') return route.fulfill({ status: 405, contentType: json, body: '{"error":"Only POST is allowed"}' });
     let event = '';
@@ -57,7 +58,7 @@ export async function mockStudio(page: Page, studio: StudioFixture): Promise<voi
     } catch {
       event = '';
     }
-    if (!['dust_load', 'dust_share', 'card_share', 'dust_next_card'].includes(event)) {
+    if (!PLAY_EVENTS.includes(event)) {
       return route.fulfill({ status: 400, contentType: json, body: '{"error":"Send an event"}' });
     }
     return route.fulfill({ status: 204, headers: { 'Cache-Control': 'no-store' } });
@@ -76,6 +77,11 @@ export async function mockStudio(page: Page, studio: StudioFixture): Promise<voi
   });
 }
 
+const PLAY_EVENTS = [
+  'dust_load', 'dust_share', 'card_share', 'dust_next_card',
+  'dust_return_1d', 'dust_return_7d', 'dust_session_2m', 'dust_session_4m', 'dust_seed_save', 'dust_seed_open',
+  'home_load', 'home_dwell_mid', 'home_dwell_long', 'broadcast_load', 'broadcast_qr', 'discord_click',
+];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SESSION = /^cs_(live|test)_[A-Za-z0-9]{10,250}$/;
 

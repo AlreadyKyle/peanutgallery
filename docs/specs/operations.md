@@ -11,13 +11,13 @@ Several benchmark rows read "not measured" because no counter exists, and nothin
 ## Scope
 
 In: new aggregate counters on `/api/count`; `public.daily_metrics` and its hourly refresh; the `benchmark_review` job (the Studio Head, schema-validated, findings on /board); the gate's game-stack check and the game roles' prompts; the announcements lane on `DISCORD_WEBHOOK_URL`.
-Out: the site and game code that sends the new counters (`docs/BACKLOG.md`, Aggregate counters for the benchmarks); the other review team members' own sessions and the report in the repository (`docs/BACKLOG.md`, The review team on events); a public metrics document (benchmarks.md asks for none); the board panel's view of the reviews beyond the findings it already lists.
+Out: the site and game code that sends the new counters (built by `docs/specs/counter-senders.md`); the other review team members' own sessions and the report in the repository (`docs/BACKLOG.md`, The review team on events); a public metrics document (benchmarks.md asks for none); the board panel's view of the reviews beyond the findings it already lists.
 
 ## Behaviour
 
 ### Counters and daily metrics
 
-- `/api/count` and `count_play_event` take sixteen names: the four play counts and `dust_return_1d`, `dust_return_7d`, `dust_session_2m`, `dust_session_4m`, `dust_seed_save`, `dust_seed_open`, `home_load`, `home_dwell_mid`, `home_dwell_long`, `broadcast_load`, `broadcast_qr`, `discord_click`. Each is one daily total; no cookie, identifier, address or text.
+- `/api/count` and `count_play_event` take sixteen names: the four play counts and `dust_return_1d`, `dust_return_7d`, `dust_session_2m`, `dust_session_4m`, `dust_seed_save`, `dust_seed_open`, `home_load`, `home_dwell_mid`, `home_dwell_long`, `broadcast_load`, `broadcast_qr`, `discord_click`. Each is one daily total; no cookie, identifier, address or text. The game and the site send them as `docs/specs/counter-senders.md` says.
 - `public.daily_metrics` holds (UTC day, metric, number). `refresh_daily_metrics(day)` recomputes a day from the contributions, the ledger, the cards, the deploys, the community tables and the play counts: payments, gross, studio and agent shares, the Machine's share, refunds, distinct payer keys (as a count), new and second-time payers, the 30-day median, agent spend, cards opened, live and rejected, deploys and smoke failures, new profiles, suggestions, seeds, votes, feed events and every play count. pg_cron runs `refresh_recent_metrics()` (today and yesterday) at minute 23. Only the service role and the board at the second factor (`board_daily_metrics`) read it.
 
 ### The benchmark review

@@ -3,7 +3,7 @@ import { awaySeconds, parseSavedAt, parseSavedState } from '../sim/save';
 import { chosenOption, createSim, devilReward, findPerk, orderBonus, step } from '../sim/sim';
 import type { SimState } from '../sim/types';
 import { AccessibleControls } from './controls';
-import { countEvent } from './count';
+import { countEvent, onceEach, returnEvent, SessionClock } from './count';
 import { describeForkEffect, describePerk, devilCaughtWords, milestoneWords, orderWords, weatherView } from './depth';
 import { fill, formatDust, formatDuration, formatPercent } from './format';
 import { Game, SAVE_INTERVAL_MS, SAVE_KEY } from './game';
@@ -22,6 +22,10 @@ const LOAD_FAILED = 'The game data did not load. Reload the page to try again.';
 const MIN_WELCOME_SECONDS = 60;
 // How near the dust devil a tap on the island catches it, in CSS pixels: generous, so it needs no precision.
 const DEVIL_REACH_PX = 60;
+// The benchmarks' counters (render/count.ts, docs/specs/counter-senders.md): each at most once in this page load.
+const countOnce = onceEach();
+// How often the session clock is read, in milliseconds.
+const SESSION_CHECK_MS = 1000;
 
 function statusElement(): HTMLElement | null {
   return document.getElementById('status');
@@ -91,7 +95,11 @@ function run(data: GameData): void {
   const seed = Math.floor(Date.now() / 1000) >>> 0;
   // A save credits the time since it was written, so dust keeps accruing while the page is closed.
   const save = readSave();
-  const away = save === null || save.savedAt === null ? 0 : awaySeconds(save.savedAt, Date.now());
+  const loadedAt = Date.now();
+  // A load from a save a day or a week old, decided from the save's own savedAt (docs/strategy/benchmarks.md, Player D1 and D7).
+  const returning = returnEvent(save?.savedAt ?? null, loadedAt);
+  if (returning !== null) countOnce(returning);
+  const away = save === null || save.savedAt === null ? 0 : awaySeconds(save.savedAt, loadedAt);
   const savedState = save === null ? null : away === 0 ? save.state : step(save.state, config, away);
   const welcome = save === null || savedState === null ? null : { gain: savedState.totalDust - save.state.totalDust, seconds: away };
   const initial = savedState ?? createSim(config, seed);
@@ -207,6 +215,7 @@ function run(data: GameData): void {
   const seedButton = document.getElementById('seed-save');
   if (seedButton instanceof HTMLButtonElement && shareStatus !== null) {
     attachSeedButton(seedButton, shareStatus, () => game.state, config, strings);
+    seedButton.addEventListener('click', () => countOnce('dust_seed_save'));
     attachGalleryLink(seedButton, () => game.state, strings);
   }
 
@@ -238,6 +247,13 @@ function run(data: GameData): void {
   });
   window.addEventListener('pagehide', () => game.save(Date.now()));
 
+  // Session length: the time this page has been visible, counted once at 2 and once at 4 minutes.
+  const session = new SessionClock();
+  session.advance(Date.now(), !document.hidden);
+  window.setInterval(() => {
+    for (const mark of session.advance(Date.now(), !document.hidden)) countOnce(mark);
+  }, SESSION_CHECK_MS);
+
   // One loop: step the sim by wall-clock time, then draw the scene, the HUD and the controls from the
   // frame's clock. A hidden tab gets no frames, so nothing renders there; the step on return credits it.
   const frame = (ms: number): void => {
@@ -266,6 +282,8 @@ function handleSeedLink(code: string, data: GameData, game: Game, own: SimState 
     window.history.replaceState(null, '', url.pathname + url.search + url.hash);
   };
   const seedState = decodeSeed(code);
+  // A load from a seed link that opens (docs/strategy/benchmarks.md, Seed opens from links).
+  if (seedState !== null) countOnce('dust_seed_open');
   const dialog = document.getElementById('seed-offer');
   const store = storage();
   if (seedState === null || !(dialog instanceof HTMLDialogElement) || store === null) {

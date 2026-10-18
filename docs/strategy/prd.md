@@ -164,7 +164,7 @@ Where this file and the spec disagree, the spec wins and this file is corrected.
 | Z3 | The feed reads from append-only `community.events` | FS: Scale | In this series |
 | Z4 | Every list is keyset-paginated; every growing table has the index its reads use | FS: Scale | In this series |
 | Z5 | A card supply and capacity that grow with funding, behind a failure breaker | | Later: [A card supply that keeps pace with funding](../BACKLOG.md#a-card-supply-that-keeps-pace-with-funding) |
-| Z6 | Aggregate counters for every benchmark marked "Needs" | `benchmarks.md` | In this series: the counters and `daily_metrics` (`docs/specs/operations.md`); later: the senders, [Aggregate counters for the benchmarks](../BACKLOG.md#aggregate-counters-for-the-benchmarks) |
+| Z6 | Aggregate counters for every benchmark marked "Needs" | `benchmarks.md` | Built: the counters and `daily_metrics` (`docs/specs/operations.md`) and their senders in the game and the site (`docs/specs/counter-senders.md`) |
 
 ## 13. The agent studio
 
