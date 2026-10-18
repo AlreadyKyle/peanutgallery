@@ -1,7 +1,8 @@
 // The supply-every-minute migration on PGlite (docs/specs/always-open.md, docs/PLAN.md §10 decision
 // 71): supply_draft_check() answers no_money after a draft run failed for want of money until a
-// contribution is credited, and for a cap only on the New York day it failed; public_supply()'s next
-// check is the next minute. Every migration runs in order, as supply_refill_test.ts runs them.
+// contribution is credited, a card goes live or is rejected, or the next New York day
+// (20261018100000_no_money_holds.sql), and for a cap only on the New York day it failed;
+// public_supply()'s next check is the next minute. Every migration runs in order, as supply_refill_test.ts runs them.
 
 import { PGlite } from "npm:@electric-sql/pglite@0.3.7";
 import { assert, assertEquals } from "jsr:@std/assert@1";
@@ -56,7 +57,7 @@ async function migrated(): Promise<PGlite> {
       [name, klass === "planner", klass],
     );
   }
-  for (const name of ["20260924400000_agent_workflows.sql", "20261010200000_supply_refill.sql", "20261011200000_supply_every_minute.sql"]) {
+  for (const name of ["20260924400000_agent_workflows.sql", "20261010200000_supply_refill.sql", "20261011200000_supply_every_minute.sql", "20261018100000_no_money_holds.sql"]) {
     await db.exec(await sqlOf(name));
   }
   return db;
@@ -72,7 +73,7 @@ const failRun = async (db: PGlite, reason: string, finishedAt = "now()") => {
   );
 };
 
-Deno.test("no_money holds after a draft fails for want of money, until a contribution is credited", OPTS, async (t) => {
+Deno.test("no_money holds after a draft fails for want of money, until the money changes", OPTS, async (t) => {
   const db = await migrated();
   try {
     await t.step("a short supply with no failure may draft", async () => {
@@ -87,13 +88,38 @@ Deno.test("no_money holds after a draft fails for want of money, until a contrib
       assertEquals([r.queued, r.reason], [false, "no_money"]);
     });
 
-    await t.step("a contribution credited after the failure clears it", async () => {
-      await db.exec(`insert into public.contributions (rail, contributor_id, entry, payer_key, credited_at) values ('stripe', 'contrib_test', 'payment', 'email:test', now() + interval '1 second')`);
+    await t.step("a money failure still holds after an hour, so the supply does not retry every hour", async () => {
+      await db.exec(`delete from public.job_runs where job_name = 'draft_card'`);
+      await failRun(db, "insufficient_balance: budget", "now() - interval '61 minutes'");
+      assertEquals((await check(db)).reason, "no_money");
+    });
+
+    await t.step("a money failure from before today's New York day no longer holds", async () => {
+      await db.exec(`delete from public.job_runs where job_name = 'draft_card'`);
+      const yesterday = `(((now() at time zone 'America/New_York')::date)::timestamp at time zone 'America/New_York') - interval '1 minute'`;
+      await failRun(db, "insufficient_balance: budget", yesterday);
       assertEquals((await check(db)).reason, null);
     });
 
-    await t.step("a money failure over an hour old no longer holds, since a finished build frees money", async () => {
-      await failRun(db, "insufficient_balance: budget", "now() - interval '61 minutes'");
+    await t.step("a card that goes live or is rejected after the failure clears it, since it frees what it held", async () => {
+      for (const stage of ["live", "rejected"]) {
+        await failRun(db, "insufficient_balance: budget");
+        assertEquals((await check(db)).reason, "no_money");
+        const card = (await db.query<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, stage)
+             select (enum_range(null::public.card_bucket))[1], (enum_range(null::public.card_source))[1], (enum_range(null::public.card_shape))[1],
+                    (enum_range(null::public.card_lane))[1], (enum_range(null::public.card_folder))[1], 'Held card', 'funded'
+           returning id`,
+        )).rows[0]!.id;
+        await db.query(`update public.cards set stage = $2 where id = $1`, [card, stage]);
+        assertEquals((await check(db)).reason, null, stage);
+      }
+    });
+
+    await t.step("a contribution credited after the failure clears it", async () => {
+      await failRun(db, "insufficient_balance: budget");
+      assertEquals((await check(db)).reason, "no_money");
+      await db.exec(`insert into public.contributions (rail, contributor_id, entry, payer_key, credited_at) values ('stripe', 'contrib_test', 'payment', 'email:test', now() + interval '1 second')`);
       assertEquals((await check(db)).reason, null);
     });
 

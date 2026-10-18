@@ -76,8 +76,10 @@ export const POSTED_TERMS = [
 ];
 
 // The values the board set (docs/PLAN.md §10 decision 36): every role that runs is on claude-opus-5-5.
+// MODEL_DESIGNER is unset, so the Game Designer reads MODEL_DIRECTOR (platform/supabase/lib/roles.ts).
 const MODELS: Record<string, string> = {
   MODEL_DIRECTOR: 'claude-opus-5-5',
+  MODEL_DESIGNER: 'claude-opus-5-5',
   MODEL_BUILDER: 'claude-opus-5-5',
   MODEL_HOST: 'claude-haiku-4-5',
 };

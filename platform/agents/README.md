@@ -22,7 +22,7 @@ Every file carries the thirteen required keys, and `trigger` exactly when `statu
     "title": { "type": "string", "minLength": 1, "description": "The role as it appears on the site and the stream." },
     "description": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^\\s][^\\n\u2014]*[.]$", "description": "One plain sentence saying what the role does, shown on the Meet the Team page: at most 200 characters, no em dash, ending in a full stop." },
     "species_note": { "type": "string", "minLength": 1, "pattern": "^[^\\n]+$", "description": "One plain line describing the alien: a small, strange, friendly creature. No backstory, no claimed experience." },
-    "model": { "type": "string", "enum": ["MODEL_DIRECTOR", "MODEL_BUILDER", "MODEL_HOST"], "description": "The environment variable whose value is the model id. Resolved at seed time." },
+    "model": { "type": "string", "enum": ["MODEL_DIRECTOR", "MODEL_DESIGNER", "MODEL_BUILDER", "MODEL_HOST"], "description": "The environment variable whose value is the model id. Resolved at seed time." },
     "budget_share": { "type": "number", "minimum": 0, "maximum": 1, "description": "Share of the agents' budget. The shares that are not 0 sum to 1. The roles added on 23 September 2026 carry 0." },
     "voice": { "type": "string", "pattern": "^[a-z]+$", "description": "One word." },
     "prompt_path": { "type": "string", "pattern": "^platform/agents/prompts/[a-z-]+\\.md$", "description": "Path from the repo root to the role prompt." },
@@ -43,7 +43,7 @@ Three rules hold across files and are not expressible in the schema: `write_acce
 | File | model | budget_share | voice | tools | metrics | class | write_access | status |
 |---|---|---|---|---|---|---|---|---|
 | studio-head | MODEL_DIRECTOR | 0.10 | terse | read set | estimate_accuracy, cost_per_ship | planner | true | running |
-| game-designer | MODEL_DIRECTOR | 0 | precise | read set and Bash | estimate_accuracy, first_pass_rate | planner | true | running |
+| game-designer | MODEL_DESIGNER | 0 | precise | read set and Bash | estimate_accuracy, first_pass_rate | planner | true | running |
 | game-director | MODEL_DIRECTOR | 0.10 | firm | read set | estimate_accuracy, cost_per_ship | reviewer | false | running |
 | builder-a | MODEL_BUILDER | 0.20 | plain | write set | first_pass_rate, cost_per_ship, estimate_accuracy | writer | true | running |
 | builder-b | MODEL_BUILDER | 0.20 | brisk | write set | first_pass_rate, cost_per_ship, estimate_accuracy | writer | true | running |
@@ -61,7 +61,7 @@ Three rules hold across files and are not expressible in the schema: `write_acce
 | curator | MODEL_BUILDER | 0 | level | none | first_pass_rate, cost_per_ship | web_only | false | starts |
 | art-director | MODEL_DIRECTOR | 0 | keen | read set | first_pass_rate, reopen_rate | reviewer | false | starts |
 
-The write set is `["Read", "Edit", "Write", "Glob", "Grep", "Bash"]` and the read set is `["Read", "Glob", "Grep"]`: the Studio Head and the two Directors read the repository and write nothing in it. The Game Designer holds the read set and Bash, `["Read", "Glob", "Grep", "Bash"]`: in a scratch checkout of `main` the dispatcher throws away, Bash runs only seed-1's package scripts, and the Designer writes card drafts, never files (`docs/specs/agent-workflows.md`). The roles added on 23 September 2026 start with no tools and no write access; only the board grants tools. `docs/SYSTEM.md` lists what each class may and may not do. `MODEL_DIRECTOR` and `MODEL_BUILDER` both hold `claude-opus-5-5` and `MODEL_HOST` holds `claude-haiku-4-5` (`docs/PLAN.md` §10 decision 36).
+The write set is `["Read", "Edit", "Write", "Glob", "Grep", "Bash"]` and the read set is `["Read", "Glob", "Grep"]`: the Studio Head and the two Directors read the repository and write nothing in it. The Game Designer holds the read set and Bash, `["Read", "Glob", "Grep", "Bash"]`: in a scratch checkout of `main` the dispatcher throws away, Bash runs only seed-1's package scripts, and the Designer writes card drafts, never files (`docs/specs/agent-workflows.md`). The roles added on 23 September 2026 start with no tools and no write access; only the board grants tools. `docs/SYSTEM.md` lists what each class may and may not do. `MODEL_DIRECTOR` and `MODEL_BUILDER` both hold `claude-opus-5-5` and `MODEL_HOST` holds `claude-haiku-4-5` (`docs/PLAN.md` §10 decision 36). `MODEL_DESIGNER`, the Game Designer's, falls back to `MODEL_DIRECTOR` when unset, in the seed and in the dispatcher alike, so the board can run drafting on a cheaper model without moving the Directors (`docs/specs/unattended-roles.md`).
 
 ## How the seed script consumes a spec
 
@@ -73,7 +73,7 @@ The write set is `["Read", "Edit", "Write", "Glob", "Grep", "Bash"]` and the rea
 | title | title | as is |
 | description | description | as is |
 | species_note | species_note | as is |
-| model | model | the value of the named environment variable (`MODEL_DIRECTOR`, `MODEL_BUILDER` or `MODEL_HOST`) |
+| model | model | the value of the named environment variable (`MODEL_DIRECTOR`, `MODEL_DESIGNER`, `MODEL_BUILDER` or `MODEL_HOST`; an unset `MODEL_DESIGNER` reads `MODEL_DIRECTOR`) |
 | budget_share | budget_share | numeric(6,4) |
 | voice | voice | as is |
 | prompt_path | prompt_path | as is |

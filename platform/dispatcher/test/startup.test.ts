@@ -28,6 +28,7 @@ const config: DispatcherConfig = {
   netlifySiteIdPlatform: 'site-platform',
   modelBuilder: 'builder-class',
   modelDirector: null,
+  modelDesigner: null,
   modelHost: null,
   priceTable: PRICE_TABLE,
   poolDailyCapUsd: 100,

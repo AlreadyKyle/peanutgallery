@@ -23,6 +23,7 @@ const base: DispatcherConfig = {
   netlifySiteIdPlatform: 'site-platform',
   modelBuilder: 'builder-class',
   modelDirector: null,
+  modelDesigner: null,
   modelHost: null,
   priceTable: parsePriceTable(JSON.stringify({ 'builder-class': { input: 3, output: 15, cache_read: 0.3, cache_write_5m: 3.75, cache_write_1h: 6 } })),
   poolDailyCapUsd: 100,

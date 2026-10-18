@@ -32,6 +32,7 @@ export const OPTIONAL_KEYS = [
   'DISPATCHER_TICK_MS',
   'DISPATCHER_MAX_CONCURRENCY',
   'MODEL_DIRECTOR',
+  'MODEL_DESIGNER',
   'MODEL_HOST',
   'PUBLIC_SITE_URL',
 ];
@@ -44,7 +45,7 @@ export const DISCORD_KEYS = ['DISCORD_WEBHOOK_SHIPS', 'DISCORD_WEBHOOK_WEEKLY', 
 export const DISCORD_WEBHOOK = /^https:\/\/((ptb|canary)[.])?discord(app)?[.]com\/api\/webhooks\/[0-9]+\/[A-Za-z0-9_-]+$/;
 
 // Optional models that, when set, need a row in PRICE_TABLE_JSON, as loadConfig requires.
-export const PRICED_OPTIONAL_MODELS = ['MODEL_DIRECTOR', 'MODEL_HOST'];
+export const PRICED_OPTIONAL_MODELS = ['MODEL_DIRECTOR', 'MODEL_DESIGNER', 'MODEL_HOST'];
 
 // Read by loadConfig but never copied from the Mac's .env, with the reason.
 export const NOT_COPIED = {

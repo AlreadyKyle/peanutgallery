@@ -39,6 +39,7 @@ function config(over: Partial<UpkeepDeps['config']> = {}): UpkeepDeps['config'] 
     netlifySiteIdPlatform: 'site-platform',
     modelBuilder: 'claude-builder',
     modelDirector: 'claude-director',
+    modelDesigner: null,
     modelHost: null,
     priceTable: parsePriceTable(JSON.stringify({ 'claude-builder': PRICE, 'claude-director': PRICE })),
     studioAnthropicApiKey: null,

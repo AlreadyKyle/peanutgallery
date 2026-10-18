@@ -24,7 +24,7 @@ const CLASSES = ['writer', 'planner', 'reviewer', 'read_only', 'web_only'];
 // Director join the roster as eighteen (docs/specs/final-state.md, docs/specs/community-core.md).
 const LAUNCH_VALUES = {
   'studio-head': { model: 'MODEL_DIRECTOR', budget_share: 0.1, voice: 'terse', tools: READ_SET, metrics: ['estimate_accuracy', 'cost_per_ship'], class: 'planner', status: 'planned' },
-  'game-designer': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'precise', tools: DESIGNER_SET, metrics: ['estimate_accuracy', 'first_pass_rate'], class: 'planner', status: 'running' },
+  'game-designer': { model: 'MODEL_DESIGNER', budget_share: 0, voice: 'precise', tools: DESIGNER_SET, metrics: ['estimate_accuracy', 'first_pass_rate'], class: 'planner', status: 'running' },
   'game-director': { model: 'MODEL_DIRECTOR', budget_share: 0.1, voice: 'firm', tools: READ_SET, metrics: ['estimate_accuracy', 'cost_per_ship'], class: 'reviewer', status: 'running' },
   'builder-a': { model: 'MODEL_BUILDER', budget_share: 0.2, voice: 'plain', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship', 'estimate_accuracy'], class: 'writer', status: 'running' },
   'builder-b': { model: 'MODEL_BUILDER', budget_share: 0.2, voice: 'brisk', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship', 'estimate_accuracy'], class: 'writer', status: 'running' },

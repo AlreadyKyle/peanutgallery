@@ -64,7 +64,7 @@ describe("readRoleSpecs against platform/agents", () => {
     expect(executor?.write_access).toBe(true);
   });
 
-  it("resolves every spec's model from one of the three environment names", async () => {
+  it("resolves every spec's model from one of the four environment names", async () => {
     const specs = await readRoleSpecs(AGENTS_DIR);
     const env = Object.fromEntries(MODEL_ENV_NAMES.map((name) => [name, `${name.toLowerCase()}-id`]));
     for (const spec of specs) {

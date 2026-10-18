@@ -2,7 +2,7 @@
 
 import type { Env } from "./env.js";
 
-export const MODEL_ENV_NAMES = ["MODEL_DIRECTOR", "MODEL_BUILDER", "MODEL_HOST"] as const;
+export const MODEL_ENV_NAMES = ["MODEL_DIRECTOR", "MODEL_DESIGNER", "MODEL_BUILDER", "MODEL_HOST"] as const;
 export type ModelEnvName = (typeof MODEL_ENV_NAMES)[number];
 
 export const TOOL_NAMES = ["Read", "Edit", "Write", "Glob", "Grep", "Bash"] as const;
@@ -170,9 +170,12 @@ export function parseRoleSpec(raw: unknown, source: string): RoleSpec {
   };
 }
 
-/** The model id for a spec: the value of the named environment variable. */
+/**
+ * The model id for a spec: the value of the named environment variable. MODEL_DESIGNER, the Game
+ * Designer's, falls back to MODEL_DIRECTOR when unset, as the dispatcher resolves it (role-model.ts).
+ */
 export function resolveModel(spec: Pick<RoleSpec, "model" | "name">, env: Env): string {
-  const value = env[spec.model]?.trim();
+  const value = env[spec.model]?.trim() || (spec.model === "MODEL_DESIGNER" ? env.MODEL_DIRECTOR?.trim() : undefined);
   if (!value) {
     throw new Error(`${spec.name}: ${spec.model} is not set in .env`);
   }

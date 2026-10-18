@@ -20,10 +20,10 @@
 // on the card sessions' adapter, studio-billed to that card with its role, never the founder's plan;
 // an attended adapter (only a hand-run tool builds one) is refused before a card is opened, but for
 // the replay eval's allowAttended. Each session's budget is
-// DRAFT_SESSION_MAX_USD, no more than the per-card maximum leaves on the card, and it starts only when
-// the throttle's money covers it (the balance after every other card's hold, the daily, monthly and
-// tier caps); while it runs, what it may still spend is held from the card path. A studio pause stops
-// it; the API refusing the studio key pauses the studio as a card session's refusal does.
+// DRAFT_SESSION_MAX_USD, no more than the per-card maximum leaves on the card or the throttle's money
+// leaves (the balance after every other card's hold, the daily, monthly and tier caps), and it starts
+// only when that is at least DRAFT_SESSION_MIN_USD; while it runs, what it may still spend is held
+// from the card path. A studio pause stops it; the API refusing the studio key pauses the studio as a card session's refusal does.
 // The typed input is {} or {floor, open_cards}; every card the sessions see passes the typed
 // reduction. A failed model call, a money stop or a Director answer that is not one valid verdict
 // fails the run and writes nothing onto the card; a new card it opened is reused by the next run.
@@ -315,14 +315,16 @@ export class DraftStop extends Error {
 }
 
 // What the next session on the card may spend: DRAFT_SESSION_MAX_USD, no more than the per-card
-// maximum leaves after the card's studio spend so far (earlier rounds included), and only when the
-// throttle's money covers all of it. Also the spend it read.
+// maximum leaves after the card's studio spend so far (earlier rounds included), and no more than the
+// throttle's money leaves (the balance, the daily, monthly and tier caps), as a build's budget shrinks
+// to the money. It stops only when that is under DRAFT_SESSION_MIN_USD, the least a session needs,
+// naming the bound that cut it. Also the spend it read.
 export async function draftSessionBudget(context: JobContext, workflow: WorkflowDeps, card: Pick<Card, 'id' | 'funded_usd' | 'severity'>): Promise<{ budgetUsd: number; spentUsd: number }> {
   const [studio, spentMap] = await Promise.all([context.db.getStudioState(), context.db.cardSpend([card.id])]);
   if (studio.paused) throw new DraftStop('studio_paused', 'the studio is paused, so no draft session starts');
   const spent = spentMap.get(card.id) ?? 0;
   const room = round4(studio.card_max_usd - spent);
-  const budget = round4(Math.min(workflow.draftSessionMaxUsd, room));
+  let budget = round4(Math.min(workflow.draftSessionMaxUsd, room));
   if (budget < DRAFT_SESSION_MIN_USD) {
     throw new DraftStop('card_max', `card ${shortId(card.id)} has spent ${spent} USD of the per-card maximum ${studio.card_max_usd} USD, too little left for a draft session`);
   }
@@ -335,8 +337,9 @@ export async function draftSessionBudget(context: JobContext, workflow: Workflow
       ['tier_cap', bounds.tierUsd],
       ['insufficient_balance', bounds.availableUsd],
     ];
-    const stopped = short.find(([, left]) => left < budget);
-    if (stopped) throw new DraftStop(stopped[0], `a draft session's budget of ${budget} USD is more than the ${stopped[1]} USD left`);
+    const stopped = short.find(([, left]) => left < DRAFT_SESSION_MIN_USD);
+    if (stopped) throw new DraftStop(stopped[0], `a draft session needs at least ${DRAFT_SESSION_MIN_USD} USD and only ${stopped[1]} USD is left`);
+    budget = round4(Math.min(budget, ...short.map(([, left]) => left)));
   }
   return { budgetUsd: budget, spentUsd: spent };
 }

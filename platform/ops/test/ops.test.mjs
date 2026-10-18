@@ -264,7 +264,7 @@ describe('provision.sh env file checks', () => {
     const env = Object.fromEntries(parseEnvFile(readFileSync(made.out, 'utf8')));
     const check = (overrides) => spawnSync(process.execPath, ['-e', script], { env: { PATH: process.env.PATH, ...env, ...overrides }, encoding: 'utf8' });
     assert.equal(check({}).status, 0, check({}).stderr);
-    for (const name of ['MODEL_BUILDER', 'MODEL_DIRECTOR', 'MODEL_HOST']) {
+    for (const name of ['MODEL_BUILDER', 'MODEL_DIRECTOR', 'MODEL_DESIGNER', 'MODEL_HOST']) {
       const refused = check({ [name]: 'unpriced-model' });
       assert.equal(refused.status, 1, name);
       assert.equal(refused.stderr.trim(), `${name} has no row in PRICE_TABLE_JSON`);
