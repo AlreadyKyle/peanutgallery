@@ -101,6 +101,10 @@ export const PLAYER_RPCS: Readonly<Record<string, readonly string[]>> = {
   vote_suggestion: ['id', 'value'],
   save_seed: ['game', 'code', 'title', 'publish'],
   vote_seed: ['id', 'value'],
+  // docs/specs/card-follows.md: "Tell me when this ships".
+  follow_card: ['card_id'],
+  unfollow_card: ['card_id'],
+  my_follows: [],
 };
 
 /** The largest JSON body a POST may carry. */

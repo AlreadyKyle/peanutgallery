@@ -12,7 +12,8 @@ export const JOB_KEYS = {
     optional: ['CONTROLLER_HEALTHCHECK_URL'],
   },
   // The ship notices (docs/specs/ship-notices.md): the Stripe read key for each session's receipt
-  // address, and the studio's Resend key to send.
+  // address, and the studio's Resend key to send. The follow emails (docs/specs/card-follows.md) read
+  // a follower's sign-in email from Supabase Auth with the same service key, so they add no key.
   notices: {
     required: ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'STRIPE_READ_KEY', 'RESEND_API_KEY', 'NTFY_TOPIC_URL'],
     optional: ['NOTICES_HEALTHCHECK_URL'],
@@ -219,6 +220,12 @@ export function supabaseClient({ url, key, fetchFn = fetch }) {
     async select(table, query) {
       const response = await fetchFn(`${base}/rest/v1/${table}?${query}`, { method: 'GET', headers, signal: AbortSignal.timeout(30_000) });
       return readJson(response, `supabase select ${table}`);
+    },
+    // One account from Supabase Auth's admin API, GET only (docs/specs/card-follows.md): the notices
+    // job reads a follower's sign-in email here at send time and stores it nowhere.
+    async authUser(id) {
+      const response = await fetchFn(`${base}/auth/v1/admin/users/${encodeURIComponent(id)}`, { method: 'GET', headers, signal: AbortSignal.timeout(30_000) });
+      return readJson(response, 'supabase auth user');
     },
   };
 }

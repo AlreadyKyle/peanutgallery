@@ -65,7 +65,7 @@ game stages), and the news section (the feed). What it leaves for later is filed
 - horizon: next
 - rank: 4
 - summary: Download everything your profile holds, or delete it, from the profile page.
-- intent: Profiles arrive with docs/specs/final-state.md. A signed-in player can download their profile, suggestions, seeds, votes and badges as a file, and delete the profile; contributions stay on the ledger as Supporter n or Anonymous, because the ledger is the record. Until this exists, requests go to the contact address. It is not built yet.
+- intent: Profiles arrive with docs/specs/final-state.md. A signed-in player can download their profile, suggestions, seeds, votes, badges and followed cards (docs/specs/card-follows.md) as a file, and delete the profile; contributions stay on the ledger as Supporter n or Anonymous, because the ledger is the record. Until this exists, requests go to the contact address. It is not built yet.
 - kernel: yes
 
 ### Studio Head drafts cards from the roadmap

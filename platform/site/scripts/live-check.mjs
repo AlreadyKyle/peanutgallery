@@ -22,7 +22,7 @@
 // each running or paused row and no model on the rest; /roadmap answers with home (there is no roadmap page). The
 // newest live card's own page has its title as the one h1, its commit and a Supporters section;
 // /thanks with no session is a plain thank-you and a made-up session reads as recording with the
-// query dropped; /api/card/<not a uuid> is a 400 and /api/thanks answers it exactly pending, no-store; /api/unsubscribe shows its button for a well-formed link and answers a bare one 400 (docs/specs/ship-notices.md)
+// query dropped; /api/card/<not a uuid> is a 400 and /api/thanks answers it exactly pending, no-store; /api/unsubscribe shows its button for a well-formed ship-notice or follow link and answers a bare one 400 (docs/specs/ship-notices.md, docs/specs/card-follows.md)
 // (docs/specs/supporter-pages.md). Every Payment Link on home and /contribute carries the
 // agreement (the Terms, the Refunds page and the age condition), and /terms shows the newest version
 // in /api/cards' terms since it took effect, lists the earlier ones and answers the next number
@@ -745,6 +745,14 @@ try {
       check(
         unsub.status === 200 && (unsub.headers.get('cache-control') ?? '') === 'no-store' && unsubBody.includes(`<form method="post" action="${fakeLink.replace('&', '&amp;')}">`),
         `/api/unsubscribe with a made-up link ${unsub.status} Cache-Control ${unsub.headers.get('cache-control')}`,
+      );
+      // The same for a follow email's link (docs/specs/card-follows.md).
+      const fakeFollow = `/api/unsubscribe?f=00000000-0000-4000-8000-000000000000&t=${'0'.repeat(64)}`;
+      const unsubFollow = await fetch(`${BASE}${fakeFollow}`);
+      const unsubFollowBody = await unsubFollow.text();
+      check(
+        unsubFollow.status === 200 && (unsubFollow.headers.get('cache-control') ?? '') === 'no-store' && unsubFollowBody.includes(`<form method="post" action="${fakeFollow.replace('&', '&amp;')}">`),
+        `/api/unsubscribe with a made-up follow link ${unsubFollow.status} Cache-Control ${unsubFollow.headers.get('cache-control')}`,
       );
       const unsubBare = await fetch(`${BASE}/api/unsubscribe`);
       check(unsubBare.status === 400, `/api/unsubscribe with no link ${unsubBare.status}`);

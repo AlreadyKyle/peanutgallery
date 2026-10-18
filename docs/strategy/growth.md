@@ -46,15 +46,16 @@ The target is the "10 seconds, 60 seconds, 2 minutes" bar in `docs/VISION.md` §
 | First 5 seconds | A living room of characters at work and one plain sentence of what this is | Live studio on home, the pitch | Studio dwell |
 | First 30 seconds | One agent hovered or tapped: "Builder A is building 'Carts leave dust trails'" | Agent detail on hover, focus or tap | Studio dwell |
 | First 60 seconds | Played a game, or opened a card near full | Play free, card flow, next-card line in the game | Visitor to player; player to card |
-| First 2 minutes | Funded, suggested, saved a seed, or signed up to be told when something ships | Fund, /suggest, Save as seed, magic-link profile | Visitor to participant; visitor to supporter |
+| First 2 minutes | Funded, suggested, saved a seed, or signed up to be told when something ships | Fund, /suggest, Save as seed, Tell me when this ships on a card (`docs/specs/card-follows.md`), magic-link profile | Visitor to participant; visitor to supporter |
 
-Rules: no account is needed to play or fund; a profile is offered only at the moment it adds something (saving a seed to a profile, claiming a contribution, suggesting); no pop-ups, no email capture walls.
+Rules: no account is needed to play or fund; a profile is offered only at the moment it adds something (saving a seed to a profile, claiming a contribution, suggesting, following a card); no pop-ups, no email capture walls.
 
 ## Retention
 
 | Reason to come back | Feature | Benchmark |
 |---|---|---|
 | Something I funded shipped | Ship notice email, "Since your last visit", the feed | Return after ship |
+| Something I followed shipped | One email per followed card when it goes live (`docs/specs/card-follows.md`), the followed list on /me | Follows per profile; return after ship |
 | My suggestion moved | Suggestion state page; XP when accepted or shipped | Returning profiles; suggestion to live |
 | My collection grew; a rare card might open | Collection, rarity announcements, badges | Collections; returning profiles |
 | The studio changed | Eras, earned decor, /studio/history | Studio dwell |
@@ -105,7 +106,7 @@ Each row is measured by the benchmark for its channel. The review team (`operati
 | Discord | The clubhouse | Event posts from the table above; members chat among themselves | Members' text never reaches an agent |
 | YouTube Shorts | Discovery | One Short per clip-worthy event above | No mass-produced uploads; each Short is a real moment |
 | Reddit, Hacker News, X | Launch beats | One post per beat, written by a person on the board | No astroturfing, no vote requests |
-| Email | Ship notices to payers | One per payment and shipped card, with a one-click unsubscribe (built) | No marketing email without opt-in |
+| Email | Ship notices to payers, and one email to a signed-in player when a card they follow ships | One per payment and shipped card, and one per follow, each with a one-click unsubscribe (built; `docs/specs/ship-notices.md`, `docs/specs/card-follows.md`) | No marketing email without opt-in |
 
 ## Launch beats tied to product capabilities
 
