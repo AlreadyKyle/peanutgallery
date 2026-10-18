@@ -55,3 +55,14 @@ Measured on the drafts as written, with the current domain.
 | `show-hn.md` | title 80; the first comment held under 2,000 | title 77, comment 1,821 |
 | `x-thread.md` | 280 a post, a link counted as 23 | 8 posts, the longest 248 counted in full |
 | `backlash-line.md` | fits any of the above | 144 |
+
+## Media
+
+A before and after pair of Dust comes from `seed-1/scripts/capture.ts`. It builds a checkout, serves it, and draws the same states (the sim with seed 1 at 0, 600, 3,600 and 21,600 seconds unless `--states` says otherwise) from the same camera, with the page clock fixed and paused as the frames spec draws them, so two runs differ only where the game changed. Each state at each width gives the page (`dust-<seconds>s-<width>.png`) and the island alone (`dust-<seconds>s-<width>-canvas.png`), and `capture.json` names the commit.
+
+1. Check out the before, main, in its own worktree: `git worktree add ../dust-before origin/main`, then `pnpm install --frozen-lockfile` in `../dust-before`.
+2. Draw it: `pnpm --filter @backseat/seed-1 capture -- --root ../dust-before/seed-1 --out shots/before --widths 1280,390`. Where main already has the script, running the same command inside `../dust-before` without `--root` does the same.
+3. Draw the after from the new commit's checkout, with the same flags: `pnpm --filter @backseat/seed-1 capture -- --out shots/after --widths 1280,390`.
+4. Pair the files with the same name, then `git worktree remove ../dust-before`.
+
+Each version is drawn from its own sim, so a change to pacing shows as a different state at the same second. Set `E2E_PORT` (or `--port`) when another preview holds the default port 4180.
