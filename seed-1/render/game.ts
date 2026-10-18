@@ -13,7 +13,26 @@ export const BACKUP_KEY = 'dust.save.before-seed';
 // Set when the save under SAVE_KEY was started from a seed, so a second seed never copies that run
 // over the player's own game in BACKUP_KEY.
 export const SEED_RUN_KEY = 'dust.save.from-seed';
+// Where a save that does not read is kept (a corrupt one, or one a newer version wrote before a
+// rollback), so the fresh game that starts in its place never writes over the player's progress.
+export const UNREADABLE_KEY = 'dust.save.unreadable';
 export const SAVE_INTERVAL_MS = 5000;
+
+/**
+ * Copies a save that did not parse to UNREADABLE_KEY before the fresh game's first save replaces it.
+ * The first one kept stays: a later unreadable save never writes over it. Returns whether it kept this
+ * one. Storage errors are swallowed, as every save is.
+ */
+export function keepUnreadable(store: Pick<Storage, 'getItem' | 'setItem'> | null, raw: string): boolean {
+  if (store === null) return false;
+  try {
+    if (store.getItem(UNREADABLE_KEY) !== null) return false;
+    store.setItem(UNREADABLE_KEY, raw);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export interface GameListener {
   /** A strike landed: the dust it added. */
@@ -208,11 +227,16 @@ export class Game {
     }
   }
 
-  /** Writes the save. Storage errors (a full or disabled store) are swallowed so play goes on without one. */
+  /**
+   * Writes the save. Its savedAt is the wall-clock time the state was last stepped to, not `now`: a
+   * hidden tab gets no frames, so its state stands still while the timer and pagehide keep saving, and
+   * stamping that state with `now` would make the next load credit none of the time it spent hidden.
+   * Storage errors (a full or disabled store) are swallowed so play goes on without one.
+   */
   save(now: number): void {
     if (this.store === null || !this.saving) return;
     try {
-      this.store.setItem(SAVE_KEY, serializeState(this.current, now));
+      this.store.setItem(SAVE_KEY, serializeState(this.current, this.lastStepAt ?? now));
     } catch {
       // ignored
     }
