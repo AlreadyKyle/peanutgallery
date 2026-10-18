@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { Glyph, type GlyphName } from '../components/Glyph';
@@ -8,6 +8,7 @@ import type { Goal, GoalsDoc } from '../lib/community-types';
 import { copy } from '../lib/copy';
 import { formatDate, formatUsd } from '../lib/format';
 import { legal } from '../lib/legal';
+import { labelOrder, visibleLabels } from '../lib/ticks';
 
 // /goals (docs/specs/final-state.md, Goals): the studio's lifetime funding as one long track with
 // its milestones, each a concrete outcome and its state: reached (with the date and what it
@@ -24,8 +25,30 @@ const STATES: Record<Goal['state'], { glyph: GlyphName; word: string }> = {
 function Track({ doc }: { doc: GoalsDoc }) {
   const top = Math.max(doc.lifetimeCents, ...doc.goals.map((goal) => goal.amountCents), 1);
   const at = (cents: number) => `${Math.min(100, (cents / top) * 100).toFixed(2)}%`;
+  // Labels that would touch are hidden (lib/ticks.ts), measured after layout and again on resize.
+  const track = useRef<HTMLDivElement>(null);
+  const labels = useRef<(HTMLSpanElement | null)[]>([]);
+  const [shown, setShown] = useState<readonly boolean[] | null>(null);
+  const states = doc.goals.map((goal) => goal.state);
+  const layoutKey = `${top}|${doc.goals.map((goal) => `${goal.id}:${goal.amountCents}:${goal.state}`).join(',')}`;
+  useLayoutEffect(() => {
+    const measure = () => {
+      const boxes = states.map((_, i) => {
+        const box = labels.current[i]?.getBoundingClientRect();
+        return box === undefined ? { left: 0, right: 0 } : { left: box.left, right: box.right };
+      });
+      const next = visibleLabels(boxes, labelOrder(states));
+      setShown((was) => (was !== null && was.length === next.length && was.every((value, i) => value === next[i]) ? was : next));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined' || track.current === null) return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(track.current);
+    return () => observer.disconnect();
+    // The key holds everything the measure reads from the goals.
+  }, [layoutKey]);
   return (
-    <div className="goals-track">
+    <div className="goals-track" ref={track}>
       <div
         className="funding-bar"
         role="progressbar"
@@ -38,10 +61,18 @@ function Track({ doc }: { doc: GoalsDoc }) {
         {doc.lifetimeCents > 0 ? <div className="funding-bar-fill" style={{ '--fill': at(doc.lifetimeCents) } as CSSProperties} /> : null}
       </div>
       <ol className="goals-ticks" aria-hidden="true">
-        {doc.goals.map((goal) => (
+        {doc.goals.map((goal, i) => (
           <li key={goal.id} data-state={goal.state} style={{ '--at': at(goal.amountCents) } as CSSProperties}>
             <span className="goals-tick" />
-            <span className="goals-tick-label">{formatUsd(goal.amountCents / 100)}</span>
+            <span
+              className="goals-tick-label"
+              ref={(element) => {
+                labels.current[i] = element;
+              }}
+              data-hidden={shown !== null && shown[i] === false ? 'true' : undefined}
+            >
+              {formatUsd(goal.amountCents / 100)}
+            </span>
           </li>
         ))}
       </ol>
@@ -90,7 +121,7 @@ export function Goals() {
               {copy.goals.loading}
             </p>
           ) : doc.state === 'unavailable' ? (
-            <EmptyState line={legal.partUnavailable} next={{ to: '/ledger', label: copy.emptyState.ledger }} unavailable />
+            <EmptyState line={legal.partUnavailable} next={{ to: '/ledger', label: copy.emptyState.ledger }} unavailable onRetry={doc.reload} />
           ) : (
             <>
               <p className="goals-lifetime">

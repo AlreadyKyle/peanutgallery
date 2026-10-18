@@ -4,9 +4,10 @@ import { EmptyState, type EmptyNext } from '../components/EmptyState';
 import { Glyph } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
 import { PersonLink } from '../components/Person';
+import { ShowMore } from '../components/ShowMore';
 import { adoptSessionFromLocation, rpc, sendMagicLink, useSignedIn } from '../lib/account';
-import { CommunityError, relativeTime, useCommunity } from '../lib/community';
-import type { PageDoc, SeedSummary } from '../lib/community-types';
+import { CommunityError, relativeTime, usePagedCommunity } from '../lib/community';
+import type { SeedSummary } from '../lib/community-types';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { legal } from '../lib/legal';
@@ -18,8 +19,9 @@ import { clearPendingSeed, parseSeedCode, rememberPendingSeed } from '../lib/see
 //
 // /seeds?save=<code> saves a seed the game linked here to the player's profile: the code is checked
 // against save_seed's rule (lib/seed-link.ts) before anything is sent; a signed-in player's save goes
-// through the same-origin save_seed RPC at once; a signed-out player is asked to sign in, the code is
-// kept in this browser, and /me sends them back here to finish the save when the link signs them in.
+// through the same-origin save_seed RPC at once, privately, and then offers to publish a copy to the
+// gallery with a title; a signed-out player is asked to sign in, the code is kept in this browser,
+// and /me sends them back here to finish the save when the link signs them in.
 
 export const PLAY_SEED_URL = 'https://play.mobmachine.games/?seed=';
 export type SeedSort = 'trending' | 'top_week' | 'top_all' | 'new';
@@ -29,18 +31,33 @@ export function seedLink(code: string): string {
   return `${PLAY_SEED_URL}${encodeURIComponent(code)}`;
 }
 
+/** A seed's true score from vote_seed's answer ({up, down}), or null when the answer holds no figures. */
+export function scoreFrom(answer: unknown): number | null {
+  if (typeof answer !== 'object' || answer === null) return null;
+  const { up, down } = answer as { up?: unknown; down?: unknown };
+  return typeof up === 'number' && typeof down === 'number' && Number.isFinite(up) && Number.isFinite(down) ? up - down : null;
+}
+
+type SeedPressed = { readonly seed: SeedSummary; readonly mine: -1 | 0 | 1; readonly score: number };
+
 export function SeedTile({ seed, signedIn }: { seed: SeedSummary; signedIn: boolean }) {
-  const [mine, setMine] = useState<-1 | 0 | 1>(0);
+  // The gallery is a public, cached document, so it cannot say how this player scored a seed, and its
+  // figures may already include them. After a press the score is the one the RPC answered with and
+  // the buttons show the press just made. Both belong to the seed they were read for: a reload brings
+  // a new seed object and the gallery's own figures again.
+  const [pressed, setPressed] = useState<SeedPressed | null>(null);
   const [busy, setBusy] = useState(false);
+  const current = pressed !== null && pressed.seed === seed ? pressed : null;
+  const mine = current?.mine ?? 0;
+  const score = current?.score ?? seed.up - seed.down;
   const cast = (value: -1 | 1) => {
     const next = mine === value ? 0 : value;
     setBusy(true);
-    rpc('vote_seed', { id: seed.id, value: next })
-      .then(() => setMine(next))
+    rpc<unknown>('vote_seed', { id: seed.id, value: next })
+      .then((answer) => setPressed({ seed, mine: next, score: scoreFrom(answer) ?? score }))
       .catch(() => undefined)
       .finally(() => setBusy(false));
   };
-  const score = seed.up - seed.down + mine;
   return (
     <li className="seed" data-featured={seed.featured ? 'true' : undefined}>
       <p className="seed-index">
@@ -95,14 +112,14 @@ type SaveState = { kind: 'idle' } | { kind: 'saving' } | { kind: 'saved'; id: st
 function SaveSignIn() {
   const id = useId();
   const [email, setEmail] = useState('');
-  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error' | 'limit'>('idle');
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setState('sending');
     // The link lands on /me, the address sign-in is set up for; /me sends the player back here.
     sendMagicLink(email.trim(), `${window.location.origin}/me`)
       .then(() => setState('sent'))
-      .catch(() => setState('error'));
+      .catch((error: unknown) => setState(error instanceof CommunityError && error.status === 429 ? 'limit' : 'error'));
   };
   return (
     <form className="form" onSubmit={submit}>
@@ -114,8 +131,62 @@ function SaveSignIn() {
         </button>
       </p>
       <p role="status" className="small">
-        {state === 'sent' ? copy.me.sent : state === 'error' ? copy.me.closed : ''}
+        {state === 'sent' ? copy.me.sent : state === 'limit' ? copy.me.tooMany : state === 'error' ? copy.me.closed : ''}
       </p>
+    </form>
+  );
+}
+
+export const SEED_TITLE_MAX = 60;
+
+/**
+ * After the save: publish the seed to the gallery with a title. save_seed needs a title (at most 60
+ * characters) to publish and has no way to publish a seed already saved, so this saves a published
+ * copy beside the private save, once.
+ */
+function PublishSeed({ game, code }: { game: string; code: string }) {
+  const id = useId();
+  const [title, setTitle] = useState('');
+  const [state, setState] = useState<'idle' | 'blank' | 'sending' | 'published' | 'error'>('idle');
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (title.trim() === '') {
+      setState('blank');
+      return;
+    }
+    setState('sending');
+    rpc<{ id: string }>('save_seed', { game, code, title: title.trim(), publish: true })
+      .then(() => setState('published'))
+      .catch(() => setState('error'));
+  };
+  if (state === 'published') return <p role="status">{copy.seeds.save.published}</p>;
+  return (
+    <form className="form seed-publish" onSubmit={submit}>
+      <label htmlFor={`${id}-title`}>{copy.seeds.save.titleLabel}</label>
+      <input
+        id={`${id}-title`}
+        type="text"
+        maxLength={SEED_TITLE_MAX}
+        value={title}
+        aria-invalid={state === 'blank' ? true : undefined}
+        aria-describedby={state === 'blank' || state === 'error' ? `${id}-hint ${id}-status` : `${id}-hint`}
+        onChange={(event) => setTitle(event.currentTarget.value)}
+      />
+      <p className="small muted" id={`${id}-hint`}>
+        {copy.seeds.save.titleHint}
+      </p>
+      <p>
+        <button type="submit" className="button button-secondary" disabled={state === 'sending'}>
+          <Glyph name="seed" />
+          {state === 'sending' ? copy.seeds.save.publishing : copy.seeds.save.publish}
+        </button>
+      </p>
+      {/* Drawn only with something to say, so the save's own line stays the section's one status. */}
+      {state === 'blank' || state === 'error' ? (
+        <p role="alert" className="small" id={`${id}-status`}>
+          {state === 'blank' ? copy.seeds.save.needTitle : copy.seeds.save.publishFailed}
+        </p>
+      ) : null}
     </form>
   );
 }
@@ -183,6 +254,7 @@ export function SaveFromLink({ raw }: { raw: string }) {
                   <Glyph name="arrow-right" />
                 </Link>
               </p>
+              {signedIn ? <PublishSeed game={seed.game} code={seed.code} /> : null}
             </>
           ) : state.kind === 'failed' ? (
             <p role="status">{copy.seeds.save.failed}</p>
@@ -219,7 +291,7 @@ export function Seeds() {
     }
   }, [saveCode, signedIn, params, setParams]);
   const [sort, setSort] = useState<SeedSort>('trending');
-  const list = useCommunity<PageDoc<SeedSummary>>(`/seeds?sort=${sort}`);
+  const list = usePagedCommunity<SeedSummary>(`/seeds?sort=${sort}`);
   return (
     <main className="wide sheet">
       <div className="band">
@@ -245,15 +317,27 @@ export function Seeds() {
               {copy.seeds.loading}
             </p>
           ) : list.state === 'unavailable' ? (
-            <EmptyState line={legal.partUnavailable} next={playNext()} unavailable />
-          ) : list.data.items.length === 0 ? (
+            <EmptyState line={legal.partUnavailable} next={playNext()} unavailable onRetry={list.reload} />
+          ) : list.items.length === 0 ? (
             <EmptyState line={copy.seeds.empty} next={playNext()} />
           ) : (
-            <ul className="seed-grid">
-              {list.data.items.map((seed) => (
-                <SeedTile key={seed.id} seed={seed} signedIn={signedIn} />
-              ))}
-            </ul>
+            <>
+              <ul className="seed-grid">
+                {list.items.map((seed) => (
+                  <SeedTile key={seed.id} seed={seed} signedIn={signedIn} />
+                ))}
+              </ul>
+              {list.hasMore ? (
+                <ShowMore
+                  label={copy.seeds.more}
+                  loadingLabel={copy.seeds.loadingMore}
+                  failedLine={copy.seeds.moreFailed}
+                  loading={list.loadingMore}
+                  failed={list.moreFailed}
+                  onMore={list.loadMore}
+                />
+              ) : null}
+            </>
           )}
         </section>
         <section className="section" aria-labelledby="seeds-how">

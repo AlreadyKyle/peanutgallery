@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { COMMUNITY_API, type FeedDoc, type FeedEvent } from './community-types';
+import { COMMUNITY_API, type FeedDoc, type FeedEvent, type PageDoc } from './community-types';
 import { copy } from './copy';
 import { formatDate } from './format';
 import { rarityOf, suitOf } from './suits';
@@ -36,12 +36,18 @@ export async function getCommunity<T>(path: string, init?: RequestInit): Promise
 
 /**
  * One community document, read once and then every `pollMs` while the tab is visible (0: once).
- * `path` null reads nothing and stays loading.
+ * `path` null reads nothing and stays loading. What is held belongs to one path: a new path (another
+ * sort or filter) reads as loading until it answers, and a new path that fails shows its own
+ * unavailable state, never the previous path's list under the new choice.
  */
 export function useCommunity<T>(path: string | null, pollMs = 0): Loaded<T> & { reload: () => void } {
-  const [state, setState] = useState<Loaded<T>>({ state: 'loading' });
+  const [held, setHeld] = useState<{ path: string | null; value: Loaded<T> }>({ path, value: { state: 'loading' } });
   const [nonce, setNonce] = useState(0);
-  const reload = useCallback(() => setNonce((n) => n + 1), []);
+  // Trying again after a failure shows loading until the document answers.
+  const reload = useCallback(() => {
+    setHeld((was) => (was.value.state === 'unavailable' ? { path: was.path, value: { state: 'loading' } } : was));
+    setNonce((n) => n + 1);
+  }, []);
   useEffect(() => {
     if (path === null) return;
     let live = true;
@@ -50,11 +56,15 @@ export function useCommunity<T>(path: string | null, pollMs = 0): Loaded<T> & { 
     const load = () => {
       started = true;
       getCommunity<T>(path)
-        .then((data) => live && setState({ state: 'ready', data }))
+        .then((data) => live && setHeld({ path, value: { state: 'ready', data } }))
         .catch((error: unknown) => {
           if (!live) return;
-          // A failed refresh keeps what is on screen.
-          setState((was) => (was.state === 'ready' ? was : { state: 'unavailable', status: error instanceof CommunityError ? error.status : null }));
+          // A failed refresh of the same path keeps what is on screen.
+          setHeld((was) =>
+            was.path === path && was.value.state === 'ready'
+              ? was
+              : { path, value: { state: 'unavailable', status: error instanceof CommunityError ? error.status : null } },
+          );
         })
         .finally(() => {
           if (live && pollMs > 0 && document.visibilityState === 'visible') timer = setTimeout(load, pollMs);
@@ -76,7 +86,59 @@ export function useCommunity<T>(path: string | null, pollMs = 0): Loaded<T> & { 
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [path, pollMs, nonce]);
+  const state: Loaded<T> = held.path === path ? held.value : { state: 'loading' };
   return { ...state, reload };
+}
+
+/** `path` with a keyset cursor added to its query. */
+export function withCursor(path: string, cursor: string): string {
+  return `${path}${path.includes('?') ? '&' : '?'}cursor=${encodeURIComponent(cursor)}`;
+}
+
+type MorePages<T> = {
+  readonly from: PageDoc<T>;
+  readonly items: readonly T[];
+  readonly next: string | null;
+  readonly loading: boolean;
+  readonly failed: boolean;
+};
+
+/**
+ * A paged community list (PageDoc): the first page from useCommunity, then Show more reads the next
+ * page with its cursor and appends it. The pages it appended belong to the first page they followed,
+ * so a new sort, a new filter or a reload starts again from its own first page.
+ */
+export function usePagedCommunity<T extends { readonly id: string }>(path: string | null) {
+  const head = useCommunity<PageDoc<T>>(path);
+  const [more, setMore] = useState<MorePages<T> | null>(null);
+  const doc = head.state === 'ready' ? head.data : null;
+  const current = more !== null && doc !== null && more.from === doc ? more : null;
+  const next = current === null ? (doc?.next ?? null) : current.next;
+  const loadMore = useCallback(() => {
+    if (path === null || doc === null || next === null) return;
+    const base = (was: MorePages<T> | null): MorePages<T> =>
+      was !== null && was.from === doc ? was : { from: doc, items: [], next: doc.next, loading: false, failed: false };
+    setMore((was) => ({ ...base(was), loading: true, failed: false }));
+    getCommunity<PageDoc<T>>(withCursor(path, next))
+      .then((page) =>
+        setMore((was) => {
+          const kept = base(was);
+          return { ...kept, items: [...kept.items, ...page.items], next: page.next, loading: false };
+        }),
+      )
+      .catch(() => setMore((was) => ({ ...base(was), loading: false, failed: true })));
+  }, [path, doc, next]);
+  const seen = new Set<string>();
+  const items = doc === null ? [] : [...doc.items, ...(current?.items ?? [])].filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)));
+  return {
+    state: head.state,
+    items,
+    hasMore: next !== null,
+    loadMore,
+    loadingMore: current?.loading ?? false,
+    moreFailed: current?.failed ?? false,
+    reload: head.reload,
+  };
 }
 
 /** How long ago, in a few plain words: "just now", "4 min ago", "3 h ago", "2 days ago", then the date. */
