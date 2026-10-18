@@ -1,9 +1,12 @@
 import './style.css';
+import { dailySeed } from '../sim/daily';
 import { awaySeconds, parseSavedAt, parseSavedState } from '../sim/save';
 import { chosenOption, createSim, devilReward, findPerk, orderBonus, step } from '../sim/sim';
 import type { SimState } from '../sim/types';
 import { AccessibleControls } from './controls';
-import { countEvent } from './count';
+import { countEvent, onceEach, returnEvent, SessionClock } from './count';
+import { createDailyGame, DAILY_KEY, DAILY_PARAM, dailyFromSearch, freshDaily, parseDaily, type DailyAsk, type DailyRecord } from './daily';
+import { attachDailyEntry, DailyRun } from './daily-ui';
 import { describeForkEffect, describePerk, devilCaughtWords, milestoneWords, orderWords, weatherView } from './depth';
 import { fill, formatDust, formatDuration, formatPercent } from './format';
 import { Game, SAVE_INTERVAL_MS, SAVE_KEY } from './game';
@@ -22,6 +25,10 @@ const LOAD_FAILED = 'The game data did not load. Reload the page to try again.';
 const MIN_WELCOME_SECONDS = 60;
 // How near the dust devil a tap on the island catches it, in CSS pixels: generous, so it needs no precision.
 const DEVIL_REACH_PX = 60;
+// The benchmarks' counters (render/count.ts, docs/specs/counter-senders.md): each at most once in this page load.
+const countOnce = onceEach();
+// How often the session clock is read, in milliseconds.
+const SESSION_CHECK_MS = 1000;
 
 function statusElement(): HTMLElement | null {
   return document.getElementById('status');
@@ -43,6 +50,15 @@ function readSave(): { state: SimState; savedAt: number | null } | null {
     if (raw === null) return null;
     const state = parseSavedState(raw);
     return state === null ? null : { state, savedAt: parseSavedAt(raw) };
+  } catch {
+    return null;
+  }
+}
+
+// A daily run's record for its day, or null for none (or one that does not parse, or another day's).
+function readDaily(date: string): DailyRecord | null {
+  try {
+    return parseDaily(storage()?.getItem(DAILY_KEY) ?? null, date);
   } catch {
     return null;
   }
@@ -86,20 +102,32 @@ function run(data: GameData): void {
   const store = storage();
   const calm = reducedMotion();
 
+  // A ?daily= link opens that day's Daily Dust run instead of the player's own game
+  // (docs/specs/daily-dust.md). The main save is then neither read for play nor ever written: the
+  // daily Game has no store, and the run keeps its own record under DAILY_KEY (render/daily-ui.ts).
+  const daily = dailyFromSearch(window.location.search, Date.now());
+  const dailyRecord = daily === null ? null : (readDaily(daily.date) ?? freshDaily(daily.date, createSim(config, dailySeed(daily.date))));
+
   // The play seed is the wall-clock second the page opened, so strikes
   // roll differently per visit while the bot keeps its fixed seed.
   const seed = Math.floor(Date.now() / 1000) >>> 0;
   // A save credits the time since it was written, so dust keeps accruing while the page is closed.
-  const save = readSave();
-  const away = save === null || save.savedAt === null ? 0 : awaySeconds(save.savedAt, Date.now());
+  const save = daily === null ? readSave() : null;
+  const loadedAt = Date.now();
+  // A load from a save a day or a week old, decided from the save's own savedAt (docs/strategy/benchmarks.md, Player D1 and D7).
+  const returning = returnEvent(save?.savedAt ?? null, loadedAt);
+  if (returning !== null) countOnce(returning);
+  const away = save === null || save.savedAt === null ? 0 : awaySeconds(save.savedAt, loadedAt);
   const savedState = save === null ? null : away === 0 ? save.state : step(save.state, config, away);
   const welcome = save === null || savedState === null ? null : { gain: savedState.totalDust - save.state.totalDust, seconds: away };
-  const initial = savedState ?? createSim(config, seed);
+  const initial = dailyRecord?.state ?? savedState ?? createSim(config, seed);
 
   const stage = document.getElementById('stage')!;
   const host = document.getElementById('game')!;
   const controlsRoot = document.getElementById('controls');
-  const game = new Game(config, initial, store);
+  // A daily run's Game has no store (render/daily.ts): it steps at most a second a tick, so time away
+  // earns nothing, waits for the first strike, lands on each half-minute mark and ends at four minutes.
+  const game = dailyRecord === null ? new Game(config, initial, store) : createDailyGame(config, dailyRecord);
   const scene = new DustScene(host, config, calm);
   scene.setState(initial);
   const hud = new Hud(stage, config, strings, calm);
@@ -201,13 +229,21 @@ function run(data: GameData): void {
 
   const shareButton = document.getElementById('share');
   const shareStatus = document.getElementById('share-status');
-  if (shareButton instanceof HTMLButtonElement && shareStatus !== null) {
-    attachShare(shareButton, shareStatus, () => game.state, config, strings);
-  }
-  const seedButton = document.getElementById('seed-save');
-  if (seedButton instanceof HTMLButtonElement && shareStatus !== null) {
-    attachSeedButton(seedButton, shareStatus, () => game.state, config, strings);
-    attachGalleryLink(seedButton, () => game.state, strings);
+  let dailyRun: DailyRun | null = null;
+  if (daily === null) {
+    if (shareButton instanceof HTMLButtonElement && shareStatus !== null) {
+      attachShare(shareButton, shareStatus, () => game.state, config, strings);
+    }
+    const seedButton = document.getElementById('seed-save');
+    if (seedButton instanceof HTMLButtonElement && shareStatus !== null) {
+      attachSeedButton(seedButton, shareStatus, () => game.state, config, strings);
+      seedButton.addEventListener('click', () => countOnce('dust_seed_save'));
+      attachDailyEntry(attachGalleryLink(seedButton, () => game.state, strings), strings);
+    }
+  } else if (dailyRecord !== null) {
+    dailyRun = startDaily(daily, dailyRecord, data, game, shareStatus, (score) =>
+      controls?.say(fill(strings.daily.said, { score: formatDust(score) })),
+    );
   }
 
   // Framing: the island stays inside whatever the HUD and the shop leave open. The sizes are read in
@@ -231,12 +267,22 @@ function run(data: GameData): void {
     controls?.say(fill(strings.labels.welcomeBack, { amount: formatDust(welcome.gain), time: formatDuration(welcome.seconds) }));
   }
 
-  // Saving: every few seconds, when the tab is hidden and when the page goes away.
-  window.setInterval(() => game.save(Date.now()), SAVE_INTERVAL_MS);
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) game.save(Date.now());
-  });
-  window.addEventListener('pagehide', () => game.save(Date.now()));
+  // Saving: every few seconds, when the tab is hidden and when the page goes away. A daily run saves
+  // its own record instead (render/daily-ui.ts).
+  if (daily === null) {
+    window.setInterval(() => game.save(Date.now()), SAVE_INTERVAL_MS);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) game.save(Date.now());
+    });
+    window.addEventListener('pagehide', () => game.save(Date.now()));
+  }
+
+  // Session length: the time this page has been visible, counted once at 2 and once at 4 minutes.
+  const session = new SessionClock();
+  session.advance(Date.now(), !document.hidden);
+  window.setInterval(() => {
+    for (const mark of session.advance(Date.now(), !document.hidden)) countOnce(mark);
+  }, SESSION_CHECK_MS);
 
   // One loop: step the sim by wall-clock time, then draw the scene, the HUD and the controls from the
   // frame's clock. A hidden tab gets no frames, so nothing renders there; the step on return credits it.
@@ -250,13 +296,32 @@ function run(data: GameData): void {
     hud.setAnchor(p.x, p.y);
     hud.frame(ms, state);
     controls?.update(state, true, ms);
+    dailyRun?.update();
     window.requestAnimationFrame(frame);
   };
   window.requestAnimationFrame(frame);
 
   // A seed link: offer it, never load it over the player's game without asking.
-  const code = seedFromSearch(window.location.search);
+  const code = daily === null ? seedFromSearch(window.location.search) : null;
   if (code !== null) handleSeedLink(code, data, game, save?.state ?? null, shareStatus);
+}
+
+// The page for a daily run: a link that asked for a day it cannot have (tomorrow, or no real date)
+// opens today's and says so, with the address corrected to the day being played.
+function startDaily(ask: DailyAsk, record: DailyRecord, data: GameData, game: Game, status: HTMLElement | null, onEnd: (score: number) => void): DailyRun | null {
+  const footer = document.querySelector('footer');
+  const shareRow = document.querySelector('.share-row');
+  if (!(footer instanceof HTMLElement) || !(shareRow instanceof HTMLElement) || status === null) return null;
+  if (ask.refused) {
+    const url = new URL(window.location.href);
+    url.searchParams.set(DAILY_PARAM, ask.date);
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    status.textContent = data.strings.daily.refused;
+  }
+  return new DailyRun(
+    { footer, shareRow },
+    { record, game, config: data.config, strings: data.strings, store: storage(), restart: () => window.location.reload(), onEnd },
+  );
 }
 
 function handleSeedLink(code: string, data: GameData, game: Game, own: SimState | null, status: HTMLElement | null): void {
@@ -266,6 +331,8 @@ function handleSeedLink(code: string, data: GameData, game: Game, own: SimState 
     window.history.replaceState(null, '', url.pathname + url.search + url.hash);
   };
   const seedState = decodeSeed(code);
+  // A load from a seed link that opens (docs/strategy/benchmarks.md, Seed opens from links).
+  if (seedState !== null) countOnce('dust_seed_open');
   const dialog = document.getElementById('seed-offer');
   const store = storage();
   if (seedState === null || !(dialog instanceof HTMLDialogElement) || store === null) {

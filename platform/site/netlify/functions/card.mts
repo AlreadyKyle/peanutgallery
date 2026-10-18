@@ -27,15 +27,17 @@ export const MAX_BODY_BYTES = 1024;
 export const SESSION_PATTERN = /^cs_(live|test)_[A-Za-z0-9]{10,250}$/;
 /**
  * The events /api/count takes; the database's count_play_event holds the same list. The first four are
- * the play counts (docs/specs/play-counts.md); the rest are the benchmarks' aggregate counters
+ * the play counts (docs/specs/play-counts.md); the next twelve are the benchmarks' aggregate counters
  * (docs/specs/operations.md): a load from a save 1 or 7 days old, a session reaching 2 or 4 minutes,
  * a seed saved or opened from a link, a home load and its dwell buckets, the broadcast's load and its
- * QR source, and a click on a Discord link. Each is one daily total with nothing that names a person.
+ * QR source, and a click on a Discord link. The last three are Daily Dust's (docs/specs/daily-dust.md):
+ * a run started, finished and shared. Each is one daily total with nothing that names a person.
  */
 export const PLAY_EVENTS = [
   'dust_load', 'dust_share', 'card_share', 'dust_next_card',
   'dust_return_1d', 'dust_return_7d', 'dust_session_2m', 'dust_session_4m', 'dust_seed_save', 'dust_seed_open',
   'home_load', 'home_dwell_mid', 'home_dwell_long', 'broadcast_load', 'broadcast_qr', 'discord_click',
+  'dust_daily_start', 'dust_daily_finish', 'dust_daily_share',
 ] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CARD_PATH = /^\/api\/card\/([^/]+)$/;

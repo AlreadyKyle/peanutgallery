@@ -500,7 +500,7 @@ export const legal = {
     'Contributing means you accept the {terms} in force when your checkout starts, including the {refunds}. To contribute you must be an adult where you live, or have the permission of a parent or guardian.',
   fundAgreement: "By funding you accept the {terms} and the {refunds}, and confirm you are an adult or have a guardian's permission.",
   // Privacy is a notice with its own date, not part of a Terms version.
-  privacyUpdated: 'Last updated 11 October 2026.',
+  privacyUpdated: 'Last updated 17 October 2026.',
   privacy: {
     title: 'Privacy',
     lede: 'What the studio stores when you contribute, and what it does not.',
@@ -526,11 +526,24 @@ export const legal = {
         ],
       },
       {
-        // docs/specs/play-counts.md
+        // docs/specs/card-follows.md
+        heading: 'Cards you follow',
+        paragraphs: [
+          'If you sign in and press Tell me when this ships on a card, the studio sends one email to the address you signed in with when that card goes live. The studio reads the address from Supabase Auth, its sign-in service, when it sends and does not copy it anywhere else. The email is sent through Resend.',
+          'If you also funded the card and Stripe has the same email address, the ship notice is the only email you get for it.',
+          'Every email has a link to stop them, which stops you following any card. You can also unfollow a card on your profile.',
+        ],
+      },
+      {
+        // docs/specs/play-counts.md, docs/specs/counter-senders.md
         heading: 'Play and share counts',
         paragraphs: [
-          'The studio counts four things a day: how many times Dust is opened, how many times Share your run is pressed, how many times a card is shared from the site, and how many clicks go from Dust to a card. Each is one running total for the day and nothing else.',
-          'A count sets no cookie and stores no identifier and no IP address, so it cannot tell who you are or whether you came back.',
+          'The studio counts how many times a day Dust is opened, Share your run is pressed, a card is shared from the site, and a click goes from Dust to a card.',
+          'It also counts, a day at a time: how many times Dust is opened from a save a day or a week old, how many visits to Dust reach 2 and 4 minutes, how many times Save as seed is pressed and a seed link is opened, how many times the home page is shown and stays open 15 and 45 seconds, how many times the broadcast page is loaded and its QR code is followed, and how many clicks go to Discord.',
+          'Each is one running total for the day and nothing else. Your browser decides whether a count applies, from what it already holds: whether Dust was opened from a save a day or a week old comes from the time your own save records, and that time is never sent.',
+          'A count sets no cookie and stores no identifier and no IP address, so it cannot tell who you are, and nothing new is stored in your browser to make one.',
+          // docs/specs/daily-dust.md
+          'For Daily Dust it also counts, the same way, how many runs are started, finished and shared each day.',
         ],
       },
       {
@@ -538,8 +551,10 @@ export const legal = {
         paragraphs: ['The site has no ads, no tracking and no cookies that follow you. The daily counts above are the only analytics.'],
       },
       {
-        heading: 'Board sign-in',
-        paragraphs: ['Only board members can sign in. Sign-in uses Supabase Auth.'],
+        heading: 'Sign-in',
+        paragraphs: [
+          'Board members, and players who keep a profile, sign in with a link sent to their email address. Sign-in uses Supabase Auth, which keeps that address so you can sign in again.',
+        ],
       },
       {
         heading: 'Hosting',

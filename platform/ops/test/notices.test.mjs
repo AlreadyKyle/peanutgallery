@@ -5,7 +5,7 @@ import { describe, test } from 'node:test';
 import { envFileProblems } from '../jobs/check-env.mjs';
 import { jobEnvProblems } from '../jobs/lib.mjs';
 import { main } from '../jobs/main.mjs';
-import { composeNotice, NOTICE_FROM, playUrl, runNotices, sessionEmail, unsubscribeUrl } from '../jobs/notices.mjs';
+import { accountEmail, composeFollowNotice, composeNotice, followUnsubscribeUrl, NOTICE_FROM, NOTICES_PER_RUN, playUrl, runNotices, sessionEmail, unsubscribeUrl } from '../jobs/notices.mjs';
 
 const NOW = new Date('2026-10-11T09:07:00Z');
 const PLAY = 'https://play.mobmachine.games';
@@ -29,12 +29,42 @@ const row = (n, extra = {}) => ({
   ...extra,
 });
 const EMAIL = (n) => `supporter${n}@example.com`;
+const follow = (n, extra = {}) => ({
+  user_id: `00000000-0000-4000-8000-0000000000f${n}`,
+  card_id: '00000000-0000-4000-8000-0000000000c1',
+  card_title: 'Dust storms\non the map',
+  card_folder: 'seed-1',
+  live_at: '2026-10-10T12:00:00Z',
+  cost_usd: 1.234,
+  unsubscribe_token: TOKEN,
+  covered: false,
+  ...extra,
+});
+const FOLLOWER = (n) => `follower${n}@example.com`;
+const ACCOUNTS = {
+  [follow(1).user_id]: { id: follow(1).user_id, email: FOLLOWER(1), email_confirmed_at: '2026-10-01T00:00:00Z' },
+  [follow(2).user_id]: { id: follow(2).user_id, email: FOLLOWER(2), email_confirmed_at: '2026-10-01T00:00:00Z' },
+};
+const NO_FOLLOWS = '; follows due 0, sent 0, covered 0, no address 0, failed 0, account unread 0, already claimed 0';
 
 // A fetch stand-in for Supabase (the four calls), Stripe (one session read per row), Resend and ntfy.
 // claimed holds the pairs already claimed; a claim answers true only the first time.
-function fake({ due = [row(1), row(2)], emails = { cs_live_fixture1: EMAIL(1), cs_live_fixture2: EMAIL(2) }, resend = () => ({ status: 200, body: { id: 'resend-1' } }), stripeDown = new Set(), stuck = [], claimed = new Set() } = {}) {
+function fake({
+  due = [row(1), row(2)],
+  emails = { cs_live_fixture1: EMAIL(1), cs_live_fixture2: EMAIL(2) },
+  resend = () => ({ status: 200, body: { id: 'resend-1' } }),
+  stripeDown = new Set(),
+  stuck = [],
+  claimed = new Set(),
+  follows = [],
+  accounts = ACCOUNTS,
+  authDown = new Set(),
+  followStuck = [],
+  followClaimed = new Set(),
+} = {}) {
   const calls = [];
   const settled = [];
+  const followSettled = [];
   const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
   const fetchFn = async (input, init = {}) => {
     const url = new URL(String(input));
@@ -68,9 +98,26 @@ function fake({ due = [row(1), row(2)], emails = { cs_live_fixture1: EMAIL(1), c
       return json(200, true);
     }
     if (url.pathname === '/rest/v1/ship_notices') return json(200, stuck);
+    if (url.pathname === '/rest/v1/rpc/follow_notices_due') return json(200, follows.slice(0, body.p_limit));
+    if (url.pathname === '/rest/v1/rpc/follow_notice_claim') {
+      const key = `${body.p_user}/${body.p_card}`;
+      if (followClaimed.has(key)) return json(200, false);
+      followClaimed.add(key);
+      return json(200, true);
+    }
+    if (url.pathname === '/rest/v1/rpc/follow_notice_settle') {
+      followSettled.push(body);
+      return json(200, true);
+    }
+    if (url.pathname === '/rest/v1/rpc/follow_notices_stuck') return json(200, followStuck);
+    if (url.pathname.startsWith('/auth/v1/admin/users/')) {
+      const id = decodeURIComponent(url.pathname.slice('/auth/v1/admin/users/'.length));
+      if (authDown.has(id)) return json(500, { msg: 'down' });
+      return accounts[id] ? json(200, accounts[id]) : json(404, { msg: 'User not found' });
+    }
     return new Response('ok', { status: 200 });
   };
-  return { fetchFn, calls, settled, claimed };
+  return { fetchFn, calls, settled, claimed, followSettled, followClaimed };
 }
 
 const sink = () => {
@@ -130,7 +177,7 @@ describe('the ship notices run', () => {
     const result = await run(f, { out });
     assert.equal(result.ok, true);
     assert.deepEqual(result.counts, { due: 2, sent: 2, no_address: 0, failed: 0, skipped: 0, stripe_unread: 0 });
-    assert.equal(out.lines[0], 'PASS: notices: due 2, sent 2, no address 0, failed 0, Stripe unread 0, already claimed 0\n');
+    assert.equal(out.lines[0], `PASS: notices: due 2, sent 2, no address 0, failed 0, Stripe unread 0, already claimed 0${NO_FOLLOWS}\n`);
     const stripe = f.calls.filter((c) => c.url.origin === 'https://api.stripe.com');
     assert.deepEqual(stripe.map((c) => [c.method, c.url.pathname]), [['GET', '/v1/checkout/sessions/cs_live_fixture1'], ['GET', '/v1/checkout/sessions/cs_live_fixture2']]);
     for (const c of stripe) assert.equal(c.headers.Authorization, 'Bearer rk_live_fixture');
@@ -210,7 +257,7 @@ describe('the ship notices run', () => {
     const f = fake();
     const out = sink();
     const result = await run(f, { dryRun: true, out });
-    assert.equal(out.lines[0], 'PASS: notices (dry run): due 2, would send 2, no address 0, failed 0, Stripe unread 0, already claimed 0\n');
+    assert.equal(out.lines[0], `PASS: notices (dry run): due 2, would send 2, no address 0, failed 0, Stripe unread 0, already claimed 0${NO_FOLLOWS.replace('sent 0', 'would send 0')}\n`);
     assert.equal(result.counts.sent, 2);
     for (const c of f.calls) {
       assert.ok(!['ship_notice_claim', 'ship_notice_settle'].includes(c.url.pathname.split('/').pop()), c.url.pathname);
@@ -227,5 +274,158 @@ describe('the ship notices run', () => {
     assert.equal(await main(['notices'], { ...ENV, RESEND_API_KEY: '' }, { fetchFn: g.fetchFn, out }), 1);
     assert.equal(g.calls.length, 0);
     assert.match(out.text(), /^FAIL: notices: notices env refused/);
+  });
+});
+
+describe('the follow email (docs/specs/card-follows.md)', () => {
+  test('names the card, that it is live, what the agents spent, its page, the play address and its own unsubscribe, and no address', () => {
+    const notice = composeFollowNotice(follow(1), PLAY);
+    assert.equal(notice.subject, 'Shipped: Dust storms on the map');
+    assert.match(notice.text, /^A card you follow has shipped\./);
+    assert.match(notice.text, /Dust storms on the map is live\./);
+    assert.match(notice.text, /The agents spent \$1\.23 building it\./);
+    assert.ok(notice.text.includes('See the card: https://mobmachine.games/card/00000000-0000-4000-8000-0000000000c1'));
+    assert.ok(notice.text.includes(`Play the game: ${PLAY}`));
+    const stop = followUnsubscribeUrl(follow(1).user_id, TOKEN);
+    assert.equal(stop, `https://mobmachine.games/api/unsubscribe?f=00000000-0000-4000-8000-0000000000f1&t=${TOKEN}`);
+    assert.ok(notice.text.includes(`Stop emails for cards you follow: ${stop}`));
+    assert.deepEqual(notice.headers, { 'List-Unsubscribe': `<${stop}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' });
+    assert.equal(notice.idempotencyKey, 'card-follow/00000000-0000-4000-8000-0000000000f1/00000000-0000-4000-8000-0000000000c1');
+    assert.doesNotMatch(`${notice.text}${notice.html}`, /@/);
+  });
+
+  test('escapes the card title in the HTML part', () => {
+    const notice = composeFollowNotice(follow(1, { card_title: 'A <b>bold</b> & "quoted" card' }), PLAY);
+    assert.ok(notice.html.includes('A &lt;b&gt;bold&lt;/b&gt; &amp; &quot;quoted&quot; card'));
+    assert.doesNotMatch(notice.html, /<b>bold/);
+  });
+
+  test('takes the account email only once it is confirmed', () => {
+    assert.equal(accountEmail({ email: ' a@b.example ', email_confirmed_at: '2026-10-01T00:00:00Z' }), 'a@b.example');
+    for (const user of [{}, null, { email: 'a@b.example' }, { email: 'a@b.example', email_confirmed_at: null }, { email: 'nope', email_confirmed_at: '2026-10-01T00:00:00Z' }]) {
+      assert.equal(accountEmail(user), null);
+    }
+  });
+});
+
+describe('the follow emails in the notices run', () => {
+  test('after the payers: reads each account from Supabase Auth with GET, claims, sends one email each, and settles sent', async () => {
+    const f = fake({ due: [row(1)], follows: [follow(1), follow(2)] });
+    const out = sink();
+    const result = await run(f, { out });
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.follows, { due: 2, sent: 2, covered: 0, no_address: 0, failed: 0, skipped: 0, account_unread: 0, waiting: false });
+    assert.equal(
+      out.lines[0],
+      'PASS: notices: due 1, sent 1, no address 0, failed 0, Stripe unread 0, already claimed 0; follows due 2, sent 2, covered 0, no address 0, failed 0, account unread 0, already claimed 0\n',
+    );
+    // The payers' list is read first; the follows get what is left of the run's budget.
+    const order = f.calls.map((c) => c.url.pathname.split('/').pop());
+    assert.ok(order.indexOf('ship_notices_due') < order.indexOf('follow_notices_due'));
+    assert.equal(f.calls.find((c) => c.url.pathname.endsWith('/follow_notices_due')).body.p_limit, NOTICES_PER_RUN - 1);
+    const auth = f.calls.filter((c) => c.url.pathname.startsWith('/auth/v1/admin/users/'));
+    assert.deepEqual(auth.map((c) => [c.method, c.url.pathname]), [
+      ['GET', `/auth/v1/admin/users/${follow(1).user_id}`],
+      ['GET', `/auth/v1/admin/users/${follow(2).user_id}`],
+    ]);
+    for (const c of auth) assert.equal(c.headers.apikey, ENV.SUPABASE_SERVICE_ROLE_KEY);
+    const sends = f.calls.filter((c) => c.url.origin === 'https://api.resend.com');
+    assert.deepEqual(sends.map((c) => c.body.to), [[EMAIL(1)], [FOLLOWER(1)], [FOLLOWER(2)]]);
+    for (const c of sends.slice(1)) {
+      assert.equal(c.body.from, NOTICE_FROM);
+      assert.equal(c.body.subject, 'Shipped: Dust storms on the map');
+      assert.match(c.headers['Idempotency-Key'], /^card-follow\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/);
+      assert.match(c.body.headers['List-Unsubscribe'], /\/api\/unsubscribe\?f=[0-9a-f-]{36}&t=[0-9a-f]{64}>$/);
+    }
+    assert.deepEqual(f.followSettled.map((s) => [s.p_user, s.p_status, s.p_provider_id]), [
+      [follow(1).user_id, 'sent', 'resend-1'],
+      [follow(2).user_id, 'sent', 'resend-1'],
+    ]);
+    const steps = f.calls
+      .map((c) => (c.url.origin === 'https://api.resend.com' ? 'send' : c.url.pathname.split('/').pop()))
+      .filter((o) => o === 'follow_notice_claim' || o === 'send');
+    assert.deepEqual(steps, ['send', 'follow_notice_claim', 'send', 'follow_notice_claim', 'send']);
+    // No address is ever printed, posted to ntfy or sent to Supabase.
+    assert.doesNotMatch(out.text(), /@/);
+    for (const c of f.calls.filter((c) => c.url.origin !== 'https://api.resend.com')) assert.doesNotMatch(JSON.stringify(c.body ?? ''), /example\.com/);
+  });
+
+  test('a covered follow is claimed and settled covered with no email and no account read', async () => {
+    const f = fake({ due: [], follows: [follow(1, { covered: true })] });
+    const result = await run(f);
+    assert.equal(result.follows.covered, 1);
+    assert.deepEqual(f.followSettled.map((s) => s.p_status), ['covered']);
+    assert.equal(f.calls.filter((c) => c.url.origin === 'https://api.resend.com').length, 0);
+    assert.equal(f.calls.filter((c) => c.url.pathname.startsWith('/auth/')).length, 0);
+  });
+
+  test('a full payers list leaves the follows for the next run', async () => {
+    const due = Array.from({ length: NOTICES_PER_RUN }, (_, i) => row(1, { payment_id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}` }));
+    const f = fake({ due, follows: [follow(1)] });
+    const out = sink();
+    const result = await run(f, { out });
+    assert.equal(result.follows.waiting, true);
+    assert.equal(f.calls.filter((c) => c.url.pathname.endsWith('/follow_notices_due')).length, 0);
+    assert.match(out.lines[0], /follows due 0, sent 0, .*, waiting for the payers\n$/);
+  });
+
+  test('never sends twice: a second run finds the follows claimed', async () => {
+    const followClaimed = new Set();
+    await run(fake({ due: [], follows: [follow(1)], followClaimed }));
+    const second = fake({ due: [], follows: [follow(1)], followClaimed });
+    const result = await run(second);
+    assert.deepEqual([result.follows.sent, result.follows.skipped], [0, 1]);
+    assert.equal(second.calls.filter((c) => c.url.origin === 'https://api.resend.com').length, 0);
+  });
+
+  test('an account Auth does not know, or with no confirmed email, settles no_address and sends nothing', async () => {
+    const f = fake({ due: [], follows: [follow(1), follow(2)], accounts: { [follow(2).user_id]: { email: FOLLOWER(2), email_confirmed_at: null } } });
+    const result = await run(f);
+    assert.equal(result.ok, true);
+    assert.equal(result.follows.no_address, 2);
+    assert.deepEqual(f.followSettled.map((s) => s.p_status), ['no_address', 'no_address']);
+    assert.equal(f.calls.filter((c) => c.url.origin === 'https://api.resend.com').length, 0);
+  });
+
+  test('an account Auth does not answer is not claimed, so the next run tries it again', async () => {
+    const f = fake({ due: [], follows: [follow(1), follow(2)], authDown: new Set([follow(1).user_id]) });
+    const result = await run(f);
+    assert.equal(result.ok, false);
+    assert.deepEqual([result.follows.account_unread, result.follows.sent], [1, 1]);
+    assert.equal(f.followClaimed.has(`${follow(1).user_id}/${follow(1).card_id}`), false);
+  });
+
+  test('a Resend error settles the follow failed, is not retried, and alerts the board with no address', async () => {
+    const f = fake({ due: [], follows: [follow(1)], resend: () => ({ status: 500, body: {} }) });
+    const out = sink();
+    const result = await run(f, { out });
+    assert.equal(result.ok, false);
+    assert.deepEqual(f.followSettled.map((s) => s.p_status), ['failed']);
+    const alert = f.calls.find((c) => c.url.origin === 'https://ntfy.sh');
+    assert.ok(alert);
+    assert.doesNotMatch(String(alert.body ?? ''), /@/);
+    assert.match(out.text(), /follow 00000000-0000-4000-8000-0000000000f1 card .*: resend: http 500; not retried/);
+  });
+
+  test('names a follow claimed for over an hour and never settled', async () => {
+    const f = fake({ due: [], followStuck: [{ user_id: 'u1', card_id: 'c1' }] });
+    const out = sink();
+    const result = await run(f, { out });
+    assert.equal(result.ok, false);
+    assert.match(out.text(), /follow u1 card c1: claimed but never settled/);
+    assert.equal(f.calls.find((c) => c.url.pathname.endsWith('/follow_notices_stuck')).body.p_before, '2026-10-11T08:07:00.000Z');
+  });
+
+  test('a dry run reads Auth and claims, sends, settles and alerts nothing', async () => {
+    const f = fake({ due: [], follows: [follow(1), follow(2, { covered: true })] });
+    const out = sink();
+    const result = await run(f, { dryRun: true, out });
+    assert.deepEqual([result.follows.sent, result.follows.covered], [1, 1]);
+    assert.match(out.lines[0], /^PASS: notices \(dry run\): .*; follows due 2, would send 1, covered 1,/);
+    assert.equal(f.calls.filter((c) => c.url.pathname.startsWith('/auth/')).length, 1);
+    for (const c of f.calls) {
+      assert.ok(!['follow_notice_claim', 'follow_notice_settle', 'follow_notices_stuck'].includes(c.url.pathname.split('/').pop()), c.url.pathname);
+      assert.notEqual(c.url.origin, 'https://api.resend.com');
+    }
   });
 });

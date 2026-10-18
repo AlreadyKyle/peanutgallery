@@ -12,6 +12,8 @@
 //   POST /api/community/auth/refresh  {refresh_token}      -> {access_token, refresh_token, expires_in}
 //   POST /api/community/rpc/<name>    Authorization: Bearer <access_token>, a JSON object of named
 //                                     arguments; only the player RPCs in lib/community.ts PLAYER_RPCS
+//                                     (follow_card, unfollow_card and my_follows among them,
+//                                     docs/specs/card-follows.md)
 //
 // The site's CSP pins connect-src to 'self' and it ships no Supabase client, so every call goes
 // through here. The GET documents are read with the publishable key, as snapshot.mts reads its

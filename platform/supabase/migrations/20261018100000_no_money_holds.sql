@@ -8,7 +8,7 @@
 -- monthly or tier cap still holds only on the New York day it failed. Every
 -- other reason and its order is unchanged.
 --
--- Applies after 20261018000000_feed_backfill.sql and can run twice.
+-- Applies after 20261018020000_daily_dust_counters.sql and can run twice.
 
 set lock_timeout = '5s';
 
