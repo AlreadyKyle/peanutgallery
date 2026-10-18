@@ -9,7 +9,7 @@ import { loadConfigFromDir } from '../bots/config';
 import { CONFIG_INVARIANT, RUN_INVARIANT, failureReport, formatReport, isFilesystemError, resolveConfigDir, runBot } from '../bots/report';
 import { FIXTURE_CONFIG_DIR, PACKAGE_DIR } from './paths';
 
-const REPORT_KEYS = ['ok', 'simulatedSeconds', 'invariants', 'unlocks', 'finalTotalDust', 'stateHash'];
+const REPORT_KEYS = ['ok', 'simulatedSeconds', 'invariants', 'unlocks', 'finalTotalDust', 'stateHash', 'depth'];
 const testsDir = join(PACKAGE_DIR, 'tests');
 const tsxCli = createRequire(join(PACKAGE_DIR, 'package.json')).resolve('tsx/cli');
 
@@ -51,6 +51,7 @@ describe('report module', () => {
     expect(lines[0]).toBe('PASS: 4 of 4 invariants hold over 3600 simulated seconds');
     expect(lines[1]).toBe('ok   no-negative-resource: dust never fell below zero (minimum 0)');
     expect(lines).toContain('unlock cart at 67 s');
+    expect(lines.at(-3)).toMatch(/^last new mechanic \S+ at [\d.]+ min \(\d+ s\), then \d+ multiplier-only unlocks?/);
     expect(lines.at(-1)).toBe(`state hash ${report.stateHash}`);
   });
 
@@ -60,6 +61,7 @@ describe('report module', () => {
     expect(report.ok).toBe(false);
     expect(report.invariants).toEqual([{ name: CONFIG_INVARIANT, ok: false, detail: 'unlocks: "unlocks" must be a non-empty array' }]);
     expect(formatReport(report).split('\n')[0]).toBe('FAIL: 0 of 1 invariants hold over 0 simulated seconds');
+    expect(formatReport(report)).not.toContain('last new mechanic');
   });
 
   it('names a run failure separately from a config failure', () => {
