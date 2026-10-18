@@ -128,7 +128,8 @@ const NEXT_IN_LINE = /^Next in line: (.+)$/;
 const WAITS_LINE = 'No card is open for funding right now. Your contribution waits in Not on a card yet and funds the next card that opens.';
 // The line naming no card, which /contribute shows while the first card in the order is not in /api/cards yet.
 const PICK_BODY = 'Your contribution funds whatever the agents build next.';
-const RECONCILE_LINE = /^(Reconciled with Stripe on \d{1,2} [A-Z][a-z]{2} \d{4}|Not yet reconciled with Stripe)\.$/;
+// A date (format.ts formatDate) holds together with no-break spaces, so \s, never a plain space, sits inside it.
+const RECONCILE_LINE = /^(Reconciled with Stripe on \d{1,2}\s[A-Z][a-z]{2}\s\d{4}|Not yet reconciled with Stripe)\.$/;
 const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const STRIPE_LINK = /^https:\/\/buy\.stripe\.com\/[A-Za-z0-9]+$/;
 const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
@@ -445,7 +446,7 @@ try {
       const metas = await shippedLane.locator('li.card .card-bottom .card-meta').allTextContents();
       const watch = await shippedLane.getByRole('link', { name: 'Watch how it was built' }).count();
       check(
-        metas.length >= shippedCards && metas.every((line) => /shipped \d{1,2} [A-Z][a-z]{2} \d{4}/.test(line)) && watch === shippedCards,
+        metas.length >= shippedCards && metas.every((line) => /shipped \d{1,2}\s[A-Z][a-z]{2}\s\d{4}/.test(line)) && watch === shippedCards,
         `${shippedCards} shipped cards carry the date and Watch how it was built`,
       );
     }

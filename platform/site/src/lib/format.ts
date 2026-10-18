@@ -68,9 +68,13 @@ export function formatDay(day: string): string {
   return threeLetterMonth(dayUtc, date);
 }
 
+/**
+ * A day as "10 Oct 2026", held together by no-break spaces (U+00A0), so a narrow card never breaks
+ * it across lines ("shipped 10 / Oct 2026").
+ */
 export function formatDate(iso: string): string {
   const date = new Date(iso);
-  return Number.isFinite(date.getTime()) ? threeLetterMonth(dateOnly, date) : iso;
+  return Number.isFinite(date.getTime()) ? threeLetterMonth(dateOnly, date).replaceAll(' ', ' ') : iso;
 }
 
 const toronto = new Intl.DateTimeFormat('en-GB', {

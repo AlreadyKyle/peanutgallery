@@ -68,9 +68,10 @@ describe('formatDateTime', () => {
 });
 
 describe('formatDate', () => {
-  it('renders day, short month and year without a clock', () => {
-    expect(formatDate('2026-03-05T14:07:00Z')).toBe('5 Mar 2026');
-    expect(formatDate('2026-12-25T00:05:00Z')).toBe('25 Dec 2026');
+  it('renders day, short month and year without a clock, held together by no-break spaces', () => {
+    expect(formatDate('2026-03-05T14:07:00Z')).toBe('5\u00a0Mar\u00a02026');
+    expect(formatDate('2026-12-25T00:05:00Z')).toBe('25\u00a0Dec\u00a02026');
+    expect(formatDate('2026-10-10T12:00:00Z')).not.toContain(' ');
   });
 
   it('returns the input when it is not a date', () => {

@@ -94,7 +94,8 @@ describe('Money in', () => {
       cleanup();
       return found;
     };
-    expect(lines(EVERY)).toEqual(['Reconciled with Stripe on 23 Sep 2026.']);
+    // The date holds together with no-break spaces (lib/format.ts formatDate).
+    expect(lines(EVERY)).toEqual(['Reconciled with Stripe on 23\u00a0Sep\u00a02026.']);
     expect(lines({ ...EVERY, last_run_ok: null, reconciled_at: null })).toEqual([legal.notReconciled]);
     expect(lines({ ...EVERY, last_run_ok: false, reconciled_at: null })).toEqual([legal.notReconciled]);
   });
