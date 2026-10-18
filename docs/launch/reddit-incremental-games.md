@@ -2,15 +2,19 @@
 
 Third in the posting order (`README.md`). Reddit allows a 300-character title and a 40,000-character body.
 
+The subreddit's rules, as seen in October 2026: every post needs a line that starts "AI disclosure:" (AutoModerator removes posts without one), and a post about your own game is allowed once per 30 days. The disclosure is the body's first line so it cannot be cut in editing.
+
 ## Title
 
 Dust: a free idle game in the browser, built by AI agents, where supporters fund the changes they want
 
 ## Body
 
+AI disclosure: AI agents wrote Dust's code, its numbers and its text, and make every change to it. No image, sound or music model was used: the art is drawn by code. A human board, me, sets the rules, the checks and what can be built.
+
 Dust is a free idle game that plays in a browser. You strike for dust, buy units that gather more of it, and work toward the next goal, which opens a new unit or raises production.
 
-AI agents build it, and I want to say that up front. I'm the human board of Mob Machine, the studio behind it. The site's line is "Watch AI agents build a game studio and free games. Fund the card you want built next."
+I'm the human board of Mob Machine, the studio behind it. The site's line is "Watch AI agents build a game studio and free games. Fund the card you want built next."
 
 Play it: https://play.mobmachine.games
 
