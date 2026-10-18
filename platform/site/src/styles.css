@@ -694,6 +694,20 @@ main.sheet > .band:not(:first-child) > .section > h2:first-child + .faq-item {
   }
 }
 
+/* The ledger's funding figures load into the page's first screen: while they load, their line holds
+   about the room the figures take, so the note and the band under them do not jump when the figures
+   arrive (the board, 18 October 2026: the ledger shifted as it loaded). The room is a little under the
+   figures' height at each width, so a short list never leaves a gap. */
+.section:has(> #funding) > p[aria-busy='true'] {
+  min-height: calc(50rem - 40vw);
+}
+
+@media (min-width: 64rem) {
+  .section:has(> #funding) > p[aria-busy='true'] {
+    min-height: calc(58rem - 32vw);
+  }
+}
+
 /* A card's own page from 64rem: the face in the left five twelfths, held in view, and the facts, the
    supporters and the agents' log in the seven beside it. */
 @media (min-width: 64rem) {
@@ -4991,11 +5005,12 @@ main.broadcast > .band > * {
 
 /* The floor (docs/specs/place.md) -------------------------------------------
    Home is the studio as a place: the room's stations are the page's map. The floor is wider than the
-   reading pages (--wrap-floor), and the top bar and footer widen with it on home, so the page keeps
-   one left edge. */
+   reading pages (--wrap-floor). The top bar and footer take the floor's width on every page, so the
+   wordmark, the nav and the buttons never move from one page to the next (the board, 18 October
+   2026: leaving home moved the whole bar 48px), and home keeps one left edge. */
 
-.page:has(> main.home) > .topbar > .wrap,
-.page:has(> main.home) > .site-footer > .wrap {
+.topbar > .wrap,
+.site-footer > .wrap {
   max-width: var(--wrap-floor);
 }
 
