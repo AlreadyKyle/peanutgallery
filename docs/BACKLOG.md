@@ -546,3 +546,12 @@ game stages), and the news section (the feed). What it leaves for later is filed
 - summary: The site and the games in languages other than English, starting with the ones visitors use most.
 - intent: Every public string lives in copy files today. Translations would follow docs/COPY.md's rules in each language, pass the content filter in each, and be chosen from the browser's language with a switch. It is not built yet.
 - kernel: yes
+
+### The 48-hour Build
+- bucket: studio
+- folder: platform
+- horizon: later
+- rank: 51
+- summary: A live event where the studio takes one new game from pitch to first playable on stream, with the crowd picking the pitch and unlocking decor.
+- intent: A launch event for when the studio has real users, so strangers have one time to show up and a story with an ending. The studio streams from /broadcast while one New game runs Pitch, Prototype and First playable as their own cards; the crowd picks the pitch from two or three by funding them; /goals shows the event live; a second track of community achievements (seeds shared, suggestions made) unlocks earned decor, never money; the build's clock never appears near a funding control. The board raises it once distinct supporters and daily players show an audience to bring. It is not built yet.
+- kernel: no
