@@ -218,6 +218,6 @@ describe('config parsing', () => {
   it('rejects an effect type it does not know', () => {
     expect(() =>
       parseUnlockTable({ unlocks: [{ id: 'odd', name: 'Odd', atTotalDust: 100, effect: { type: 'bonus', value: 2 } }] }, parseSpawnTable(spawn)),
-    ).toThrow('effect type must be "unit" or "multiplier"');
+    ).toThrow('effect type must be "unit", "multiplier", "strike", "weather", "gems" or "fork"');
   });
 });

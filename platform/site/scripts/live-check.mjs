@@ -12,7 +12,7 @@
 // bands in order (the top bar and band 1 on signal, band 2 on paper, then ink and paper in turn),
 // no dead space (scripts/layout-audit.mjs, the same checks as the layout balance e2e test), the
 // footer's Weekly reports, Terms, Privacy, Refunds and Contact links, no console errors and no Content Security
-// Policy report. The landing's h2 order, read from the page: Pick a card to fund, Play the first game (decision 70), How the cards move,
+// Policy report. The landing's h2 order, read from the page: The studio, live (docs/specs/final-state.md), Pick a card to fund, Play the first game (decision 70), How the cards move,
 // the team (only when there is one) and Where the money goes. Home's cards to fund
 // (docs/specs/home-flow.md) as full faces, at most three, or the panel that funds the next card in
 // line; then the flow: Next up, Building and Shipped in order, each with at most three cards or its
@@ -108,7 +108,7 @@ const FOOTER_LINKS = [
   ['Refunds', '/refunds'],
   ['Contact', '/contact'],
 ];
-const H2_ORDER = ['Pick a card to fund', 'Play the first game', 'How the cards move', 'The team', 'Where the money goes'];
+const H2_ORDER = ['The studio, live', 'Pick a card to fund', 'Play the first game', 'How the cards move', 'The team', 'Where the money goes'];
 const OPTIONAL_H2 = new Set(['The team']);
 // Home's flow (docs/specs/home-flow.md): three lanes in this order, each with at most three cards or
 // its tile saying what happens next, never blank. The cards to fund sit above them, at most three.
@@ -230,7 +230,9 @@ function linksWithoutAgreement(page) {
       .filter((a) => {
         const grid = a.closest('ul.card-grid, ul.fund-grid');
         const next = grid === null ? [] : [grid.nextElementSibling, grid.nextElementSibling?.nextElementSibling];
-        return !underFirst && !next.some((el) => el?.classList.contains('fund-agreement') && has(el));
+        // The Machine card carries its own agreement inside it (components/MachineCard.tsx).
+        const machine = a.closest('.machine-card')?.querySelector('.fund-agreement') ?? null;
+        return !underFirst && !has(machine) && !next.some((el) => el?.classList.contains('fund-agreement') && has(el));
       })
       .map((a) => `${(a.textContent ?? '').trim()} -> ${a.getAttribute('href')}`);
   }, AGREEMENT_TOKENS);
@@ -469,7 +471,15 @@ try {
   const choices = await page
     .getByRole('main')
     .locator('a[href^="https://buy.stripe.com/"]')
-    .evaluateAll((as) => as.map((a) => [a.textContent ?? '', a.href]));
+    .evaluateAll((as) => as.filter((a) => a.closest('.machine-card') === null).map((a) => [a.textContent ?? '', a.href]));
+  // The Machine card goes to the same checkout as Fund the next card in line: no card, the default split.
+  const machineLinks = await page.getByRole('main').locator('.machine-card a[href^="https://buy.stripe.com/"]').evaluateAll((as) => as.map((a) => a.href));
+  if (machineLinks.length > 0) {
+    check(
+      machineLinks.every((href) => STRIPE_LINK.test(href.split('?')[0]) && href.split('?')[1] === 'client_reference_id=split20'),
+      `the Machine card funds the next card in line with the default split -> ${machineLinks.join(' | ')}`,
+    );
+  }
   if (choices.length === 0) {
     skip('contribute choices: no payment link in this build');
   } else {

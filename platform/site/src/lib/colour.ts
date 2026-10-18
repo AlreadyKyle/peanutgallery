@@ -28,6 +28,8 @@ export const COLOUR_TOKENS: readonly ColourToken[] = [
   { name: '--coin', role: 'Money only: Contribute, the funding bar, the coin mark, the Funded glyph' },
   { name: '--coin-down', role: 'Contribute hover and press on paper and ink' },
   { name: '--coin-up', role: 'Contribute hover and press on signal' },
+  { name: '--blueprint', role: 'The blueprint ground of the studio history (docs/specs/final-state.md)' },
+  { name: '--blueprint-line', role: 'The blueprint grid and quiet lines, decorative' },
 ];
 
 /**
@@ -89,6 +91,12 @@ export const COLOUR_PAIRS: readonly ColourPair[] = [
   { fg: '--coin', bg: '--ink', floor: 3, use: 'Ink: the Contribute fill and the coin mark' },
   { fg: '--coin-down', bg: '--ink', floor: 3, use: 'Ink: the Contribute hover and press fill' },
   { fg: '--line-on-ink', bg: '--ink', floor: 0, use: 'Ink: hairlines' },
+  // The blueprint (/studio/history, docs/specs/final-state.md): paper text and lines on the blueprint ground.
+  { fg: '--paper', bg: '--blueprint', floor: 7, use: 'Blueprint: text, the room lines, the focus ring' },
+  { fg: '--blueprint-line', bg: '--blueprint', floor: 0, use: 'Blueprint: the grid (decorative)' },
+  // The live studio and the player pages: the room's fills under ink lines, the role card and frames.
+  { fg: '--ink', bg: '--paper-hover', floor: 7, use: 'The room: ink lines on the shaded walls and sides' },
+  { fg: '--ink', bg: '--line', floor: 3, use: 'The room: ink lines on the darker sides and the hatch' },
   // Banned: each measures below its floor, so a rule keeps it off the page.
   { fg: '--signal', bg: '--ink', floor: 3, banned: true, use: 'Signal never touches ink: band 2 is always paper' },
   { fg: '--ink', bg: '--signal', floor: 3, banned: true, use: 'No ink text on signal; the Contribute edge merges there and its amber carries it' },

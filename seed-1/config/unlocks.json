@@ -1,18 +1,465 @@
 {
   "unlocks": [
-    { "id": "cart", "name": "Cart", "atTotalDust": 100, "effect": { "type": "unit", "unit": "cart" } },
-    { "id": "mill", "name": "Mill", "atTotalDust": 1000, "effect": { "type": "unit", "unit": "mill" } },
-    { "id": "forge", "name": "Forge", "atTotalDust": 10000, "effect": { "type": "unit", "unit": "forge" } },
-    { "id": "foundry", "name": "Foundry", "atTotalDust": 100000, "effect": { "type": "unit", "unit": "foundry" } },
-    { "id": "sharper-tools", "name": "Sharper tools", "atTotalDust": 500000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "wider-paths", "name": "Wider paths", "atTotalDust": 2000000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "steady-hands", "name": "Steady hands", "atTotalDust": 6000000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "finer-sieves", "name": "Finer sieves", "atTotalDust": 13000000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "longer-days", "name": "Longer days", "atTotalDust": 26000000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "stronger-wheels", "name": "Stronger wheels", "atTotalDust": 50000000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "bright-lanterns", "name": "Bright lanterns", "atTotalDust": 85000000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "deeper-veins", "name": "Deeper veins", "atTotalDust": 130000000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "polished-rails", "name": "Polished rails", "atTotalDust": 185000000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "quiet-rooms", "name": "Quiet rooms", "atTotalDust": 300000000, "effect": { "type": "multiplier", "value": 1.05 } }
-  ]
+    {
+      "id": "sturdy-broom",
+      "name": "Sturdy broom",
+      "atTotalDust": 40,
+      "effect": {
+        "type": "strike",
+        "value": 2
+      }
+    },
+    {
+      "id": "cart",
+      "name": "Cart",
+      "atTotalDust": 100,
+      "effect": {
+        "type": "unit",
+        "unit": "cart"
+      }
+    },
+    {
+      "id": "mill",
+      "name": "Mill",
+      "atTotalDust": 1000,
+      "effect": {
+        "type": "unit",
+        "unit": "mill"
+      }
+    },
+    {
+      "id": "weather-vane",
+      "name": "Weather vane",
+      "atTotalDust": 2500,
+      "effect": {
+        "type": "weather"
+      }
+    },
+    {
+      "id": "forge",
+      "name": "Forge",
+      "atTotalDust": 10000,
+      "effect": {
+        "type": "unit",
+        "unit": "forge"
+      }
+    },
+    {
+      "id": "iron-broom",
+      "name": "Workshop",
+      "atTotalDust": 40000,
+      "effect": {
+        "type": "fork",
+        "options": [
+          {
+            "id": "iron-broom",
+            "name": "Iron broom",
+            "effect": {
+              "type": "strike",
+              "value": 1.5
+            }
+          },
+          {
+            "id": "oiled-axles",
+            "name": "Oiled axles",
+            "effect": {
+              "type": "unit",
+              "unit": "cart",
+              "value": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "foundry",
+      "name": "Foundry",
+      "atTotalDust": 100000,
+      "effect": {
+        "type": "unit",
+        "unit": "foundry"
+      }
+    },
+    {
+      "id": "sharper-tools",
+      "name": "Sharper tools",
+      "atTotalDust": 500000,
+      "effect": {
+        "type": "fork",
+        "options": [
+          {
+            "id": "millstones",
+            "name": "Millstones",
+            "effect": {
+              "type": "unit",
+              "unit": "mill",
+              "value": 1.5
+            }
+          },
+          {
+            "id": "bellows",
+            "name": "Bellows",
+            "effect": {
+              "type": "unit",
+              "unit": "forge",
+              "value": 1.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "pressing-stone",
+      "name": "Pressing stone",
+      "atTotalDust": 1000000,
+      "effect": {
+        "type": "gems"
+      }
+    },
+    {
+      "id": "wider-paths",
+      "name": "Wider paths",
+      "atTotalDust": 2000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "steady-hands",
+      "name": "Steady or quick",
+      "atTotalDust": 6000000,
+      "effect": {
+        "type": "fork",
+        "options": [
+          {
+            "id": "steady-hands",
+            "name": "Steady hands",
+            "effect": {
+              "type": "multiplier",
+              "value": 1.2
+            }
+          },
+          {
+            "id": "quick-hands",
+            "name": "Quick hands",
+            "effect": {
+              "type": "strike",
+              "value": 1.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "finer-sieves",
+      "name": "Finer sieves",
+      "atTotalDust": 13000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "longer-days",
+      "name": "Longer days",
+      "atTotalDust": 26000000,
+      "effect": {
+        "type": "fork",
+        "options": [
+          {
+            "id": "weather-lore",
+            "name": "Weather lore",
+            "effect": {
+              "type": "weather",
+              "value": 2
+            }
+          },
+          {
+            "id": "order-book",
+            "name": "Order book",
+            "effect": {
+              "type": "order",
+              "value": 3
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "stronger-wheels",
+      "name": "Stronger wheels",
+      "atTotalDust": 50000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "bright-lanterns",
+      "name": "Bright lanterns",
+      "atTotalDust": 85000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "deeper-veins",
+      "name": "Deeper veins",
+      "atTotalDust": 130000000,
+      "effect": {
+        "type": "fork",
+        "options": [
+          {
+            "id": "deep-pour",
+            "name": "Deep pour",
+            "effect": {
+              "type": "unit",
+              "unit": "foundry",
+              "value": 1.5
+            }
+          },
+          {
+            "id": "devil-net",
+            "name": "Devil net",
+            "effect": {
+              "type": "devil",
+              "value": 3
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "polished-rails",
+      "name": "Polished rails",
+      "atTotalDust": 185000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "quiet-rooms",
+      "name": "Quiet rooms",
+      "atTotalDust": 300000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "warm-hearths",
+      "name": "Warm hearths",
+      "atTotalDust": 450000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "golden-broom",
+      "name": "Golden hour",
+      "atTotalDust": 700000000,
+      "effect": {
+        "type": "fork",
+        "options": [
+          {
+            "id": "golden-broom",
+            "name": "Golden broom",
+            "effect": {
+              "type": "strike",
+              "value": 1.5
+            }
+          },
+          {
+            "id": "golden-sun",
+            "name": "Golden sun",
+            "effect": {
+              "type": "multiplier",
+              "value": 1.2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "tall-chimneys",
+      "name": "Tall chimneys",
+      "atTotalDust": 1000000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "swift-carts",
+      "name": "Swift carts",
+      "atTotalDust": 1400000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "starlit-nights",
+      "name": "Starlit nights",
+      "atTotalDust": 1900000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "whole-island",
+      "name": "The whole island",
+      "atTotalDust": 3000000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.25
+      }
+    },
+    {
+      "id": "far-shores",
+      "name": "Far shores",
+      "atTotalDust": 5000000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.25
+      }
+    }
+  ],
+  "weather": {
+    "firstAfter": 8,
+    "gapMin": 60,
+    "gapMax": 120,
+    "kinds": [
+      {
+        "id": "breeze",
+        "name": "Breeze",
+        "seconds": 40,
+        "weight": 3,
+        "all": 1.5
+      },
+      {
+        "id": "rain",
+        "name": "Rain",
+        "seconds": 50,
+        "weight": 2,
+        "units": {
+          "mill": 4,
+          "gatherer": 0.5
+        }
+      },
+      {
+        "id": "heatwave",
+        "name": "Heatwave",
+        "seconds": 50,
+        "weight": 2,
+        "units": {
+          "forge": 3,
+          "foundry": 2,
+          "cart": 0.5
+        }
+      },
+      {
+        "id": "shooting-star",
+        "name": "Shooting star",
+        "seconds": 25,
+        "weight": 1,
+        "strike": 5
+      }
+    ]
+  },
+  "orders": {
+    "opensAt": "cart",
+    "rewardSeconds": 15,
+    "bonusPerOrder": 0.01,
+    "bonusCap": 10,
+    "budget": 90,
+    "rest": 45,
+    "kinds": [
+      {
+        "type": "own",
+        "weight": 3,
+        "min": 2,
+        "max": 4
+      },
+      {
+        "type": "gather",
+        "weight": 3,
+        "min": 120,
+        "max": 240
+      },
+      {
+        "type": "strikes",
+        "weight": 2,
+        "min": 25,
+        "max": 50
+      }
+    ]
+  },
+  "devils": {
+    "opensAt": "mill",
+    "firstAfter": 15,
+    "gapMin": 90,
+    "gapMax": 180,
+    "lasts": 25,
+    "rewardSeconds": 15,
+    "whirlSeconds": 8,
+    "whirlStrike": 2
+  },
+  "gems": {
+    "dustPerGem": 125000,
+    "bonusPerGem": 0.1,
+    "perks": [
+      {
+        "id": "strong-arms",
+        "name": "Strong arms",
+        "cost": 1,
+        "effect": {
+          "type": "strike",
+          "value": 3
+        }
+      },
+      {
+        "id": "head-start",
+        "name": "Head start",
+        "cost": 2,
+        "effect": {
+          "type": "start",
+          "unit": "gatherer",
+          "count": 10
+        }
+      },
+      {
+        "id": "weather-wise",
+        "name": "Weather wise",
+        "cost": 3,
+        "effect": {
+          "type": "weather",
+          "value": 2
+        }
+      },
+      {
+        "id": "thrift",
+        "name": "Thrift",
+        "cost": 4,
+        "effect": {
+          "type": "thrift",
+          "value": 0.8
+        }
+      },
+      {
+        "id": "golden-pile",
+        "name": "Golden pile",
+        "cost": 6,
+        "effect": {
+          "type": "production",
+          "value": 2
+        }
+      }
+    ]
+  }
 }

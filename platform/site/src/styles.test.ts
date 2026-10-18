@@ -35,7 +35,7 @@ function rules(css: string): Rule[] {
     const ch = plain[i];
     if (ch === '{') {
       const prelude = plain.slice(start, i).trim();
-      if (prelude.startsWith('@media') || prelude.startsWith('@supports') || prelude.startsWith('@layer')) {
+      if (prelude.startsWith('@media') || prelude.startsWith('@supports') || prelude.startsWith('@layer') || prelude.startsWith('@container')) {
         media = prelude;
         mediaDepth = depth;
         depth += 1;
@@ -240,7 +240,8 @@ function gsubFeatures(file: Buffer): string[] {
 describe('plain and readable', () => {
   it('uses uppercase only on the wordmark, and italic nowhere', () => {
     const upper = ALL_RULES.filter((rule) => /text-transform:\s*uppercase/.test(rule.body)).map((rule) => rule.selector);
-    expect(upper).toEqual(['.wordmark']);
+    // The wordmark is drawn twice: in the top bar and as the footer's name.
+    expect(upper).toEqual(['.wordmark', '.footer-name']);
     expect(both).not.toMatch(/font-style:\s*(italic|oblique)/);
     expect(ALL_RULES.find((rule) => rule.selector === 'body')?.body).toMatch(/font-synthesis-style:\s*none/);
   });
@@ -250,8 +251,12 @@ describe('plain and readable', () => {
     expect(headings?.body).toMatch(/text-wrap:\s*balance/);
   });
 
-  it('never uses the 900 display weight or letter-spacing', () => {
-    expect(both).not.toMatch(/font-weight:\s*900|--weight-display|letter-spacing/);
+  it('never uses the 900 display weight, and takes letter-spacing only from a tracking token (or 0)', () => {
+    expect(both).not.toMatch(/font-weight:\s*900|--weight-display/);
+    const spacing = [...styles.matchAll(/letter-spacing:\s*([^;]+);/g)].map((m) => m[1]!.trim());
+    expect(spacing.length).toBeGreaterThan(0);
+    for (const value of spacing) expect(value).toMatch(/^(0|var\(--tracking-(display|heading|label)\))$/);
+    for (const name of ['display', 'heading', 'label']) expect(tokens).toMatch(new RegExp(`--tracking-${name}:\\s*-?0?\\.\\d+em;`));
   });
 
   it('gives buttons, nav links and fields the 44px touch target', () => {
@@ -328,6 +333,8 @@ describe('colour (DESIGN.md, Colour), measured from tokens.css', () => {
         '.button.btn-coin:active',
         'main > .band:first-child',
         '.page:has(> main > .band:first-child) > .topbar',
+        // The live studio's paper screen on home's plate resets the roles to paper's, Contribute's hover with them.
+        '.hero-home ~ .live-studio .studio-stage',
       ].sort(),
     );
     // The signal plate's only amber is the hover it gives Contribute there.
@@ -356,7 +363,9 @@ describe('colour (DESIGN.md, Colour), measured from tokens.css', () => {
 
   it('never uses a gradient but for the Paused hatch, nor a glow or shadow but the change marker', () => {
     const gradients = ALL_RULES.filter((rule) => /gradient\(/.test(rule.body)).map((rule) => rule.selector);
-    expect(gradients).toEqual([".card[data-face='paused']::before"]);
+    // docs/specs/final-state.md (Rarity) adds the legendary card's hatched edge and the sheen that
+    // sweeps it: rarity is drawn as an edge pattern, never colour alone.
+    expect(gradients).toEqual([".card[data-face='paused']::before", "[data-rarity='legendary'] > .rarity-edge", "[data-rarity='legendary'] > .rarity-edge::after"]);
     const shadows = ALL_RULES.filter((rule) => /(box|text)-shadow:/.test(rule.body)).map((rule) => rule.selector);
     expect(shadows).toEqual(['.changed']);
   });
@@ -512,7 +521,8 @@ describe('motion', () => {
     for (const match of both.matchAll(/(?:^|[;\s])(?:transition|animation):\s*([^;]+);/g)) {
       const value = match[1]!;
       expect(value, value).not.toMatch(/\b\d+(\.\d+)?m?s\b/);
-      expect(value, value).toMatch(/var\(--dur-(quick|move|flip)\)/);
+      // --dur-reveal is the scene's duration (docs/specs/final-state.md, the motion pass: 200 to 500ms).
+      expect(value, value).toMatch(/var\(--dur-(quick|move|flip|reveal)\)/);
       expect(value, value).not.toMatch(/\ball\b/);
     }
     expect(both).not.toMatch(/\binfinite\b|view-transition|@starting-style|\blinear\(/);

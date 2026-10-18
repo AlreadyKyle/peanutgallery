@@ -18,6 +18,8 @@ import { VPS_JOBS } from '../jobs/lib.mjs';
 import './jobs.test.mjs';
 import './mac.test.mjs';
 import './notices.test.mjs';
+// The load test of the public read paths (docs/specs/load-test.md).
+import './load.test.mjs';
 
 const OPS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO_ROOT = path.resolve(OPS_DIR, '..', '..');

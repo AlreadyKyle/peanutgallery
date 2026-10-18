@@ -1,0 +1,17 @@
+{
+  "note": "The community badges (docs/specs/final-state.md, XP, levels, badges). Each is earned by its rule, checked in the database by community.award_badges; the migration 20261017100000_community_core.sql inserts exactly these rows and platform/supabase/functions/_shared/community_core_test.ts checks they match. A badge is a record, never money.",
+  "badges": [
+    { "id": "first_card", "name": "First card", "glyph": "card", "rule": "Fund any card, the Machine included." },
+    { "id": "five_suits", "name": "Full hand", "glyph": "hand", "rule": "Fund a card of each of the five suits." },
+    { "id": "first_rare", "name": "Rare find", "glyph": "gem", "rule": "Fund a rare card." },
+    { "id": "first_legendary", "name": "Legend spotted", "glyph": "crown", "rule": "Fund a legendary card." },
+    { "id": "card_shipped", "name": "It shipped", "glyph": "box", "rule": "A card you funded ships." },
+    { "id": "first_suggestion", "name": "Idea box", "glyph": "plane", "rule": "Send your first suggestion." },
+    { "id": "suggestion_shipped", "name": "Ideas made real", "glyph": "bulb", "rule": "A suggestion of yours ships." },
+    { "id": "first_seed", "name": "Planted", "glyph": "sprout", "rule": "Publish your first seed to the gallery." },
+    { "id": "ten_seeds", "name": "Gardener", "glyph": "tree", "rule": "Publish ten seeds to the gallery." },
+    { "id": "seed_featured", "name": "Featured", "glyph": "star", "rule": "A seed of yours is featured." },
+    { "id": "level_11", "name": "Regular", "glyph": "badge", "rule": "Reach level 11." },
+    { "id": "level_31", "name": "Patron", "glyph": "medal", "rule": "Reach level 31." }
+  ]
+}

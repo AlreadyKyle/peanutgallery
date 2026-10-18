@@ -15,6 +15,9 @@ import {
 import { formatDateTime } from './lib/format';
 import { PLAY_COUNT_HEADS, PLAY_COUNTS_LINE } from './PlayCounts';
 import { CAPS_BY_SQL } from './Status';
+import { REASON_FIRST } from './Community';
+import { confirmText } from './lib/community';
+import { GAME_REASON_NEEDED, ROLE_REASON_NEEDED } from './Roster';
 
 // The panel's database calls the old page made and this one never does. Each name is spelt in parts so
 // the spec's grep of platform/board/src (docs/specs/optional-board.md, Verification) finds no call.
@@ -26,7 +29,8 @@ const RETIRED_RPCS = [
   rpcName('set', 'card', 'horizon'),
   rpcName('set', 'card', 'veto'),
   rpcName('set', 'cooling', 'window'),
-  rpcName('set', 'role', 'pause'),
+  // set_role_pause left this list: the final state's Agents admin turns a role on and off
+  // (docs/specs/final-state.md, Admin; Roster.tsx), at the second factor as the database requires.
   rpcName('set', 'caps'),
   rpcName('file', 'directive'),
   rpcName('file', 'note'),
@@ -64,6 +68,8 @@ const fake = vi.hoisted(() => ({
   // An RPC named here is left pending until release() is called, so a test sees a control mid-action.
   held: null as string | null,
   release: () => {},
+  // An RPC named here answers with this error message instead of its data.
+  rpcErrors: {} as Record<string, string>,
 }));
 
 vi.mock('./lib/supabase', async (importOriginal) => {
@@ -107,6 +113,7 @@ vi.mock('./lib/supabase', async (importOriginal) => {
     rpc: async (name: string, args?: Record<string, unknown>) => {
       fake.calls.push({ name, args });
       if (name === fake.held) await new Promise<void>((done) => (fake.release = done));
+      if (fake.rpcErrors[name] !== undefined) return { data: null, error: { message: fake.rpcErrors[name] } };
       // The card RPCs change the card as the database does, so the next read gives it back changed.
       if (name === 'cancel_card' || name === 'resume_card') {
         fake.cards = fake.cards.map((c) => (c.id === args?.p_card ? { ...c, stage: name === 'cancel_card' ? 'rejected' : 'funded' } : c));
@@ -123,6 +130,17 @@ vi.mock('./lib/supabase', async (importOriginal) => {
         cancel_card: fake.cancelResult,
         file_card: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
         enqueue_manual_job: '7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
+        board_flags: { curator_triage: false, profiles_open: true },
+        board_games: ROSTER_GAMES,
+        board_agent_roster: ROSTER_AGENTS,
+        board_set_flag: { curator_triage: true, profiles_open: true },
+        board_community_users: { items: [{ userId: 'u1', handle: 'supporter-1', displayName: 'Supporter One', level: 2, xp: 120, suspended: false }], next: null },
+        board_suggestions: { items: COMMUNITY_SUGGESTIONS, next: null },
+        board_community_cards: { items: [{ id: 'c-open', title: 'Carts leave dust trails', stage: 'building', suit: 'game', rarity: 'common', computedRarity: 'rare' }], next: null },
+        board_seeds: { items: [{ id: 'seed-1', title: 'Big dune', author: 'supporter-1', code: 'dust:v1:AB', up: 3, down: 1, featured: false, unpublished: true }], next: null },
+        board_goals: { lifetimeCents: 1000, goals: [{ id: 'g1', amountCents: 50000, title: 'Sound', outcome: 'Hire a sound role', state: 'next', link: null }] },
+        board_eras: { eras: [{ id: 'workshop', name: 'Workshop', unlockedBy: 'Sound', reachedAt: null }] },
+        board_moderation_log: { items: [{ id: 3, at: '2026-10-10T12:00:00Z', actor: 'board@mobmachine.games', action: 'set_flag', target: 'curator_triage', reason: 'start triage', details: {} }], next: null },
       };
       if (name === 'card_supply' && fake.supply === null) return { data: null, error: { message: 'card_supply is unavailable' } };
       if (name === 'board_play_counts' && fake.playCounts === null) return { data: null, error: { message: 'A second factor is required' } };
@@ -180,6 +198,98 @@ vi.mock('./lib/supabase', async (importOriginal) => {
 });
 
 const startedAt = new Date('2026-10-10T12:00:00Z');
+
+// Two suggestions in two clusters, as board_suggestions gives them (docs/specs/community-core.md).
+const COMMUNITY_SUGGESTIONS = [
+  { id: 's1', area: 'dust', title: 'Night mode', body: 'The sand could glow.', state: 'clustered', held: false, votes: 4, author: 'supporter-1', clusterId: 'k-night', clusterKey: 'night-mode', triage: { summary: 'Glowing sand at night.', flags: [] } },
+  { id: 's2', area: 'dust', title: 'Glow sand', body: '', state: 'clustered', held: true, votes: 1, author: 'supporter-2', clusterId: 'k-glow', clusterKey: 'glow-sand', triage: { summary: 'Sand that glows.', flags: [] } },
+];
+
+// board_games and board_agent_roster as 20261017220000_board_games_admin.sql answers them.
+const ROSTER_GAMES = [
+  {
+    folder: 'seed-1',
+    name: 'Dust',
+    status: 'live',
+    accepting_cards: true,
+    featured: true,
+    blurb: 'An idle game you play in a browser.',
+    play_url: 'https://play.mobmachine.games',
+    box_art: '/games/dust-box-art.svg',
+    plays: {
+      load_event: 'dust_load',
+      share_event: 'dust_share',
+      loads: { day: 5, week: 12, month: 23, total: 36 },
+      shares: { day: 2, week: 2, month: 2, total: 2 },
+    },
+    admin_log: [
+      { at: '2026-10-10T09:00:00Z', actor: 'board@mobmachine.games', action: 'feature_game', reason: 'Our first game', details: { from: false, to: true, unfeatured: null } },
+    ],
+    open_count: 2,
+    shipped_count: 1,
+    open_cards: [{ id: 'c-open', title: 'Carts leave dust trails', stage: 'building', horizon: 'now', updated_at: '2026-10-10T10:00:00Z' }],
+    shipped_cards: [{ id: 'c-live', title: 'Night sky', live_at: '2026-10-09T10:00:00Z', commit_sha: 'abc1234' }],
+    latest_deploy: { sha: 'def5678aaaa', is_green: false, smoke_result: 'smoke failed', created_at: '2026-10-10T11:00:00Z' },
+    latest_green_deploy: { sha: 'abc1234bbbb', created_at: '2026-10-09T11:00:00Z' },
+  },
+  {
+    folder: 'seed-2',
+    name: 'seed-2',
+    status: 'in_development',
+    accepting_cards: false,
+    featured: false,
+    blurb: null,
+    play_url: null,
+    box_art: null,
+    plays: { load_event: null, share_event: null, loads: { day: 0, week: 0, month: 0, total: 0 }, shares: { day: 0, week: 0, month: 0, total: 0 } },
+    admin_log: [],
+    open_count: 0,
+    shipped_count: 0,
+    open_cards: [],
+    shipped_cards: [],
+    latest_deploy: null,
+    latest_green_deploy: null,
+  },
+];
+const CAPS = { role_day_usd: 1.5, role_month_usd: 12.25, studio_day_usd: 3, studio_month_usd: 50, daily_cap_usd: 100, monthly_cap_usd: 500 };
+const ROSTER_AGENTS = [
+  {
+    id: 'r-builder-a', name: 'Builder A', title: 'Builder A', model: 'claude-test', tools: ['Read', 'Edit', 'Bash'], write_access: true, agent_class: 'builder',
+    description: 'Builds funded game cards.', species_note: 'A badger with a hard hat.', avatar_url: null, trigger: null, budget_share: 0.125,
+    state: 'active', status: 'running', paused: false, paused_reason: null, paused_at: null, jobs: ['build_card'],
+    spend: { day_usd: 1.5, week_usd: 4, month_usd: 12.25, total_usd: 40 },
+    caps: CAPS,
+    runs_day: { succeeded: 3, failed: 1, skipped: 0, queued: 0, running: 0 },
+    runs_week: { succeeded: 9, failed: 2, skipped: 1, last_at: '2026-10-10T11:00:00Z' },
+    recent_runs: [{ id: 'run-1', job: 'build_card', status: 'failed', origin: 'schedule', card_id: null, reason: 'tests', created_at: '2026-10-10T11:00:00Z', started_at: null, finished_at: null }],
+    pause_history: [
+      { at: '2026-10-09T08:00:00Z', actor: 'board@mobmachine.games', paused: false, reason: 'Fixed the flaky test' },
+      { at: '2026-10-09T07:00:00Z', actor: 'board@mobmachine.games', paused: true, reason: 'Flaky test' },
+    ],
+  },
+  {
+    id: 'r-curator', name: 'Curator', title: 'Curator', model: 'claude-test-small', tools: [], write_access: false, agent_class: 'web_only',
+    description: 'Sorts suggestions into clusters.', species_note: null, avatar_url: null, trigger: 'When the suggestion box opens.', budget_share: 0,
+    state: 'active', status: 'starts', paused: true, paused_reason: 'not yet', paused_at: '2026-10-10T09:00:00Z', jobs: ['curator_triage'],
+    spend: { day_usd: 0, week_usd: 0, month_usd: 0, total_usd: 0 },
+    caps: { ...CAPS, role_day_usd: 0, role_month_usd: 0 },
+    runs_day: { succeeded: 0, failed: 0, skipped: 2, queued: 0, running: 0 },
+    runs_week: { succeeded: 0, failed: 0, skipped: 2, last_at: null },
+    recent_runs: [],
+    pause_history: [],
+  },
+  {
+    id: 'r-host', name: 'Host', title: 'Host', model: 'claude-test-small', tools: [], write_access: false, agent_class: 'web_only',
+    description: 'Narrates the stream.', species_note: null, avatar_url: null, trigger: 'When the stream exists.', budget_share: 0,
+    state: 'active', status: 'planned', paused: false, paused_reason: null, paused_at: null, jobs: [],
+    spend: { day_usd: 0, week_usd: 0, month_usd: 0, total_usd: 0 },
+    caps: { ...CAPS, role_day_usd: 0, role_month_usd: 0, daily_cap_usd: 0 },
+    runs_day: { succeeded: 0, failed: 0, skipped: 0, queued: 0, running: 0 },
+    runs_week: { succeeded: 0, failed: 0, skipped: 0, last_at: null },
+    recent_runs: [],
+    pause_history: [],
+  },
+];
 
 function card(id: string, title: string, stage: string, more: Row = {}): Row {
   return { id, title, stage, horizon: 'now', failing_check: null, updated_at: '2026-10-09T10:00:00Z', estimate_usd: '0.0000', ...more };
@@ -241,6 +351,7 @@ beforeEach(() => {
   fake.mfaCalls.length = 0;
   fake.held = null;
   fake.release = () => {};
+  fake.rpcErrors = {};
 });
 
 afterEach(() => {
@@ -449,7 +560,9 @@ describe('the panel at aal2', () => {
       expect(screen.queryByRole('region', { name: region })).toBeNull();
       expect(screen.queryByRole('form', { name: region })).toBeNull();
     }
-    expect(regions()).toEqual(['Status', 'Activity', 'Play and share counts', 'Actions', 'Pause and resume']);
+    // community-core adds the Community admin region (docs/specs/final-state.md, docs/specs/community-core.md).
+    // board-live adds Games and agents (docs/specs/final-state.md, Admin).
+    expect(regions()).toEqual(['Status', 'Activity', 'Play and share counts', 'Actions', 'Pause and resume', 'Games and agents', 'Community']);
   });
 
   it('lists exactly the six actions', async () => {
@@ -865,5 +978,330 @@ describe('the sources', () => {
       const text = readFileSync(file, 'utf8');
       for (const name of RETIRED_RPCS) expect(text.includes(name), `${file} names ${name}`).toBe(false);
     }
+  });
+});
+
+describe('community admin', () => {
+  const community = () => within(screen.getByRole('region', { name: 'Community' }));
+  async function openTab(name: string, reason = '') {
+    await renderBoard();
+    fireEvent.click(community().getByRole('button', { name }));
+    await flush();
+    if (reason !== '') fireEvent.change(community().getByLabelText(/^Reason for changes/), { target: { value: reason } });
+  }
+  const row = (selector: string) => within(document.querySelector(selector) as HTMLElement);
+
+  it('reads nothing until a tab is chosen, then toggles a flag only with a reason and after the confirm, and shows the moderation log', async () => {
+    await renderBoard();
+    expect(fake.calls.filter((call) => call.name.startsWith('board_') && !['board_role', 'board_studio_state', 'board_jobs', 'board_play_counts'].includes(call.name))).toEqual([]);
+    fireEvent.click(community().getByRole('button', { name: 'Flags' }));
+    await flush();
+    expect(named('board_flags')).toHaveLength(1);
+    const toggle = row('tr[data-flag="curator_triage"]').getByRole('button', { name: 'Turn on' });
+    expect((toggle as HTMLButtonElement).disabled).toBe(true);
+    // A disabled button says why: the reason comes first.
+    expect(community().getByText(REASON_FIRST)).toBeTruthy();
+    fireEvent.change(community().getByLabelText(/^Reason for changes/), { target: { value: 'start triage' } });
+    expect(community().queryByText(REASON_FIRST)).toBeNull();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    fireEvent.click(row('tr[data-flag="curator_triage"]').getByRole('button', { name: 'Turn on' }));
+    await flush();
+    expect(confirm).toHaveBeenCalledWith(confirmText.flag('curator_triage', true));
+    expect(named('board_set_flag')).toEqual([]);
+    confirm.mockReturnValue(true);
+    fireEvent.click(row('tr[data-flag="curator_triage"]').getByRole('button', { name: 'Turn on' }));
+    await flush();
+    expect(named('board_set_flag')[0]!.args).toEqual({ p_key: 'curator_triage', p_value: true, p_reason: 'start triage' });
+    fireEvent.click(community().getByRole('button', { name: 'Moderation log' }));
+    await flush();
+    expect(community().getByText('start triage')).toBeTruthy();
+  });
+
+  it('warns that turning profiles_open off stops new sign-ins', async () => {
+    await openTab('Flags', 'spam wave');
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    fireEvent.click(row('tr[data-flag="profiles_open"]').getByRole('button', { name: 'Turn off' }));
+    await flush();
+    expect(confirm.mock.calls[0]![0]).toMatch(/^Turn profiles_open off\? No new player can sign in/);
+    expect(named('board_set_flag')).toEqual([]);
+  });
+
+  // Each destructive action asks first, naming what it changes, and does nothing when the board cancels.
+  const destructive: { tab: string; selector: string; button: string; rpc: string; says: string }[] = [
+    { tab: 'Users', selector: 'tr[data-handle="supporter-1"]', button: 'Suspend', rpc: 'board_suspend_user', says: confirmText.suspend('supporter-1') },
+    { tab: 'Suggestions', selector: 'tr[data-suggestion="s1"]', button: 'Decline', rpc: 'board_decline_suggestion', says: confirmText.decline('Night mode', 'duplicate') },
+    { tab: 'Suggestions', selector: 'tr[data-suggestion="s1"]', button: 'Draft from cluster', rpc: 'board_draft_from_cluster', says: confirmText.draft('night-mode') },
+    { tab: 'Goals', selector: 'tr[data-goal="g1"]', button: 'Delete', rpc: 'board_delete_goal', says: confirmText.deleteGoal('Sound', '$500.00') },
+    { tab: 'Studio eras', selector: 'tr[data-era="workshop"]', button: 'Set as current', rpc: 'board_set_era', says: confirmText.era('Workshop') },
+  ];
+  for (const action of destructive) {
+    it(`asks before ${action.button} on ${action.tab}, naming its object`, async () => {
+      await openTab(action.tab, 'a reason');
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      fireEvent.click(row(action.selector).getByRole('button', { name: action.button }));
+      await flush();
+      expect(confirm).toHaveBeenCalledWith(action.says);
+      expect(named(action.rpc)).toEqual([]);
+      confirm.mockReturnValue(true);
+      fireEvent.click(row(action.selector).getByRole('button', { name: action.button }));
+      await flush();
+      expect(named(action.rpc)).toHaveLength(1);
+      expect(named(action.rpc)[0]!.args).toMatchObject({ p_reason: 'a reason' });
+    });
+  }
+
+  it('merges and links by picking a loaded cluster or card, never a typed id', async () => {
+    await openTab('Suggestions', 'same idea');
+    const night = row('tr[data-suggestion="s1"]');
+    expect(night.queryByRole('textbox')).toBeNull();
+    const mergeButton = night.getByRole('button', { name: 'Merge into' }) as HTMLButtonElement;
+    expect(mergeButton.disabled).toBe(true);
+    const into = night.getByLabelText('Cluster to merge night-mode into') as HTMLSelectElement;
+    // The other loaded cluster only, never the row's own.
+    expect([...into.options].map((o) => o.textContent)).toEqual(['Choose a cluster', 'glow-sand']);
+    fireEvent.change(into, { target: { value: 'k-glow' } });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    fireEvent.click(night.getByRole('button', { name: 'Merge into' }));
+    await flush();
+    expect(confirm).toHaveBeenCalledWith(confirmText.merge('night-mode', 'glow-sand'));
+    expect(named('board_merge_clusters')[0]!.args).toEqual({ p_from: 'k-night', p_into: 'k-glow', p_reason: 'same idea' });
+    expect(community().getByRole('status').textContent).toBe('Merge night-mode into glow-sand: done.');
+    const link = row('tr[data-suggestion="s1"]').getByLabelText('Card to link cluster night-mode to') as HTMLSelectElement;
+    expect([...link.options].map((o) => o.textContent)).toEqual(['Choose a card', 'Carts leave dust trails (building)']);
+    fireEvent.change(link, { target: { value: 'c-open' } });
+    fireEvent.click(row('tr[data-suggestion="s1"]').getByRole('button', { name: 'Link card' }));
+    await flush();
+    expect(named('board_link_cluster_card')[0]!.args).toEqual({ p_cluster: 'k-night', p_card: 'c-open', p_reason: 'same idea' });
+  });
+
+  it('saves a milestone once however often Save is pressed, and takes $500 and 1,000 as amounts', async () => {
+    await openTab('Goals', 'new goal');
+    fireEvent.change(community().getByLabelText('Amount in dollars'), { target: { value: '1,00' } });
+    expect(community().getByText(/^That is not an amount/)).toBeTruthy();
+    fireEvent.change(community().getByLabelText('Amount in dollars'), { target: { value: '$500' } });
+    expect(community().queryByText(/^That is not an amount/)).toBeNull();
+    fireEvent.change(community().getByLabelText('Title'), { target: { value: 'Music' } });
+    fireEvent.change(community().getByLabelText('Outcome'), { target: { value: 'A composer role' } });
+    fake.held = 'board_save_goal';
+    const save = community().getByRole('button', { name: 'Save milestone' });
+    fireEvent.click(save);
+    fireEvent.click(save);
+    await flush();
+    fireEvent.click(save);
+    await flush();
+    expect(named('board_save_goal')).toHaveLength(1);
+    expect(named('board_save_goal')[0]!.args).toMatchObject({ p_amount_cents: 50000, p_title: 'Music' });
+    // Every action button reads as disabled while one runs, and keeps its focus.
+    expect(save.getAttribute('aria-disabled')).toBe('true');
+    expect(row('tr[data-goal="g1"]').getByRole('button', { name: 'Delete' }).getAttribute('aria-disabled')).toBe('true');
+    await act(async () => fake.release());
+    await flush();
+    expect(community().getByRole('status').textContent).toBe('Save milestone: done.');
+    expect(save.getAttribute('aria-disabled')).toBeNull();
+    fake.held = null;
+    fireEvent.change(community().getByLabelText('Amount in dollars'), { target: { value: '1,000' } });
+    fireEvent.change(community().getByLabelText('Title'), { target: { value: 'Art' } });
+    fireEvent.change(community().getByLabelText('Outcome'), { target: { value: 'An artist role' } });
+    fireEvent.click(community().getByRole('button', { name: 'Save milestone' }));
+    await flush();
+    expect(named('board_save_goal')[1]!.args).toMatchObject({ p_amount_cents: 100000 });
+  });
+
+  it('says Republish when it republishes a seed', async () => {
+    await openTab('Seeds', 'back up');
+    fireEvent.click(row('tr[data-seed="seed-1"]').getByRole('button', { name: 'Republish' }));
+    await flush();
+    expect(named('board_unpublish_seed')[0]!.args).toEqual({ p_id: 'seed-1', p_unpublished: false, p_reason: 'back up' });
+    expect(community().getByRole('status').textContent).toBe('Republish: done.');
+  });
+
+  it('shows a gateway error page as a plain sentence', async () => {
+    fake.rpcErrors = { board_suspend_user: '<html>Bad gateway</html>' };
+    await openTab('Users', 'spam');
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    fireEvent.click(row('tr[data-handle="supporter-1"]').getByRole('button', { name: 'Suspend' }));
+    await flush();
+    const alert = community().getByRole('alert');
+    expect(alert.textContent).toBe('Suspend supporter-1: The server sent back an error page instead of an answer; it may be down or restarting. Try again in a minute.');
+    expect(alert.className).toBe('error');
+  });
+});
+
+describe('games and agents', () => {
+  const rosterRegion = () => within(screen.getByRole('region', { name: 'Games and agents' }));
+  const openTab = async (name: 'Games' | 'Agents') => {
+    await renderBoard();
+    fireEvent.click(rosterRegion().getByRole('button', { name }));
+    await flush();
+    return rosterRegion();
+  };
+  const tileOf = (folder: string) => document.querySelector(`li[data-game="${folder}"]`) as HTMLElement;
+  const agentOf = (name: string) => document.querySelector(`li[data-role="${name}"]`) as HTMLElement;
+
+  it('reads nothing until a tab is chosen, then shows each game with its art, address, status, plays, deploys and cards', async () => {
+    await renderBoard();
+    const roster = rosterRegion();
+    expect(named('board_games')).toEqual([]);
+    expect(named('board_agent_roster')).toEqual([]);
+    fireEvent.click(roster.getByRole('button', { name: 'Games' }));
+    await flush();
+    expect(named('board_games')).toHaveLength(1);
+    expect(named('board_agent_roster')).toEqual([]);
+    const tile = screen.getByText('Dust').closest('li')!;
+    expect(tile.getAttribute('data-game')).toBe('seed-1');
+    expect(within(tile).getByRole('img', { name: 'Dust box art' }).getAttribute('src')).toBe('/games/dust-box-art.svg');
+    expect(within(tile).getByRole('link', { name: 'Play Dust' }).getAttribute('href')).toBe('https://play.mobmachine.games');
+    expect(tile.textContent).toContain('Featured');
+    expect(tile.textContent).toContain('status: live, takes new cards');
+    expect(tile.textContent).toContain('An idle game you play in a browser.');
+    expect(tile.textContent).toContain('last deploy failed');
+    expect(tile.textContent).toContain('def5678');
+    expect(tile.textContent).toContain('Last green: abc1234');
+    expect(tile.textContent).toContain('Loads5 today, 12 in 7 days, 23 in 30 days, 36 in all');
+    expect(tile.textContent).toContain('Shares2 today, 2 in 7 days, 2 in 30 days, 2 in all');
+    expect(tile.textContent).toContain('Cards2 open, 1 shipped');
+    expect(tile.textContent).toContain('Carts leave dust trails');
+    expect(tile.textContent).toContain('Night sky');
+    expect(tile.textContent).toContain('featured: Our first game');
+    // A game with no row of its own: the folder for a name, no art or address, in development, counted nowhere.
+    const second = tileOf('seed-2');
+    expect(second.querySelector('img')).toBeNull();
+    expect(second.textContent).toContain('status: in development, takes no new cards');
+    expect(second.textContent).toContain('No public blurb.');
+    expect(second.textContent).toContain('Loadsnot counted');
+    expect(second.textContent).toContain('not deployed: none recorded');
+    expect(second.textContent).not.toContain('Featured');
+    expect(roster.getByText(/Every change to a game needs a reason/)).toBeTruthy();
+  });
+
+  it('changes a game only with a reason: status, new cards, featured and the blurb each call their RPC, then read again', async () => {
+    const roster = await openTab('Games');
+    const dust = within(tileOf('seed-1'));
+    const setStatus = dust.getByRole('button', { name: 'Set status' });
+    // The status is unchanged and there is no reason: nothing is called.
+    expect(setStatus.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.change(dust.getByLabelText('Status'), { target: { value: 'paused' } });
+    expect(setStatus.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(setStatus);
+    fireEvent.click(dust.getByRole('button', { name: 'Stop new cards' }));
+    await flush();
+    expect(fake.calls.filter((call) => call.name.startsWith('board_set_game'))).toEqual([]);
+    // The panel says why the buttons are off.
+    expect(roster.getByText(GAME_REASON_NEEDED)).toBeTruthy();
+
+    fireEvent.change(roster.getByLabelText(/^Reason for changes to a game/), { target: { value: 'A crash on load' } });
+    expect(roster.queryByText(GAME_REASON_NEEDED)).toBeNull();
+    expect(dust.getByRole('button', { name: 'Set status' }).getAttribute('aria-disabled')).toBeNull();
+    fireEvent.click(dust.getByRole('button', { name: 'Set status' }));
+    await flush();
+    expect(named('board_set_game_status').map((call) => call.args)).toEqual([{ p_folder: 'seed-1', p_status: 'paused', p_reason: 'A crash on load' }]);
+    expect(roster.getByRole('status').textContent).toBe('Dust is paused.');
+    expect(named('board_games')).toHaveLength(2);
+
+    fireEvent.click(dust.getByRole('button', { name: 'Stop new cards' }));
+    await flush();
+    expect(named('board_set_game_accepting').map((call) => call.args)).toEqual([{ p_folder: 'seed-1', p_accepting: false, p_reason: 'A crash on load' }]);
+    expect(roster.getByRole('status').textContent).toBe('Dust takes no new cards.');
+
+    fireEvent.click(dust.getByRole('button', { name: 'Unfeature' }));
+    await flush();
+    expect(named('board_set_game_featured').map((call) => call.args)).toEqual([{ p_folder: 'seed-1', p_featured: false, p_reason: 'A crash on load' }]);
+
+    fireEvent.click(within(tileOf('seed-2')).getByRole('button', { name: 'Feature' }));
+    await flush();
+    expect(named('board_set_game_featured').at(-1)!.args).toEqual({ p_folder: 'seed-2', p_featured: true, p_reason: 'A crash on load' });
+    fireEvent.click(within(tileOf('seed-2')).getByRole('button', { name: 'Take new cards' }));
+    await flush();
+    expect(named('board_set_game_accepting').at(-1)!.args).toEqual({ p_folder: 'seed-2', p_accepting: true, p_reason: 'A crash on load' });
+
+    // The blurb: unchanged text calls nothing; a new line is kept to one line; an empty one clears it.
+    const save = dust.getByRole('button', { name: 'Save blurb' });
+    expect(save.getAttribute('aria-disabled')).toBe('true');
+    const blurb = dust.getByLabelText(/^Public blurb/) as HTMLTextAreaElement;
+    expect(blurb.maxLength).toBe(280);
+    fireEvent.change(blurb, { target: { value: 'A quarry idle game.\nPlay it free.' } });
+    expect(dust.getByLabelText(/^Public blurb \(33 of 280\)/)).toBeTruthy();
+    fireEvent.click(dust.getByRole('button', { name: 'Save blurb' }));
+    await flush();
+    expect(named('board_set_game_blurb').map((call) => call.args)).toEqual([{ p_folder: 'seed-1', p_blurb: 'A quarry idle game. Play it free.', p_reason: 'A crash on load' }]);
+    expect(roster.getByRole('status').textContent).toBe("Dust's blurb saved.");
+    fireEvent.change(blurb, { target: { value: '' } });
+    fireEvent.click(dust.getByRole('button', { name: 'Clear blurb' }));
+    await flush();
+    expect(named('board_set_game_blurb').at(-1)!.args).toEqual({ p_folder: 'seed-1', p_blurb: '', p_reason: 'A crash on load' });
+  });
+
+  it('ignores a second game write while one runs, then says what happened', async () => {
+    const roster = await openTab('Games');
+    fireEvent.change(roster.getByLabelText(/^Reason for changes to a game/), { target: { value: 'r' } });
+    fake.held = 'board_set_game_accepting';
+    const dust = within(tileOf('seed-1'));
+    fireEvent.click(dust.getByRole('button', { name: 'Stop new cards' }));
+    await flush();
+    expect(dust.getByRole('button', { name: 'Unfeature' }).getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(dust.getByRole('button', { name: 'Unfeature' }));
+    fireEvent.click(dust.getByRole('button', { name: 'Stop new cards' }));
+    await flush();
+    expect(named('board_set_game_accepting')).toHaveLength(1);
+    expect(named('board_set_game_featured')).toEqual([]);
+    fake.release();
+    await flush();
+    expect(roster.getByRole('status').textContent).toBe('Dust takes no new cards.');
+  });
+
+  it('groups every role by roster status and shows its profile, model, tools, write access, runs and spend against the caps', async () => {
+    const roster = await openTab('Agents');
+    expect(named('board_agent_roster')).toHaveLength(1);
+    expect(roster.getByText('3 roles: 1 running, 1 starting later, 1 planned; 1 turned off.')).toBeTruthy();
+    expect([...document.querySelectorAll('[data-group]')].map((g) => g.getAttribute('data-group'))).toEqual(['running', 'starts', 'planned']);
+    expect(document.querySelector('[data-group="starts"] h4')!.textContent).toBe('Starts later (1)');
+    const builder = agentOf('Builder A');
+    expect(builder.textContent).toContain('Builds funded game cards.');
+    expect(builder.textContent).toContain('RosterRunning');
+    expect(builder.textContent).toContain('CreatureA badger with a hard hat.');
+    expect(builder.textContent).toContain('claude-test');
+    expect(builder.textContent).toContain('Read, Edit, Bash');
+    expect(builder.textContent).toContain('Write accessyes');
+    expect(builder.textContent).toContain('$1.50 today, $4.00 in 7 days, $12.25 in 30 days, $40.00 in all');
+    expect(builder.querySelector('[data-caps]')!.textContent).toBe(
+      "$1.50 of the studio's $3.00 today, 2% of the daily cap of $100.00; $12.25 of the studio's $50.00 this month, 2% of the monthly cap of $500.00",
+    );
+    expect(builder.textContent).toContain('Budget share12.5%');
+    expect(builder.textContent).toContain('3 succeeded, 1 failed');
+    expect(builder.textContent).toContain(`9 succeeded, 2 failed, 1 skipped; last run ${formatDateTime('2026-10-10T11:00:00Z')}`);
+    expect(builder.textContent).toContain('build_card failed (tests)');
+    expect(builder.textContent).toContain('on: Fixed the flaky test');
+    expect(builder.textContent).toContain('off: Flaky test');
+    const curator = agentOf('Curator');
+    expect(curator.textContent).toContain('Starts later (When the suggestion box opens.)');
+    expect(curator.textContent).toContain(`off (not yet) since ${formatDateTime('2026-10-10T09:00:00Z')}`);
+    expect(curator.textContent).not.toContain('Turned on and off');
+    const host = agentOf('Host');
+    expect(host.textContent).toContain('Planned (When the stream exists.)');
+    expect(host.textContent).toContain('no daily cap set');
+    expect(host.textContent).toContain('Runs, 7 daysno jobs');
+  });
+
+  it('turns a role on or off only with a reason, and reads the roster again', async () => {
+    const roster = await openTab('Agents');
+    const curator = roster.getByRole('button', { name: 'Turn Curator on' });
+    expect(curator.closest('li')!.textContent).toContain('off (not yet)');
+    expect(curator.closest('li')!.textContent).toContain('Write accessno');
+    // No reason, no call, and the panel says a reason is needed.
+    expect(curator.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(curator);
+    await flush();
+    expect(named('set_role_pause')).toEqual([]);
+    expect(roster.getByRole('alert').textContent).toBe(ROLE_REASON_NEEDED);
+    fireEvent.change(roster.getByLabelText('Reason for turning a role on or off'), { target: { value: 'start triage' } });
+    expect(roster.queryByRole('alert')).toBeNull();
+    fireEvent.click(roster.getByRole('button', { name: 'Turn Curator on' }));
+    await flush();
+    expect(named('set_role_pause').map((call) => call.args)).toEqual([{ p_role: 'r-curator', p_paused: false, p_reason: 'start triage' }]);
+    expect(roster.getByRole('status').textContent).toBe('Curator turned on.');
+    expect(named('board_agent_roster')).toHaveLength(2);
+    fireEvent.click(roster.getByRole('button', { name: 'Turn Builder A off' }));
+    await flush();
+    expect(named('set_role_pause').at(-1)!.args).toEqual({ p_role: 'r-builder-a', p_paused: true, p_reason: 'start triage' });
   });
 });

@@ -81,9 +81,11 @@ describe('suits, from data', () => {
   it('gives each of the two folders a suit with a label, and no two suits share a glyph', () => {
     const suits = FOLDERS.map((folder) => SUITS[categoryOf(card({ folder }))]);
     expect(suits.map((suit) => suit.label)).toEqual([copy.categories.game, copy.categories.studio]);
-    for (const suit of suits) expect(suit.label.trim()).not.toBe('');
-    expect(new Set(suits.map((suit) => suit.glyph)).size).toBe(suits.length);
-    expect(Object.keys(SUITS).sort()).toEqual(['game', 'studio']);
+    // docs/specs/final-state.md (Card suits): five suits, each its own word and glyph.
+    const all = Object.values(SUITS);
+    for (const suit of all) expect(suit.label.trim()).not.toBe('');
+    expect(new Set(all.map((suit) => suit.glyph)).size).toBe(all.length);
+    expect(Object.keys(SUITS).sort()).toEqual(['game', 'machine', 'new_game', 'platform', 'studio']);
   });
 
   it('draws the suit at the start of the index row, with its glyph', () => {
@@ -91,7 +93,8 @@ describe('suits, from data', () => {
     const suit = box.querySelector('.card-index [data-suit]')!;
     expect(suit.getAttribute('data-suit')).toBe('studio');
     expect(suit.textContent).toBe(copy.categories.studio);
-    expect(suit.querySelector('svg')?.getAttribute('data-glyph')).toBe('browser');
+    // The studio suit is the agent team (docs/specs/final-state.md); the browser is the platform suit's.
+    expect(suit.querySelector('svg')?.getAttribute('data-glyph')).toBe('team');
     expect(suit.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
   });
 
@@ -296,10 +299,12 @@ describe('the AI-agent byline (docs/specs/agent-workflows.md)', () => {
     const li = face(card({ source: 'agent', summary: 'The gatherer costs one more.', drafter_role_id: 'r-designer' }), [designer]);
     const block = li.querySelector(':scope > .card-text');
     expect([...(block?.children ?? [])].map((child) => child.className)).toEqual(['card-summary', 'card-meta card-byline']);
-    expect([...li.children].map((child) => child.className)).toEqual(['card-index', '', 'card-text', 'card-bottom']);
+    // The rarity's edge and tab (docs/specs/final-state.md, Rarity) are drawn out of the flow, so they take no track.
+    const parts = (el: Element) => [...el.children].map((child) => child.className).filter((name) => !name.startsWith('rarity-'));
+    expect(parts(li)).toEqual(['card-index', '', 'card-text', 'card-bottom']);
     cleanup();
     const board = face(card({ source: 'board', summary: 'Filed by the board.', drafter_role_id: null }), [designer]);
     expect(board.querySelector('.card-text')).toBeNull();
-    expect([...board.children].map((child) => child.className)).toEqual(['card-index', '', 'card-summary', 'card-bottom']);
+    expect(parts(board)).toEqual(['card-index', '', 'card-summary', 'card-bottom']);
   });
 });

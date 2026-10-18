@@ -115,7 +115,7 @@ describe('MachineFlow', () => {
     ]);
     // Each lane is named by its heading.
     for (const li of lanes) expect(li.getAttribute('aria-labelledby')).toBe(li.querySelector('h3.flow-title')?.id);
-    expect(lanes.map((li) => li.querySelector('.flow-step-number')?.textContent)).toEqual(['1', '2', '3']);
+    expect(lanes.map((li) => li.querySelector('.flow-step-number')?.textContent)).toEqual(['01', '02', '03']);
     expect(lane('building').querySelector('.flow-who')?.textContent).toBe(copy.flow.lanes.building.who);
     expect(lane('shipped').querySelector('.flow-who')?.textContent).toBe(copy.flow.lanes.shipped.who);
     // Every card in a lane is a compact face with an h4 title and no summary; the open cards are
@@ -304,21 +304,22 @@ describe('FundNow', () => {
     ]);
     expect(document.querySelectorAll('p.fund-agreement')).toHaveLength(1);
     expect(grid.contains(document.querySelector('p.fund-agreement'))).toBe(false);
-    // There is always a second way to fund (decision 73): the next card in line, last in the grid.
-    const next = grid.querySelector(':scope > li.fund-next')!;
-    expect(grid.lastElementChild).toBe(next);
+    // There is always a second way to fund (decision 73): the next card in line, in the row under the grid.
+    const next = document.querySelector('.fund-ways > .fund-next')!;
+    expect(grid.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(grid.querySelector('.fund-next')).toBeNull();
     expect(next.textContent).toContain(legal.pickForMe);
     expect(next.textContent).toContain(legal.fundNextBody);
     expect(next.querySelector('a[href="/contribute"]')).not.toBeNull();
     expect(document.querySelectorAll('a[href="/contribute"]')).toHaveLength(1);
   });
 
-  it('keeps the next card in line beside a single open card, so there are always two ways to fund', () => {
+  it('keeps the next card in line under a single open card, so there are always two ways to fund', () => {
     renderFund(snapshot(open(1)));
     const items = document.querySelectorAll('ul.fund-grid > li');
-    expect(items).toHaveLength(2);
+    expect(items).toHaveLength(1);
     expect(items[0]!.classList.contains('card')).toBe(true);
-    expect(items[1]!.classList.contains('fund-next')).toBe(true);
+    expect(document.querySelector('.fund-ways > .fund-next')?.textContent).toContain(legal.pickForMe);
   });
 
   it('says no agreement when no card carries a live link', () => {

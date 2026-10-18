@@ -335,8 +335,9 @@ describe('the Discord webhooks and the public site', () => {
     `https://discord.com/api/webhooks/1/${TOKEN} extra`,
   ];
 
-  for (const key of ['DISCORD_WEBHOOK_SHIPS', 'DISCORD_WEBHOOK_WEEKLY'] as const) {
-    const field = key === 'DISCORD_WEBHOOK_SHIPS' ? 'discordWebhookShips' : 'discordWebhookWeekly';
+  // DISCORD_WEBHOOK_URL is the announcements lane (docs/specs/operations.md).
+  for (const key of ['DISCORD_WEBHOOK_SHIPS', 'DISCORD_WEBHOOK_WEEKLY', 'DISCORD_WEBHOOK_URL'] as const) {
+    const field = key === 'DISCORD_WEBHOOK_SHIPS' ? 'discordWebhookShips' : key === 'DISCORD_WEBHOOK_WEEKLY' ? 'discordWebhookWeekly' : 'discordWebhookUrl';
 
     it(`${key} is null when unset or blank, and read in each Discord form`, () => {
       expect(loadConfig(FULL, REPO)[field]).toBeNull();

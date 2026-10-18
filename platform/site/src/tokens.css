@@ -49,6 +49,8 @@
   --coin: #d9a441; /* money only: Contribute, the funding bar's fill, the coin mark, the Funded glyph */
   --coin-down: #b8862f; /* Contribute on hover and press, on paper and ink */
   --coin-up: #ecc36e; /* Contribute on hover and press, on the signal band */
+  --blueprint: #1c3a63; /* the blueprint ground of /studio/history only (docs/specs/final-state.md, Studio evolution) */
+  --blueprint-line: #4a6d9c; /* the blueprint's grid and its quiet lines, decorative */
 
   /* Agent avatars. Fills only: every shape has an --ink outline, so none carries meaning by colour. */
   --creature-blue: #8db9e8;
@@ -89,8 +91,8 @@
   --weight-strong: 600;
   --weight-bold: 700;
   --leading-body: 1.6;
-  --leading-display: 1.15; /* the page heading (h1) */
-  --leading-heading: 1.25; /* section headings (h2) */
+  --leading-display: 1.04; /* the page heading (h1): set tight, like a printed headline */
+  --leading-heading: 1.15; /* section headings (h2) */
   --leading-title: 1.35; /* h3 and h4, card, row and choice titles: a two-line title's lines never touch */
 
   /* Type scale (the board, 23 Sep 2026). Headings grow with the viewport, from a 390px phone to a
@@ -98,8 +100,14 @@
   --size-small: 0.875rem; /* 14px: meta lines, the card's index row and spec rows, a row's date and meta, footer */
   --size-body: 1.0625rem; /* 17px: paragraphs, nav, buttons, row titles */
   --size-lead: 1.25rem; /* 20px: the lede, figures, h3 and card titles */
-  --size-h2: clamp(1.5rem, 1.25rem + 1vw, 2rem); /* 24px to 32px: section headings */
-  --size-h1: clamp(2rem, 1.5rem + 2.25vw, 3.5rem); /* 33px to 56px: the page heading */
+  --size-h2: clamp(1.625rem, 1.2rem + 1.6vw, 2.5rem); /* 26px to 40px: section headings */
+  --size-h1: clamp(2.375rem, 1.4rem + 3.6vw, 4.5rem); /* 38px to 72px: the page heading */
+  --size-hero: clamp(2.375rem, 1rem + 2.6vw, 3.25rem); /* 38px to 52px: home's pitch, three lines beside the room */
+
+  /* Tracking: the only letter-spacing values. Display type sets tight, mono labels open. */
+  --tracking-display: -0.03em; /* h1 and the pitch */
+  --tracking-heading: -0.015em; /* h2 */
+  --tracking-label: 0.04em; /* labels set in the mono face */
 
   /* Space */
   --space-1: 0.5rem;
@@ -112,10 +120,14 @@
   --band-pad: clamp(3rem, 9vw, 6rem);
 
   /* Layout */
-  --wrap: 72rem;
+  --wrap: 76rem; /* 1216px: wide enough that the page fills a 1440px screen */
   --measure: 44rem;
   --measure-text: 36em; /* running text: about 72 characters a line at the body size */
-  --gutter: 1.25rem;
+  /* The page's side margin grows with the viewport, like the headings: 20px on a phone up to about
+     400px, 5% of the width from there (about 38px at 768px, 51px at 1024px), 64px from 1280px. At
+     1344px the 76rem wrap takes over and the margins keep growing (112px at 1440px), so the margin
+     never jumps and a laptop never shows the page pressed against its edges. */
+  --gutter: clamp(1.25rem, 5vw, 4rem);
   --rail: 9rem; /* the time column of a row from 48rem */
   --radius: 0.375rem; /* buttons, fields, chips and choices */
   --radius-card: 1rem;
@@ -129,4 +141,7 @@
   --stagger: 50ms;
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  /* The scene (docs/specs/final-state.md, the motion pass): a section's reveal and the legendary sheen. */
+  --dur-reveal: 480ms;
+  --ease-scene: cubic-bezier(0.22, 1, 0.36, 1);
 }

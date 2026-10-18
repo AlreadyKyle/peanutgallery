@@ -21,6 +21,9 @@ describe('avatarFeatures', () => {
   it('reads each launch agent from its species note', () => {
     expect(Object.keys(NOTES).sort()).toEqual(
       [
+        // community-core adds the Curator and the Art Director (docs/specs/final-state.md).
+        'Art Director',
+        'Curator',
         'Biz Dev',
         'Builder A',
         'Builder B',

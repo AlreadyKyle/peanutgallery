@@ -2,9 +2,10 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
 // The game's accessible DOM layer (render/controls.ts, index.html): a main landmark and heading, the
-// canvas hidden from assistive technology, real buttons for Strike and each unit, and a polite live
-// region. This spec plays with the keyboard only and runs axe at a phone and a desktop width. Every
-// file this spec imports is a package, never card code. A fresh page has no save, so play starts at 0.
+// canvas hidden from assistive technology, real buttons for Strike and each unit (the visible shop
+// over the Three.js scene), and a polite live region. This spec plays with the keyboard only and runs
+// axe at a phone and a desktop width. Every file this spec imports is a package, never card code. A
+// fresh page has no save, so play starts at 0.
 
 async function axeSeriousOrCritical(page: Page): Promise<string[]> {
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
@@ -27,7 +28,7 @@ for (const [label, width, height] of [
     await page.setViewportSize({ width, height });
     await ready(page);
     expect(await axeSeriousOrCritical(page)).toEqual([]);
-    // Again with the control panel open, as a keyboard user sees it.
+    // Again with focus in the shop, as a keyboard user sees it.
     await page.keyboard.press('Tab');
     await expect(page.getByRole('button', { name: 'Strike' })).toBeFocused();
     expect(await axeSeriousOrCritical(page)).toEqual([]);
@@ -59,9 +60,13 @@ test('plays with the keyboard only: strike, then buy a Gatherer', async ({ page 
     await page.keyboard.press('Tab');
   }
   await expect(strike).toBeFocused();
-  // Every control is a 44px touch target at 375px.
+  // Every control is a 44px touch target at 375px, and the shop fits the screen's width.
   const box = await strike.boundingBox();
   expect(box!.height).toBeGreaterThanOrEqual(44);
+  const unit = await gatherer.boundingBox();
+  expect(unit!.height).toBeGreaterThanOrEqual(44);
+  expect(unit!.width).toBeGreaterThanOrEqual(44);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(375);
 
   // Strike with Enter and Space until a Gatherer is affordable (the rate adds dust too).
   for (let i = 0; i < 40 && (await gatherer.getAttribute('aria-disabled')) === 'true'; i += 1) {

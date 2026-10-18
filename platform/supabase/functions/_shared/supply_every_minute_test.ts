@@ -1,7 +1,7 @@
 // The supply-every-minute migration on PGlite (docs/specs/always-open.md, docs/PLAN.md §10 decision
 // 71): supply_draft_check() answers no_money after a draft run failed for want of money until a
 // contribution is credited, a card goes live or is rejected, or the next New York day
-// (20261017000000_no_money_holds.sql), and for a cap only on the New York day it failed;
+// (20261018100000_no_money_holds.sql), and for a cap only on the New York day it failed;
 // public_supply()'s next check is the next minute. Every migration runs in order, as supply_refill_test.ts runs them.
 
 import { PGlite } from "npm:@electric-sql/pglite@0.3.7";
@@ -57,7 +57,7 @@ async function migrated(): Promise<PGlite> {
       [name, klass === "planner", klass],
     );
   }
-  for (const name of ["20260924400000_agent_workflows.sql", "20261010200000_supply_refill.sql", "20261011200000_supply_every_minute.sql", "20261017000000_no_money_holds.sql"]) {
+  for (const name of ["20260924400000_agent_workflows.sql", "20261010200000_supply_refill.sql", "20261011200000_supply_every_minute.sql", "20261018100000_no_money_holds.sql"]) {
     await db.exec(await sqlOf(name));
   }
   return db;

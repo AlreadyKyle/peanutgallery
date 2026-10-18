@@ -2,9 +2,11 @@
 
 What the studio is for, what it should feel like, how it grows and how it pays for itself. `docs/PLAN.md` is the constitution and wins any conflict; this file sets direction and the order of bets. The founder's order of priority: fun and new first, and it must also scale, grow and make money. Nothing here changes the kernel (`docs/PLAN.md` §4 Kernel). Work named here that is not built points at its `docs/BACKLOG.md` entry, and no number below is a current figure or a dated target.
 
+The board's brief of 17 October 2026 sets the final state (`docs/PLAN.md` §10 decision 75). Its contract is `docs/specs/final-state.md`, and its strategy is `docs/strategy/`: the mission and vision, the audiences, the business model and unit economics, the product requirements, the benchmarks with their targets, the research, the growth plan, the agent team, the game quality bar, the operating system and the phased roadmap. This file is the short form and agrees with them; where they go into more detail, they lead.
+
 ## 1. Product goals
 
-Every goal is a metric the studio can compute from what exists today: the ledger, the cards and their events, Stripe through the webhook rows, the weekly reports and the Discord outbound log. Thresholds are proposals and are the board's to confirm.
+Every goal is a metric the studio can compute from what exists today (the full set, with targets and floors, is `docs/strategy/benchmarks.md`): the ledger, the cards and their events, Stripe through the webhook rows, the weekly reports and the Discord outbound log. Thresholds are proposals and are the board's to confirm.
 
 ### Fun and new (first)
 
@@ -34,6 +36,8 @@ Every goal is a metric the studio can compute from what exists today: the ledger
 - **Agent margin.** Agent spend against agent share in, per card. Agents run only when funded, so this is a quality metric (waste, failed runs) more than a solvency one.
 
 ## 2. The vision
+
+**The mission.** Make game development a show anyone can watch, steer and fund (`docs/strategy/mission-and-vision.md`).
 
 **The promise.** Watch AI agents build a free game and fund the next change you want to see.
 
@@ -88,14 +92,16 @@ Ranked by impact on the loop for the effort. Built means on main or on this bran
 6. **Dust's own link preview** (built): `seed-1/scripts/og-image.mjs` draws a 1200 by 630 picture of the game in code at build time, and `seed-1/index.html` points `og:image` and `twitter:image` at it, with its own alt text.
 7. **Play and share counts** (built): daily totals of Dust loads, Share your run, card shares and clicks from Dust to a card, with nothing that names a player (`docs/specs/play-counts.md`).
 8. **Card share and since your last visit** (built): `ShareCard` on card pages and /thanks, `SinceLastVisit` on home.
-9. **Free voting** (backlog): [Free voting on open cards](BACKLOG.md#free-voting-on-open-cards), behind [Player accounts](BACKLOG.md#player-accounts). Lets non-payers steer, which grows the crowd that later funds.
-10. **Weekly episodes and the stream** (backlog): [Weekly episodes and clips](BACKLOG.md#weekly-episodes-and-clips), [Twitch channel and stream scenes](BACKLOG.md#twitch-channel-and-stream-scenes). The discovery engine at scale.
-11. **Seasons** (backlog): [Seasons](BACKLOG.md#seasons). A reason to come back on a cycle the board sets.
+9. **Suggestions, upvotes and seeds** (final state): any signed-in player can suggest a change, upvote others' suggestions and publish a run as a seed, so non-payers steer and share (`docs/specs/final-state.md`, Suggestions; Seeds and instances). They replace free voting on cards.
+10. **The live studio, the feed and the broadcast overlay** (final state): the agents drawn at work from live data, the feed of what happened, and /broadcast for Twitch. Clips and the unattended stream stay in the backlog: [Weekly episodes and clips](BACKLOG.md#weekly-episodes-and-clips), [Twitch channel and stream scenes](BACKLOG.md#twitch-channel-and-stream-scenes).
+11. **Collection, XP and eras** (final state): card suits and rarity, a collection, levels, badges and frames, goals and studio eras tied to milestones. They replace seasons as the reason to come back on a cycle.
 12. **Shipped-in-game marker** (new, not filed): a one-time note in Dust the first time a player sees a unit or unlock that shipped from a card since their last visit, naming the card. Filed after item 4 proves the read path.
 
-Rejected for now: leaderboards and comparisons between players (the shareable runs entry rules them out), streak penalties, and any timer that punishes absence.
+Rejected for now: leaderboards and comparisons between players (the seeds gallery ranks runs by votes, never players), streak penalties, and any timer that punishes absence.
 
 ## 5. Business model and unit economics
+
+The full model, with fees, the path to profitability and the kill and pivot lines, is `docs/strategy/business-strategy.md`.
 
 **Revenue** is the studio share of each contribution: after the 10% chargeback reserve, the supporter's split, default 80% agents and 20% studio (`docs/PLAN.md` §5 The split). On a $5 contribution at the default, $0.90 is studio income before the studio's own costs.
 
@@ -113,11 +119,11 @@ Rejected for now: leaderboards and comparisons between players (the shareable ru
 
 **Risks.** Too few open cards to fund (the supply floor guards it). Cards that ship nothing a player can see, which makes funding feel like a tax. Fee drag on small payments. A refund wave on spent money (the reserve and holds guard it). Agent cost per card rising faster than estimates.
 
-**What not to do.** No pay-to-win: money buys changes for everyone, never an advantage for the payer. No selling the future: a card is funded when it is ready and built when funded, nothing is pre-sold (the Star Citizen lesson in `docs/research/comparables.md`). No referral payouts or rewards for recruiting. No chance mechanics beside money, no coins as a currency. All ages, everywhere. The kernel stays: the ledger, the caps, the reserves, the gate, the content filter and the read/write separation.
+**What not to do.** No pay-to-win: money buys changes for everyone, never an advantage for the payer. No selling the future: a card is funded when it is ready and built when funded, nothing is pre-sold (the Star Citizen lesson in `docs/research/comparables.md`). No referral payouts or rewards for recruiting. No paid randomness and no coins as a currency: a card's rarity is a published deterministic function of its id (`rarity = f(sha256(card_id))`, with published odds), decided when the card opens, so nobody pays for a roll and contributing rolls nothing, and rarity changes only XP and cosmetics, never the price, the bar, what gets built or the order (`docs/specs/final-state.md`, Rarity). XP is not money. All ages, everywhere. The kernel stays: the ledger, the caps, the reserves, the gate, the content filter and the read/write separation.
 
 ## 6. Design quality bar
 
-The site's bar is `platform/site/DESIGN.md`: a quiet table, motion only for a real change or a press, three motifs. Dust has no written bar yet ([A creative guide for Dust](BACKLOG.md#a-creative-guide-for-dust)). Small opportunities found reading the code:
+The site's bar is `platform/site/DESIGN.md`: a quiet table, motion only for a real change or a press, three motifs. Every game's bar is `docs/strategy/game-quality.md`: the line style, feedback, the first 60 seconds, performance budgets, accessibility and box art, scored by the Game Director. Dust's own choices within it wait on [A creative guide for Dust](BACKLOG.md#a-creative-guide-for-dust). Small opportunities found reading the code:
 
 - `seed-1/render/scene.ts`: the feedback beats are in place; the next polish is a short count-up on the total when the welcome-back credit lands, so the gain is seen arriving, skipped under reduced motion.
 - `seed-1/render/share.ts` and `seed-1/content/strings.json`: the shared text is the whole artifact today. A code-drawn card image is the next step, using the site's card edge so a shared run reads as part of the studio.
@@ -130,9 +136,9 @@ Every change here goes through the design paths and the Directors' visual review
 
 ## 7. Open questions for the board
 
-1. Confirm or replace the proposed thresholds in section 1, and which of them the board's panel shows.
-2. Should the studio count plays and shares at all, in aggregate with no identifiers, so conversion can be seen? The privacy page would say so.
-3. May Dust show the next Dust card's title and bar inside the game? It puts a money prompt on the game page, which today carries only the studio link.
-4. Suggested contribution amounts on /contribute: which, if any, and should they track the nearest card's remaining amount?
-5. When does the studio take up later income, and in what order: tiers, Twitch, sponsors?
-6. Is "visible change per dollar" a rubric item for the Game Director, so number-only cards rank below changes a player can see?
+Questions 2 and 3 of the earlier list are settled: the studio counts plays and shares as daily totals with no identifiers (`docs/specs/play-counts.md`), and Dust shows the next Dust card under the game. Question 6 is settled by `docs/strategy/game-quality.md` and `docs/strategy/benchmarks.md` (visible change per dollar is a game quality benchmark). What remains:
+
+1. Confirm or replace the targets and floors in `docs/strategy/benchmarks.md`, and which of them the board's panel shows.
+2. Suggested contribution amounts on cards: the Machine card's presets start at $5 (`docs/specs/final-state.md`); should a card's own suggestions round its remainder up to $5 to avoid fee drag (`docs/strategy/business-strategy.md` §2)?
+3. When does the studio take up later income, and in what order: the loyalty bonus, tiers, Twitch, sponsors (`docs/strategy/roadmap.md`, Phase 6)?
+4. Confirm the kill and pivot lines in `docs/strategy/business-strategy.md` §8.

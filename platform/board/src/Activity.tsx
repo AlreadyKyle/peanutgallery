@@ -104,6 +104,7 @@ export const FINDING_KIND_WORDS: Record<FindingKind, string> = {
   cli: 'Claude Code pin',
   scan: 'Weekly scan',
   producer: 'Producer signal',
+  benchmark: 'Benchmark review',
 };
 
 /** A detail value that is a GitHub address (the weekly scan's run and job) is a link; the rest is text. */

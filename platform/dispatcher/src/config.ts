@@ -63,6 +63,9 @@ export interface DispatcherConfig {
   // that lane inert. Each address is a bearer secret: never logged or printed.
   discordWebhookShips: string | null;
   discordWebhookWeekly: string | null;
+  // DISCORD_WEBHOOK_URL: the announcements lane (docs/specs/operations.md): notable feed events (a card
+  // funded or shipped, a rare card, a milestone, an era), built from structured fields only. Unset, inert.
+  discordWebhookUrl?: string | null;
   // The public site's origin, which the posts link to.
   publicSiteUrl: string;
   // DISPATCHER_DRAIN_AT: from this time the tick claims no new card or job, and the process exits 0
@@ -378,6 +381,7 @@ function buildConfig(env: Env, codeRoot: string, handRun: boolean): DispatcherCo
     ntfyTopicUrl: optionalHttpsUrlEnv(env, 'NTFY_TOPIC_URL'),
     discordWebhookShips: discordWebhookEnv(env, 'DISCORD_WEBHOOK_SHIPS'),
     discordWebhookWeekly: discordWebhookEnv(env, 'DISCORD_WEBHOOK_WEEKLY'),
+    discordWebhookUrl: discordWebhookEnv(env, 'DISCORD_WEBHOOK_URL'),
     publicSiteUrl: publicSiteUrlEnv(env),
     drainAt: drainAtEnv(env),
   };

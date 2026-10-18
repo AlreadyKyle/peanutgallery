@@ -77,7 +77,10 @@ function capture(): { log: ReturnType<typeof createLogger>; lines: () => Array<R
 describe('roleModelTokens', () => {
   it("reads every role's token from this repository's agent specs", () => {
     const tokens = roleModelTokens(CODE_ROOT);
-    expect(tokens.size).toBe(16);
+    // Eighteen with the Curator and the Art Director (docs/specs/final-state.md).
+    expect(tokens.size).toBe(18);
+    expect(tokens.get('Curator')).toBe('MODEL_BUILDER');
+    expect(tokens.get('Art Director')).toBe('MODEL_DIRECTOR');
     expect(tokens.get('Builder A')).toBe('MODEL_BUILDER');
     expect(tokens.get('Biz Dev')).toBe('MODEL_BUILDER');
     expect(tokens.get('Game Designer')).toBe('MODEL_DESIGNER');

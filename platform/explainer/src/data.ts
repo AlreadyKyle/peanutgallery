@@ -6,7 +6,6 @@ import janitor from '../../agents/janitor.json';
 import platformBuilder from '../../agents/platform-builder.json';
 import platformDirector from '../../agents/platform-director.json';
 import qa from '../../agents/qa.json';
-import studioHead from '../../agents/studio-head.json';
 import { copy } from '../../site/src/lib/copy';
 import { legal } from '../../site/src/lib/legal';
 import { formatUsd } from '../../site/src/lib/format';
@@ -25,7 +24,7 @@ export const SITE_ADDRESS = 'mobmachine.games';
 export const stepHeadings = legal.howMoneyMoves.blocks.map((block) => block.heading);
 
 /** The agents drawn in the team scene: every role whose spec says it is running (data.test.ts). */
-export const roster = [builderA, builderB, qa, gameDesigner, gameDirector, studioHead, platformBuilder, platformDirector, janitor].map((role) => ({
+export const roster = [builderA, builderB, qa, gameDesigner, gameDirector, platformBuilder, platformDirector, janitor].map((role) => ({
   title: role.title,
   note: role.species_note,
 }));

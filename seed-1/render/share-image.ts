@@ -9,17 +9,18 @@ export const IMAGE_WIDTH = 1200;
 export const IMAGE_HEIGHT = 630;
 export const IMAGE_FILE_NAME = 'dust-run.png';
 
-// The scene's palette (render/scene.ts), as CSS colours.
+// The page's palette (render/style.css): paper, ink, the sand of the pile and the Dust suit magenta.
 const COLORS = {
-  background: '#12161c',
-  panel: '#1c222b',
-  panelEdge: '#2b3440',
-  accent: '#d9a441',
-  bar: '#6fa8dc',
-  text: '#e8e6df',
-  muted: '#9aa3ad',
+  background: '#fdfcf8',
+  panel: '#f8ecc9',
+  panelEdge: '#151515',
+  accent: '#b0226a',
+  bar: '#b0226a',
+  text: '#151515',
+  muted: '#55524c',
+  mote: '#e6dfd0',
 };
-const FONT = 'sans-serif';
+const FONT = "'Atkinson Hyperlegible Next', sans-serif";
 const MARGIN = 72;
 // Unlock names sit in pills, at most two rows of them; the rest collapse to "+N" so the address stays clear.
 const PILL_HEIGHT = 48;
@@ -106,7 +107,7 @@ export function drawRunCard(ctx: CardContext, facts: RunFacts): void {
   ctx.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
 
   // Motes of dust, scattered evenly by a fixed low-discrepancy sequence, so every card looks the same.
-  ctx.fillStyle = COLORS.panelEdge;
+  ctx.fillStyle = COLORS.mote;
   for (let i = 1; i <= 40; i += 1) {
     const x = ((i * 0.7548776662) % 1) * IMAGE_WIDTH;
     const y = ((i * 0.5698402910) % 1) * IMAGE_HEIGHT;
@@ -136,7 +137,7 @@ export function drawRunCard(ctx: CardContext, facts: RunFacts): void {
   for (const pill of layoutPills(facts.names, (text) => ctx.measureText(text).width)) {
     ctx.fillStyle = COLORS.panel;
     ctx.strokeStyle = COLORS.panelEdge;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.roundRect(pill.x, pill.y, pill.width, PILL_HEIGHT, PILL_HEIGHT / 2);
     ctx.fill();
@@ -148,6 +149,12 @@ export function drawRunCard(ctx: CardContext, facts: RunFacts): void {
   ctx.fillStyle = COLORS.muted;
   ctx.font = `32px ${FONT}`;
   ctx.fillText(facts.url, MARGIN, IMAGE_HEIGHT - MARGIN + 16);
+
+  // The suit band along the bottom edge, ruled off in ink.
+  ctx.fillStyle = COLORS.panelEdge;
+  ctx.fillRect(0, IMAGE_HEIGHT - 20, IMAGE_WIDTH, 4);
+  ctx.fillStyle = COLORS.accent;
+  ctx.fillRect(0, IMAGE_HEIGHT - 16, IMAGE_WIDTH, 16);
 }
 
 /**

@@ -10,7 +10,9 @@
 //   grounds;
 // - balance: two blocks side by side in one row (grid cells or flex items) differ in the height of
 //   their content by no more than max(160px, 35% of the taller), unless the container or a block is
-//   marked data-balance="ignore" (with a comment in the code saying why);
+//   marked data-balance="ignore" (with a comment in the code saying why); a sticky block (the
+//   sheet's heading, the card page's face) stays in view beside what it labels, so it is left out
+//   of the rows, and a grid that holds one is a page's layout, not a list of like items;
 // - hollow: inside a band, no vertical run of empty space between two blocks is longer than 240px;
 // - grid cells: a grid of like items in two or more columns puts one item in each cell: no item is
 //   wider than one column and every row starts at the grid's content edge; a part-empty last row is
@@ -165,6 +167,7 @@ export function auditLayout(limits) {
     return rows;
   };
   const inFlow = (el) => extent.get(el) && !['absolute', 'fixed'].includes(style(el).position);
+  const sticky = (el) => style(el).position === 'sticky';
 
   for (const container of document.body.querySelectorAll('*')) {
     const cs = style(container);
@@ -177,7 +180,7 @@ export function auditLayout(limits) {
 
     // Balance.
     if (!ignored(container)) {
-      for (const row of rows) {
+      for (const row of rowsOf(items.filter((item) => !sticky(item)))) {
         const side = row.items.filter((item) => !ignored(item));
         if (side.length < 2) continue;
         const heights = side.map((item) => {
@@ -198,7 +201,7 @@ export function auditLayout(limits) {
     // (an avatar beside its text) is not a list. The computed tracks are the used widths in px.
     if (grid && new Set(items.map((item) => item.tagName)).size === 1) {
       const tracks = cs.gridTemplateColumns.split(' ').filter((t) => /px$/.test(t)).map(parseFloat);
-      if (tracks.length >= 2 && !ignored(container)) {
+      if (tracks.length >= 2 && !ignored(container) && !items.some(sticky)) {
         const widest = Math.max(...tracks);
         const left = box(container).left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth);
         for (const item of items) {
@@ -337,6 +340,9 @@ export function auditLayout(limits) {
     const prev = before(heading);
     const prior = prev === null ? null : before(prev);
     if (prior === null) continue;
+    // Rhythm is for stacked blocks: a block a grid sets beside or below the heading (/thanks's reward,
+    // two columns from 64rem) is not the block before it on the page.
+    if (box(prev).bottom > box(heading).top || box(prior).bottom > box(prev).top) continue;
     const above = box(heading).top - box(prev).bottom;
     const between = box(prev).top - box(prior).bottom;
     if (above + 1 < between) out.push(`rhythm: ${name(heading)} sits ${Math.round(above)}px under ${name(prev)}, which sits ${Math.round(between)}px under the block before it`);

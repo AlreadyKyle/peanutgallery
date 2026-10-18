@@ -31,6 +31,8 @@ vi.mock('./routes', async () => {
       { to: '//paypal.me/evil', label: 'Pay there' },
       { to: '/\\paypal.me/evil', label: 'Pay elsewhere' },
     ],
+    footerNav: [],
+    communityNav: [],
   };
 });
 

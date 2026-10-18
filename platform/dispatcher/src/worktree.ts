@@ -185,6 +185,7 @@ export const KERNEL_PATHS: readonly string[] = [
   'platform/site/src/components/Funding.tsx',
   'platform/site/src/components/Guarded.tsx',
   'platform/site/src/components/LedgerSummary.tsx',
+  'platform/site/src/components/MachineCard.tsx',
   'platform/site/src/components/Mark.tsx',
   'platform/site/src/components/Meter.tsx',
   'platform/site/src/components/MoneyIn.tsx',
@@ -255,10 +256,12 @@ export const DESIGN_PATHS: readonly string[] = [
   'platform/site/src/components/Card.tsx',
   'platform/site/src/components/Glyph.tsx',
   'platform/site/src/lib/motion.ts',
+  'platform/site/src/lib/reveal.ts',
   'platform/site/src/routes.tsx',
   'platform/site/public',
   'platform/site/brand',
   'seed-1/render/favicon.svg',
+  'seed-1/box-art.svg',
 ];
 
 // File and folder names no agent may create or change at any depth: Claude Code loads a nested

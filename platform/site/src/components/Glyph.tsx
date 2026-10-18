@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
-import type { CardCategory, Face } from '../lib/cards';
+import type { Face } from '../lib/cards';
+import type { Rarity, Suit } from '../lib/community-types';
 import { copy } from '../lib/copy';
+import { suitTile } from '../lib/suits';
 
 /**
  * The site's glyphs: 16px, drawn by code in currentColor, so each follows its text on paper or ink
@@ -26,7 +28,22 @@ export type GlyphName =
   | 'arrow-up'
   | 'arrow-down'
   | 'clock'
-  | 'pencil';
+  | 'pencil'
+  | 'spark'
+  | 'blocks'
+  | 'machine'
+  | 'team'
+  | 'gem-common'
+  | 'gem-uncommon'
+  | 'gem-rare'
+  | 'gem-legendary'
+  | 'plane'
+  | 'box'
+  | 'badge'
+  | 'milestone'
+  | 'seed'
+  | 'thumb-up'
+  | 'thumb-down';
 
 function gearTeeth(): ReactNode[] {
   return Array.from({ length: 8 }, (_, i) => {
@@ -40,6 +57,64 @@ function gearTeeth(): ReactNode[] {
 }
 
 const DRAWINGS: Record<GlyphName, ReactNode> = {
+  // The new game suit (docs/specs/final-state.md, Card suits): a four-point spark, a game not built yet.
+  spark: <path className="glyph-line" d="M8 1.75c.6 3.4 2.85 5.65 6.25 6.25-3.4.6-5.65 2.85-6.25 6.25-.6-3.4-2.85-5.65-6.25-6.25 3.4-.6 5.65-2.85 6.25-6.25z" />,
+  // The platform suit: three stacked blocks, a feature of the site the community asked for.
+  blocks: (
+    <>
+      <path className="glyph-line" d="M1.75 9.25h6v5h-6zM8.25 9.25h6v5h-6zM5 4.25h6v5H5z" />
+    </>
+  ),
+  // The machine suit: the mark, a small machine with two eyes.
+  machine: (
+    <>
+      <path className="glyph-line" d="M2.25 4.75h11.5v8.5H2.25z" />
+      <circle className="glyph-fill" cx={5.75} cy={9} r={1.15} />
+      <circle className="glyph-fill" cx={10.25} cy={9} r={1.15} />
+      <path className="glyph-line" d="M8 4.75v-2.5" />
+    </>
+  ),
+  // The studio suit: two heads side by side, the agent team.
+  team: (
+    <>
+      <circle className="glyph-line" cx={5} cy={7.5} r={2.75} />
+      <circle className="glyph-line" cx={11} cy={7.5} r={2.75} />
+      <path className="glyph-line" d="M1.75 14.25c.5-2 1.75-3 3.25-3s2.75 1 3 3c.25-2 1.5-3 3-3s2.75 1 3.25 3" />
+    </>
+  ),
+  // Rarity (docs/specs/final-state.md, Rarity): one gem cut per rarity, a word always beside it.
+  'gem-common': <circle className="glyph-line" cx={8} cy={8} r={4.75} />,
+  'gem-uncommon': <path className="glyph-line" d="M8 2.5l5.5 5.5L8 13.5 2.5 8z" />,
+  'gem-rare': (
+    <>
+      <path className="glyph-line" d="M8 2.5l5.5 5.5L8 13.5 2.5 8z" />
+      <path className="glyph-fill" d="M8 5.5l2.5 2.5L8 10.5 5.5 8z" />
+    </>
+  ),
+  'gem-legendary': <path className="glyph-line" d="M8 1.75l1.85 3.95 4.3.5-3.2 2.95.85 4.25L8 11.25 4.2 13.4l.85-4.25-3.2-2.95 4.3-.5z" />,
+  // The feed: a suggestion arrives as a paper plane; a ship leaves as a box.
+  plane: <path className="glyph-line" d="M1.75 7.5l12.5-5-3.5 11.25-3-4.25zM7.75 9.5l6.5-7" />,
+  box: (
+    <>
+      <path className="glyph-line" d="M2.25 5.25L8 2.5l5.75 2.75v6L8 14l-5.75-2.75z" />
+      <path className="glyph-line" d="M2.25 5.25L8 8l5.75-2.75M8 8v6" />
+    </>
+  ),
+  badge: (
+    <>
+      <circle className="glyph-line" cx={8} cy={6.25} r={4.25} />
+      <path className="glyph-line" d="M5.5 9.75l-1.25 4.5L8 12.75l3.75 1.5-1.25-4.5" />
+    </>
+  ),
+  milestone: <path className="glyph-line" d="M3.25 14.25V1.75M3.25 2.25h9l-2 2.75 2 2.75h-9" />,
+  seed: (
+    <>
+      <path className="glyph-line" d="M8 14.25V8.5" />
+      <path className="glyph-line" d="M8 8.5C8 5 10.5 3 13.75 3c0 3.25-2.5 5.5-5.75 5.5zM8 10.5c0-2.75-2-4.5-5.75-4.5 0 2.75 2 4.5 5.75 4.5z" />
+    </>
+  ),
+  'thumb-up': <path className="glyph-line" d="M8 2.25l5.25 6H10v5.5H6v-5.5H2.75z" />,
+  'thumb-down': <path className="glyph-line" d="M8 13.75l5.25-6H10v-5.5H6v5.5H2.75z" />,
   // The game suit, and Play buttons: a cartridge with a label window and contacts.
   cartridge: (
     <>
@@ -143,9 +218,9 @@ export function Glyph({ name }: { name: GlyphName }) {
  * A suit as a tag: its glyph in a tile of the suit's colour, then its label (DESIGN.md, Suits). The
  * tile is drawn on paper and the work face only; the signal and ink bands reset it by role.
  */
-export function SuitTag({ suit }: { suit: CardCategory }) {
+export function SuitTag({ suit }: { suit: Suit }) {
   return (
-    <span className="tag" data-suit={suit}>
+    <span className="tag" data-suit={suitTile(suit)} data-suit-key={suit}>
       <span className="suit-tile">
         <Glyph name={SUITS[suit].glyph} />
       </span>
@@ -165,11 +240,36 @@ export function StateTag({ face, stamp = false }: { face: Face; stamp?: boolean 
   );
 }
 
-/** The suits: two, from a card's folder. The cartridge appears only here and on Play buttons. */
-export const SUITS: Record<CardCategory, { glyph: GlyphName; label: string }> = {
+/**
+ * The suits (docs/specs/final-state.md, Card suits): five, each a word and a glyph of its own. A card
+ * without a suit takes its folder's (lib/suits.ts). The cartridge appears only on the game suit and on
+ * Play buttons. The two game suits share the game tile and the rest the studio tile; the glyph and
+ * the word tell them apart.
+ */
+export const SUITS: Record<Suit, { glyph: GlyphName; label: string }> = {
   game: { glyph: 'cartridge', label: copy.categories.game },
-  studio: { glyph: 'browser', label: copy.categories.studio },
+  new_game: { glyph: 'spark', label: copy.categories.new_game },
+  studio: { glyph: 'team', label: copy.categories.studio },
+  platform: { glyph: 'browser', label: copy.categories.platform },
+  machine: { glyph: 'machine', label: copy.categories.machine },
 };
+
+/** Each rarity's word and gem (docs/specs/final-state.md, Rarity): drawn on the card's face, never colour alone. */
+export const RARITY_TAGS: Record<Rarity, { glyph: GlyphName; word: string }> = {
+  common: { glyph: 'gem-common', word: copy.rarity.common },
+  uncommon: { glyph: 'gem-uncommon', word: copy.rarity.uncommon },
+  rare: { glyph: 'gem-rare', word: copy.rarity.rare },
+  legendary: { glyph: 'gem-legendary', word: copy.rarity.legendary },
+};
+
+export function RarityTag({ rarity }: { rarity: Rarity }) {
+  return (
+    <span className="tag rarity-tag" data-rarity={rarity}>
+      <Glyph name={RARITY_TAGS[rarity].glyph} />
+      {RARITY_TAGS[rarity].word}
+    </span>
+  );
+}
 
 /** Each face's state word and glyph. A word and a glyph, never colour alone. */
 export const STATE_TAGS: Record<Face, { glyph: GlyphName; word: string }> = {

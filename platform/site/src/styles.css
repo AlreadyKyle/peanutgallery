@@ -55,7 +55,7 @@ main {
 
 /* A text page (ledger, contribute, the legal pages, not found) keeps every block to the reading
    measure. */
-main:not(.wide) > * {
+main:not(.wide, .sheet) > * {
   max-width: var(--measure);
 }
 
@@ -74,10 +74,12 @@ h4 {
 h1 {
   font-size: var(--size-h1);
   line-height: var(--leading-display);
+  letter-spacing: var(--tracking-display);
 }
 
 h2 {
   font-size: var(--size-h2);
+  letter-spacing: var(--tracking-heading);
   margin-bottom: var(--space-3);
 }
 
@@ -285,8 +287,9 @@ main.title-stays > .band:last-child {
   flex-grow: 1;
 }
 
-/* A page that is not wide keeps each band's blocks to the reading measure. */
-main:not(.wide) > .band > * {
+/* A page that is not wide keeps each band's blocks to the reading measure; a sheet lays them out on
+   the index's two columns instead (The sheet, below). */
+main:not(.wide, .sheet, .card-page) > .band > * {
   max-width: var(--measure);
 }
 
@@ -490,12 +493,117 @@ nav a.active {
   }
 }
 
+/* Up to 80rem the links sit closer, so the bar stays one row with Play and Contribute at 1024px. */
+@media (min-width: 64rem) and (max-width: 79.99rem) {
+  .nav-links,
+  .nav-links[data-open='true'] {
+    gap: 0 var(--space-2);
+  }
+}
+
 /* Page heading and sections --------------------------------------------- */
 
 .hero p,
 .section > p,
 .prose {
   max-width: var(--measure-text);
+}
+
+/* The index: every section after the first band opens on a 2px rule in the text colour, the brand's
+   spec-sheet line: it gives each section an edge, so a wide band reads as ruled, never as empty
+   ground. No number sits over it (the board, 18 October 2026): the heading under it is the label. */
+/* Blocks whose heading is not a section's first child take the same rule: how it works' video and
+   steps, home's first game with the explainer (one rule over the pair) and /contribute's two
+   headings. */
+main > .band:not(:first-child) .section:has(> h2:first-child:not(.sr-only)),
+main > .band:not(:first-child) .how-watch,
+main > .band:not(:first-child) .how-step,
+main > .band:not(:first-child) .showcase,
+main > .band:not(:first-child) .split-slider,
+main > .band:not(:first-child) .contribute > h2 {
+  padding-top: var(--space-2);
+  border-top: 2px solid currentColor;
+}
+
+/* A link to a section (/#fund) lands with its rule and number in view, not cut by the window's top. */
+h2[id] {
+  scroll-margin-top: var(--space-5);
+}
+
+/* The sheet (main.sheet: the text pages, the ledger, the FAQ, goals, suggest, seeds, /thanks): from
+   64rem every section after the first band sets its heading in the left five twelfths, held in view
+   while its text scrolls, and its text in the seven beside it, so the text keeps its reading measure
+   and the page still fills the screen. Blocks that are not a section take the full width. */
+@media (min-width: 64rem) {
+  main.sheet > .band:not(:first-child) > .section {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    column-gap: var(--space-5);
+    align-items: start;
+  }
+
+  main.sheet > .band:not(:first-child) > .section > * {
+    grid-column: 2;
+  }
+
+  main.sheet > .band:not(:first-child) > .section > h2:first-child {
+    grid-column: 1;
+    grid-row: 1 / span 60;
+    position: sticky;
+    top: var(--space-3);
+    margin: 0;
+  }
+
+  /* The section's 2px rule is its first line: a list that opens the text column drops its own top
+     hairline, so the two never stack. */
+  main.sheet > .band:not(:first-child) > .section > h2:first-child + .rows > li:first-child,
+  main.sheet > .band:not(:first-child) > .section > h2:first-child + .spec-rows > div:first-child,
+  main.sheet > .band:not(:first-child) > .section > h2:first-child + .facts > div:first-child,
+main.sheet > .band:not(:first-child) > .section > h2:first-child + .stats > :first-child,
+main.sheet > .band:not(:first-child) > .section > h2:first-child + .faq-item {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  /* The text column is the measure itself (about 80 characters at 1440px), so its paragraphs fill it. */
+  main.sheet > .band:not(:first-child) > .section p,
+  main.sheet > .band:not(:first-child) > .section .faq-item {
+    max-width: none;
+  }
+}
+
+/* Until 80rem the sheet's text column is too narrow for a time rail beside each row, so the time sits
+   over its row, as on a phone; the heading's column is the page's rail. */
+@media (min-width: 64rem) and (max-width: 79.99rem) {
+  main.sheet .rows.rail li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A card's own page from 64rem: the face in the left five twelfths, held in view, and the facts, the
+   supporters and the agents' log in the seven beside it. */
+@media (min-width: 64rem) {
+  main.card-page > .band:last-child:has(> .card-face-column) {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    column-gap: var(--space-5);
+    align-items: start;
+  }
+
+  main.card-page > .band:last-child > * {
+    grid-column: 2;
+  }
+
+  main.card-page > .band:last-child > .card-face-column {
+    grid-column: 1;
+    grid-row: 1 / span 12;
+    position: sticky;
+    top: var(--space-3);
+  }
+
+  main.card-page > .band:last-child > .card-face-column + * {
+    margin-top: 0;
+  }
 }
 
 /* A link on its own line: a 44px target that takes one line of layout. */
@@ -513,6 +621,61 @@ a.target {
 
 .hero h1 {
   margin-bottom: var(--space-3);
+}
+
+/* A page's plate from 64rem: the heading in the left seven twelfths and the lede, with any line under
+   it, in the right five, both from the plate's top, so a line that arrives with the data never moves
+   the heading. The plate reads as one row, never a heading beside an empty half. */
+@media (min-width: 64rem) {
+  .hero:not(.hero-home) {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    column-gap: var(--space-5);
+    align-items: start;
+  }
+
+  .hero:not(.hero-home) > * {
+    grid-column: 2;
+  }
+
+  .hero:not(.hero-home) > h1 {
+    grid-column: 1;
+    grid-row: 1 / span 6;
+    margin-bottom: 0;
+  }
+
+  /* The lede's first line sits on the heading's cap height, not above it. */
+  .hero:not(.hero-home) > h1 + * {
+    padding-top: var(--space-1);
+  }
+
+  .hero:not(.hero-home) > h1 + * {
+    margin-top: 0;
+  }
+
+  /* A card's title runs long and its face sits under it in two columns, so its plate stays one
+     column: the title, then its lines. */
+  main.card-page .hero {
+    display: block;
+  }
+
+  main.card-page .hero > h1 {
+    margin-bottom: var(--space-3);
+  }
+}
+
+/* A card's plate is short: its title at the section size (a card title runs long) and the plate's
+   foot closer, so the face and its Fund this card are in view when the page opens. */
+main.card-page .hero > h1 {
+  font-size: var(--size-h2);
+}
+
+main.card-page > .band:first-child {
+  padding-block: var(--space-5) var(--space-4);
+}
+
+main.card-page > .band:nth-child(2) {
+  padding-top: var(--space-5);
 }
 
 .lede {
@@ -752,17 +915,19 @@ button.link:hover:not(:disabled) {
   border-style: dashed;
 }
 
-/* Picked: a 6px signal ribbon inside the top edge. Paused: a 6px ink hatch in the same slot (the two
-   never meet). Both are backgrounds, so forced colours drop them; the word and glyph carry the state. */
+/* Picked: a 6px signal tab under the top edge at its left, two fifths of the card wide, so it starts
+   where the corner's curve ends and stops well clear of the rarity tab on the right. Paused: a 6px
+   ink hatch in the same slot (the two never meet). Both are backgrounds, so forced colours drop
+   them; the word and glyph carry the state. */
 .card[data-face='picked']::before,
 .card[data-face='paused']::before {
   content: '';
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
+  left: var(--radius-card);
+  width: 40%;
   height: 6px;
-  border-radius: calc(var(--radius-card) - 2px) calc(var(--radius-card) - 2px) 0 0;
+  border-radius: 0 0 3px 3px;
 }
 
 .card[data-face='picked']::before {
@@ -848,15 +1013,23 @@ button.link:hover:not(:disabled) {
     grid-row: 3;
   }
 
+  /* The bottom block fills its track and pins its button to the foot, so a card with an extra
+     line above its button (what is left to fund) still lines its button up with the row's. */
   .card-grid > .card > .card-bottom {
     grid-row: 4;
     margin-top: 0;
+    display: flex;
+    flex-direction: column;
   }
 
-  /* The next card in line (decision 73) spans the same four rows as the faces beside it. */
-  .card-grid > .fund-next {
-    grid-row: span 4;
+  .card-grid > .card > .card-bottom > .button {
+    margin-top: auto;
   }
+
+  .card-grid > .card > .card-bottom > :has(+ .button) {
+    margin-bottom: var(--space-2);
+  }
+
 }
 
 .card-bottom > .button {
@@ -904,7 +1077,7 @@ button.link:hover:not(:disabled) {
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 0 var(--space-2);
-  padding: 0.375rem var(--space-1);
+  padding: 0.375rem 0;
   border-bottom: 1px solid var(--hairline);
 }
 
@@ -988,9 +1161,38 @@ button.link:hover:not(:disabled) {
   max-width: none;
 }
 
-.contribute > p,
-.contribute > h2 {
+.contribute > p {
   max-width: var(--measure);
+}
+
+/* From 64rem the split and the next card in line share the first row, the split on the left and the
+   panel, with its agreement under it, on the right; the cards and the Machine card take the width. */
+@media (min-width: 64rem) {
+  .contribute {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: var(--space-5);
+    align-items: start;
+  }
+
+  .contribute > * {
+    grid-column: 1 / -1;
+  }
+
+  .contribute > .split-slider {
+    grid-column: 1;
+    grid-row: 1;
+    margin-bottom: 0;
+  }
+
+  .contribute > .contribute-next {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .contribute > .contribute-next + h2 {
+    margin-top: var(--space-5);
+  }
 }
 
 /* The split slider (docs/specs/split-slider.md): a native range input at full touch height, the
@@ -1083,6 +1285,29 @@ button.link:hover:not(:disabled) {
 
 .choice-primary .choice-title {
   font-size: var(--size-h2);
+  text-wrap: balance;
+}
+
+/* The panel is one link, so it shows the press it offers: a paper button under its words, a label
+   and an arrow, never a bare disc a reader might take for a carousel control. It is drawn, not
+   written: its alternative text is empty, so the link's name and text stay its title and line. */
+.choice-primary::after {
+  content: 'Choose an amount \2192' / '';
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  min-height: var(--target);
+  margin-top: var(--space-3);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--size-body);
+  font-weight: var(--weight-strong);
+}
+
+.choice-primary:hover::after {
+  background: var(--paper-hover);
 }
 
 .choice-primary .choice-body {
@@ -1120,7 +1345,9 @@ button.link:hover:not(:disabled) {
 .game-shot {
   display: block;
   width: 100%;
-  max-width: 18rem;
+  /* The box art is 3:4, taller than the still it replaced; this width keeps the tile beside its text
+     within the layout audit's balance (scripts/layout-audit.mjs). */
+  max-width: 16.5rem;
   height: auto;
   border: 2px solid var(--ink);
   border-radius: var(--radius-card);
@@ -1164,9 +1391,24 @@ button.link:hover:not(:disabled) {
   --focus-colour: var(--primary-fg);
 }
 
+/* Beside the Machine card the tile takes the row's height: its lines stay at the top and its
+   Contribute button sits at the foot of the row, so no hollow pools under it. */
+.fund-empty,
 .fund-next {
   align-self: stretch;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.fund-empty > .button,
+.fund-next > .button {
+  margin-top: auto;
+}
+
+/* Paired with the Machine card, the tile's title is a card title, the same size as its neighbour's. */
+.fund-ways:has(> .machine-card) .fund-empty-title {
+  font-size: var(--size-lead);
 }
 
 .fund-empty > p,
@@ -1214,7 +1456,7 @@ button.link:hover:not(:disabled) {
   display: flex;
   flex-wrap: wrap;
   gap: 0 var(--space-2);
-  padding: var(--space-2) var(--space-1);
+  padding: var(--space-2) 0;
   border-top: 1px solid var(--hairline);
   font-size: var(--size-body);
 }
@@ -1393,17 +1635,11 @@ button.link:hover:not(:disabled) {
   max-width: var(--measure);
   margin: 0;
   padding: 0;
-  counter-reset: how-step;
 }
 
 .how-step {
   display: grid;
   gap: var(--space-2);
-  counter-increment: how-step;
-}
-
-.how-text h2::before {
-  content: counter(how-step) '. ';
 }
 
 .how-text p {
@@ -1552,19 +1788,19 @@ button.link:hover:not(:disabled) {
   }
 }
 
-/* The pill keeps one size while the home hero's frame shrinks: from 64rem the hero has two columns
-   and the frame is 460px wide at 1024px, reaching 544px at 1200px, and below 72rem the labelled pill
-   reaches the poster's own lines ("Watch AI agents build it."). There it becomes the 44px play mark
-   alone, and the label stays for a screen reader. e2e/explainer-poster.spec.ts reads the poster's
+/* The pill keeps one size while home's frame shrinks: from 64rem the showcase shares its row with the
+   first game, the frame is under 720px wide, and the labelled pill reaches the poster's own lines
+   ("Watch AI agents build it."). There it becomes the 44px play mark alone, and the label stays for a
+   screen reader. e2e/explainer-poster.spec.ts reads the poster's
    pixels under the pill at every width, on both pages that draw the video. */
-@media (min-width: 64rem) and (max-width: 71.99rem) {
-  .hero-with-video .explainer-play {
+@media (min-width: 64rem) {
+  .showcase .explainer-play {
     justify-content: center;
     width: var(--target);
     padding: 0;
   }
 
-  .hero-with-video .explainer-play-label {
+  .showcase .explainer-play-label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -1572,15 +1808,6 @@ button.link:hover:not(:disabled) {
     overflow: hidden;
     clip: rect(0 0 0 0);
     white-space: nowrap;
-  }
-}
-
-/* From 72rem the hero's frame stops growing at 544px and the labelled pill came back within a few
-   pixels of the poster's lines. Tucked a step further into its corner, it keeps a clear gap. */
-@media (min-width: 72rem) {
-  .hero-with-video .explainer-play {
-    left: var(--space-2);
-    bottom: var(--space-2);
   }
 }
 
@@ -1720,7 +1947,8 @@ button.link:hover:not(:disabled) {
 }
 
 /* On an ink band an avatar sits on a paper disc and draws unchanged. */
-main > .band:nth-child(2n + 3) .avatar {
+main > .band:nth-child(2n + 3) .avatar,
+main > .band:first-child .pipe .avatar {
   border-radius: 50%;
   background: var(--paper);
 }
@@ -1762,18 +1990,20 @@ main > .band:nth-child(2n + 3) .avatar {
   fill: var(--line);
 }
 
-/* Footer ----------------------------------------------------------------- */
+/* Footer -----------------------------------------------------------------
+   A spec sheet (docs/specs/brand.md, Footer): the mark and the studio's line, then two labelled
+   columns of links, one link to a line, then the credit under a hairline. Five columns from 64rem
+   (the brand block takes two), the three link columns side by side from 30rem, one under it. */
 
 .site-footer {
   border-top: 1px solid var(--hairline);
 }
 
 .footer-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-3);
-  padding-block: var(--space-3);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4) var(--space-3);
+  padding-block: var(--space-5) var(--space-3);
   color: var(--text-muted);
   font-size: var(--size-small);
 }
@@ -1782,10 +2012,49 @@ main > .band:nth-child(2n + 3) .avatar {
   margin: 0;
 }
 
-.footer-links {
+.footer-brand {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+}
+
+.footer-brand > p:last-child {
+  max-width: 22rem;
+}
+
+/* The footer's name is the wordmark again: uppercase and bold, like the top bar's. */
+.footer-name {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--size-body);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+/* The name, its mark and the column labels take the footer's text colour, not its muted tone. */
+.site-footer .footer-name,
+.site-footer .footer-label {
+  color: var(--paper);
+}
+
+.page:has(> main > .band:last-child:nth-child(odd)) > .site-footer .footer-name,
+.page:has(> main > .band:last-child:nth-child(odd)) > .site-footer .footer-label {
+  color: var(--ink);
+}
+
+/* A column's label: the sans at 600, in the footer's text colour (above), over its muted links. */
+.footer-label {
+  margin-bottom: var(--space-1);
+  font-weight: var(--weight-strong);
+}
+
+.footer-links {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .footer-row a {
@@ -1794,18 +2063,29 @@ main > .band:nth-child(2n + 3) .avatar {
   min-height: var(--target);
 }
 
-/* Below 30rem the footer's links no longer fit on one line, and a wrapped row left the last one alone
-   on a line of its own (Discord at 375px, 26 Sep 2026). They sit in equal columns instead, one link to
-   a cell, as wide as the footer: three from 344px of footer (two full rows of the six), two below
-   (three full rows at 320px), and a part-empty last row when there are fewer. A column is at least
-   6.5rem, wider than the longest link at any text size, so no label breaks and 200% text stacks them
-   in one column rather than scrolling sideways. */
-@media (max-width: 29.99rem) {
-  .footer-links {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
-    gap: var(--space-1);
-    flex-basis: 100%;
+.footer-row > .credit {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--hairline);
+}
+
+@media (min-width: 30rem) {
+  .footer-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .footer-row > .footer-brand,
+  .footer-row > .credit {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 64rem) {
+  .footer-row {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .footer-row > .footer-brand {
+    grid-column: span 2;
   }
 }
 
@@ -2110,28 +2390,12 @@ input[type='radio'] {
   margin: var(--space-2) 0;
   padding: 0;
   list-style: none;
-  counter-reset: duty;
 }
 
+/* Each duty on a hairline, no number over it (the board, 18 October 2026). */
 .who-duties li {
-  position: relative;
-  padding-left: var(--space-4);
-  counter-increment: duty;
-}
-
-.who-duties li::before {
-  content: counter(duty);
-  position: absolute;
-  top: 0;
-  left: 0;
-  display: grid;
-  place-items: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  font-size: var(--size-small);
-  font-weight: var(--weight-bold);
+  border-top: 1px solid var(--hairline);
+  padding-top: var(--space-1);
 }
 
 .who-outro {
@@ -2200,40 +2464,238 @@ input[type='radio'] {
 
 /* Home ---------------------------------------------------------------------- */
 
-/* Play free and the How it works link, side by side, clear of the lede above and the status line
-   below. */
-/* Home's hero holds the pitch, the studio's state and the explainer video. Below 64rem they stack in
-   that order. From 64rem the pitch and the video sit side by side, where the pitch alone left the
-   plate's right half empty, and the state runs under both, so the two columns balance. */
-.hero-with-video {
+/* Home's plate is one picture (docs/specs/brand.md, Home; the board, 18 October 2026): the pitch, its
+   ask, the actions and the studio's state on the left; the live studio on the right, the room whole
+   and in view when the page opens; and the pipe under both, its label under the pitch and its rows
+   under the room. Below 64rem they stack in that order. One headline: the ask is the lede, set at
+   the lead size under the pitch, never a second headline. */
+.hero-home {
   display: grid;
-  gap: var(--space-4);
+  align-content: start;
 }
 
-.hero.hero-with-video .status-line {
-  margin-top: 0;
+.hero-home h1 {
+  margin: 0;
+  font-size: var(--size-hero);
+  text-wrap: balance;
 }
 
+.hero-home .lede {
+  margin: var(--space-2) 0 0;
+  font-size: var(--size-lead);
+  line-height: var(--leading-title);
+}
+
+.hero-home .hero-actions {
+  margin-top: var(--space-3);
+}
+
+/* The status line belongs to the actions: close under them, a step before the pipe. */
+.hero-home .hero-status .status-line {
+  margin-top: var(--space-1);
+}
+
+/* The live studio on the plate: a paper screen in the dark band, its ground and roles paper's, so the
+   room, its era label and the role cards draw exactly as they do on paper. */
+.home > .band:first-child > .live-studio {
+  margin-top: var(--space-4);
+}
+
+/* Selected through the hero, not the band's position, so the plate's own rules keep their one amber. */
+.hero-home ~ .live-studio .studio-stage {
+  border-color: var(--paper);
+  color: var(--ink);
+  --text-muted: var(--muted);
+  --hairline: var(--line);
+  --focus-colour: var(--signal);
+  --primary-bg: var(--signal);
+  --primary-fg: var(--paper);
+  --primary-hover: var(--signal-deep);
+  --primary-press: var(--signal-press);
+  --outline-bg: var(--paper);
+  --outline-fg: var(--ink);
+  --outline-hover: var(--paper-hover);
+  --outline-press: var(--line);
+  --coin-hover: var(--coin-down);
+  --suit-tile-game: var(--suit-game);
+  --suit-tile-studio: var(--suit-studio);
+  --live-mark: var(--live);
+}
+
+/* The live studio's heading on the plate is the room's caption, not a second headline: the lead size
+   and, on the same line, how to read the room. */
+.live-studio-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem var(--space-2);
+}
+
+.home .live-studio-head > h2 {
+  margin: 0;
+  font-size: var(--size-lead);
+  letter-spacing: 0;
+}
+
+.home .live-studio-head > p {
+  margin: 0;
+}
+
+.home .live-studio-head > p:not(.twitch) {
+  color: var(--text-muted);
+  font-size: var(--size-small);
+}
+
+.home .live-studio-grid {
+  margin-top: var(--space-2);
+}
+
+/* From 64rem the plate is two columns, five parts to seven: on the left the pitch, hung from the
+   room's caption line, and the pipe, its foot on the room's foot; on the right the room. Both columns
+   are live and end on one line, so the plate leaves no hollow beside the room. */
 @media (min-width: 64rem) {
-  .hero-with-video {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas:
-      'text video'
-      'status status';
-    align-items: center;
+  .home > .band:first-child {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    grid-template-rows: auto 1fr auto;
+    align-content: start;
     column-gap: var(--space-5);
   }
 
-  .hero-with-video > .hero-text {
-    grid-area: text;
+  .home > .band:first-child > *,
+  .home .live-studio-grid {
+    margin: 0;
   }
 
-  .hero-with-video > .explainer {
-    grid-area: video;
+  .home .live-studio,
+  .home .live-studio-grid {
+    display: contents;
   }
 
-  .hero-with-video > .hero-status {
-    grid-area: status;
+  .hero-home {
+    grid-column: 1;
+    grid-row: 1 / 3;
+  }
+
+  .home .live-studio-head {
+    grid-column: 2;
+    grid-row: 1;
+    margin-bottom: var(--space-2);
+  }
+
+  /* The room's paper screen fills its rows, so its foot is the pipe's foot whichever column is taller;
+     the drawing sits in the middle of it. */
+  .home .live-studio-grid > .studio {
+    display: flex;
+    flex-direction: column;
+    grid-column: 2;
+    grid-row: 2 / 4;
+  }
+
+  .home .studio-stage {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .home .live-studio-grid > .pipe {
+    grid-column: 1;
+    grid-row: 3;
+    align-self: end;
+    margin-top: var(--space-2);
+    border-inline-start: 0;
+    padding: 0;
+  }
+
+  /* Beside the room the pipe is a caption line and two compact rows: the kind on the left, the line
+     and its who and when beside it. */
+  .home .pipe {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: var(--space-2);
+  }
+
+  .home .pipe-intro {
+    margin: 0;
+  }
+
+  .home .pipe > :not(.pipe-title, .pipe-intro) {
+    flex-basis: 100%;
+  }
+
+  .home .pipe-rows {
+    margin-top: var(--space-2);
+  }
+
+  .home .pipe-row {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    column-gap: var(--space-2);
+    padding-block: 0.5em;
+  }
+
+  .home .pipe-kind {
+    grid-row: 1 / 3;
+    align-self: start;
+  }
+
+  .home .pipe-text {
+    margin: 0;
+  }
+
+  .home .pipe-meta {
+    grid-column: 2;
+    margin-top: 0.125rem;
+  }
+}
+
+/* Up to 80rem the pitch's column is too narrow for the pipe under it as well: the pipe runs across
+   the plate's foot instead, its two rows side by side, and the room's screen ends on the pitch's foot. */
+@media (min-width: 64rem) and (max-width: 79.99rem) {
+  .home .live-studio-grid > .studio {
+    grid-row: 2 / 3;
+  }
+
+  .home .live-studio-grid > .pipe {
+    grid-column: 1 / -1;
+    margin-top: var(--space-4);
+  }
+
+  .home .pipe-rows {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-5);
+  }
+
+  .home .pipe-row {
+    border-bottom: 1px solid var(--hairline);
+  }
+}
+
+/* The plate opens closer under the top bar on home and closes closer under the room, so the room is in
+   view when the page opens and the next band's rule and heading show under it. */
+.home > .band:first-child {
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-4);
+}
+
+/* The first game and the explainer, side by side from 64rem (the video alone takes the row). */
+.showcase {
+  display: grid;
+  gap: var(--band-pad) var(--space-5);
+  align-items: center;
+}
+
+@media (min-width: 64rem) {
+  .showcase:has(> .game-tile) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .showcase > .game-tile {
+    grid-template-columns: minmax(0, 13rem) minmax(0, 1fr);
+    column-gap: var(--space-4);
   }
 }
 
@@ -2256,8 +2718,50 @@ input[type='radio'] {
 }
 
 .money-split {
-  max-width: var(--measure);
+  max-width: var(--measure-text);
   margin-top: var(--space-2);
+}
+
+/* Where the money goes: the pool and the split, and beside them from 64rem the latest actions. */
+.money-grid {
+  display: grid;
+  gap: var(--space-4) var(--space-5);
+  align-items: start;
+}
+
+.money-actions > .rows-heading:first-child {
+  margin-top: 0;
+}
+
+/* The pool and the split stay in view beside the actions, like the sheet's heading. */
+@media (min-width: 64rem) {
+  .money-grid {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+
+  .money-summary {
+    position: sticky;
+    top: var(--space-3);
+  }
+}
+
+/* The other ways to fund, under the open cards: the next card in line and the Machine card, two
+   equal halves from 48rem, so the row is filled however many cards are open. */
+.fund-ways {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.fund-ways > .machine-card {
+  max-width: none;
+  margin-top: 0;
+}
+
+@media (min-width: 48rem) {
+  .fund-ways:has(> :nth-child(2)) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
 }
 
 /* Two blocks side by side from 64rem (home's Shipped and Planned next). One alone takes the row, so
@@ -2314,6 +2818,8 @@ input[type='radio'] {
   border: 2px solid var(--ink);
   border-radius: 50%;
   background: var(--paper);
+  /* The index's numerals: the mono face, two digits (01, 02, ...), on every numbered thing. */
+  font-family: var(--font-mono);
   font-size: var(--size-small);
   font-weight: var(--weight-bold);
   font-variant-numeric: tabular-nums;
@@ -2393,6 +2899,26 @@ input[type='radio'] {
   margin: var(--space-1) 0 0;
 }
 
+/* What an empty or unloaded list says instead (EmptyState.tsx): the empty lane's dashed tile, the
+   reason at the body size, then what to do next. */
+.empty-state {
+  padding: var(--space-3);
+  border: 2px dashed currentColor;
+  border-radius: var(--radius-card);
+}
+
+.empty-state > p {
+  margin: 0;
+}
+
+.empty-state > p + p {
+  margin-top: var(--space-1);
+}
+
+.empty-state-line {
+  font-weight: var(--weight-strong);
+}
+
 /* What an empty lane says instead: a dashed tile, never a card (it carries no card's data). */
 .flow-empty {
   padding: var(--space-2);
@@ -2447,6 +2973,14 @@ input[type='radio'] {
 
 @media (max-width: 47.99rem) {
   .fund-grid:not([data-all]) > li:nth-child(n + 4) {
+    display: none;
+  }
+}
+
+/* In the two-column grid (48 to 72rem) a third card would sit alone beside an empty cell, so home
+   shows two whenever the link to the rest follows the grid; the rest are one press away. */
+@media (min-width: 48rem) and (max-width: 71.99rem) {
+  .fund-grid:not([data-all]):has(~ .more) > li:nth-child(n + 3) {
     display: none;
   }
 }
@@ -2657,7 +3191,7 @@ input[type='radio'] {
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 0 var(--space-2);
-  padding: 0.375rem var(--space-1);
+  padding: 0.375rem 0;
   border-bottom: 1px solid var(--hairline);
 }
 
@@ -2737,7 +3271,48 @@ ol.timeline {
 }
 
 /* /thanks's reward (docs/specs/supporter-loop.md): the card the money went to first, at the reading
-   measure, with the supporter's number on its face; its Share button drawn as a primary button. */
+   measure, with the supporter's number on its face; its Share button drawn as a primary button. Its
+   heading is for screen readers only, so the block opens the band without a rule or a number. From
+   64rem the face, its share line and Share take the sheet's left column and what happens next the
+   right, so the left never stands empty beside it. */
+@media (min-width: 64rem) {
+  /* The face's top sits level with What happens next, and its share line with the ship note, so
+     the two columns read across. */
+  main.sheet > .band:not(:first-child) > .thanks-reward > .thanks-face {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    align-self: start;
+    margin-top: 0;
+  }
+
+  main.sheet > .band:not(:first-child) > .thanks-reward > .thanks-face + p {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  main.sheet > .band:not(:first-child) > .thanks-reward > .share-card {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+  main.sheet > .band:not(:first-child) > .thanks-reward > #next {
+    grid-row: 1;
+    margin-top: 0;
+  }
+
+  main.sheet > .band:not(:first-child) > .thanks-reward > .thanks-next {
+    grid-row: 2;
+  }
+
+  main.sheet > .band:not(:first-child) > .thanks-reward > [data-note='ship-email'] {
+    grid-row: 3;
+  }
+}
+
+.thanks-face + p {
+  margin-top: var(--space-2);
+}
+
 .thanks-face {
   max-width: 24rem;
   gap: var(--space-1);
@@ -2775,7 +3350,14 @@ ol.timeline {
   margin-top: var(--space-1);
 }
 
+/* The step the card is on: a small stamp after its line, not a loose word. */
 .thanks-now {
+  display: inline-block;
+  margin-left: var(--space-1);
+  padding: 0 0.375rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius);
+  font-size: var(--size-small);
   font-weight: var(--weight-bold);
 }
 
@@ -2783,4 +3365,1426 @@ ol.timeline {
 .reached .funding-bar {
   margin-top: var(--space-1);
   max-width: 20rem;
+}
+
+/* The final state (docs/specs/final-state.md) ----------------------------------------------------
+   The live studio and the pipe, the suits and rarity on the card, the Machine card, goals, the
+   blueprints, suggestions, seeds, profiles, the FAQ and the broadcast overlay. */
+
+/* The live studio: the room, and the pipe beside it from 64rem. On a phone the room comes first. */
+.live-studio > p {
+  max-width: var(--measure-text);
+}
+
+/* The Twitch badge (LiveStudio.tsx, only with VITE_TWITCH_CHANNEL): the Live stamp as a link. */
+.live-studio > p.twitch {
+  margin-block: var(--space-1) var(--space-2);
+}
+
+.twitch .tag-stamp {
+  display: inline-flex;
+  min-height: var(--target);
+  margin-block: 0;
+  font-weight: var(--weight-strong);
+  text-decoration: none;
+}
+
+.live-studio-grid {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+@media (min-width: 64rem) {
+  .live-studio-grid {
+    grid-template-columns: minmax(0, 1fr) 20rem;
+  }
+
+  /* Beside the room the pipe is a ruled column as tall as the room and its facts, so the row never
+     leaves a hollow under a short feed (DESIGN.md, No dead space). */
+  .live-studio-grid > .pipe {
+    border-inline-start: 1px solid var(--hairline);
+    padding-inline-start: var(--space-3);
+  }
+}
+
+/* The drawing's own box: role cards are placed in it, in the room's units. */
+.studio-frame {
+  position: relative;
+}
+
+.studio-stage {
+  position: relative;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-card);
+  background: var(--paper);
+  padding: var(--space-2);
+}
+
+.room {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.room-fill,
+.room-side,
+.room-shade,
+.room-wall,
+.room-wall-lit,
+.room-window,
+.room-screen,
+.room-hole,
+.room-leaf,
+.room-edge {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.room-fill,
+.room-wall-lit,
+.room-leaf {
+  fill: var(--paper);
+}
+
+.room-side,
+.room-wall,
+.room-window {
+  fill: var(--paper-hover);
+}
+
+.room-shade {
+  fill: var(--line);
+}
+
+.room-screen,
+.room-hole {
+  fill: var(--ink);
+}
+
+.room-edge,
+.room-strong,
+.room-cap {
+  stroke-width: 2;
+}
+
+.room-edge {
+  fill: none;
+}
+
+.room-grid {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.room-line,
+.room-thin {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.room-thin {
+  stroke-width: 1.25;
+}
+
+.room-hatch {
+  fill: var(--paper-hover);
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The rug: a plain paper fill with a woven border, solid (a dashed line on this floor marks a zone). */
+.room-rug {
+  fill: var(--paper-hover);
+  stroke: var(--ink);
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
+}
+
+.room-rug-border {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The blueprint (/studio/history): paper lines on the blueprint ground, nothing filled. */
+.room[data-variant='blueprint'] :is(.room-fill, .room-side, .room-shade, .room-wall, .room-wall-lit, .room-window, .room-leaf, .room-hatch, .room-rug) {
+  fill: var(--blueprint);
+  stroke: var(--paper);
+}
+
+.room[data-variant='blueprint'] :is(.room-screen, .room-hole) {
+  fill: var(--blueprint-line);
+  stroke: var(--paper);
+}
+
+.room[data-variant='blueprint'] :is(.room-line, .room-thin, .room-edge) {
+  stroke: var(--paper);
+}
+
+.room[data-variant='blueprint'] :is(.room-grid, .room-rug-border) {
+  stroke: var(--blueprint-line);
+}
+
+/* The agents: the team's own avatars, drawn at the room's line weight. */
+.studio-agent {
+  cursor: pointer;
+}
+
+/* Keyboard focus keeps the site's ring (3px, --focus-colour) around the agent's box; the drawn ring
+   below marks the agent whose card is open and the one under the pointer. */
+
+.studio-agent .avatar-body,
+.studio-agent .avatar-line,
+.studio-agent .avatar-eye {
+  vector-effect: non-scaling-stroke;
+  stroke-width: 1.75;
+}
+
+.studio-agent .avatar-thin {
+  stroke-width: 1.25;
+}
+
+.studio-agent .avatar-ground {
+  fill: var(--line);
+}
+
+.agent-ring {
+  fill: none;
+  stroke: var(--focus-colour);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+  opacity: 0;
+}
+
+.studio-agent[aria-expanded='true'] .agent-ring,
+.studio-agent:hover .agent-ring {
+  opacity: 1;
+}
+
+.mark-bubble {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.mark-dot {
+  fill: var(--ink);
+}
+
+.mark-ink,
+.sprite-line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.sprite-paper {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* An agent's mark says what it is doing where it does it: none on a walk, and the book only in the
+   lounge. The pose comes from the frame loop (StudioRoom.tsx); still, every agent rests. */
+.studio-agent[data-pose='walk'] .agent-mark,
+.studio-agent[data-pose='away'][data-activity='reading'] .agent-mark {
+  opacity: 0;
+}
+
+/* The role card an agent shows on hover, focus or tap: written facts first, the card an addition. */
+.role-card {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  gap: var(--space-1);
+  align-items: flex-start;
+  width: min(17rem, 80%);
+  padding: 0.75em;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--size-small);
+  line-height: var(--leading-title);
+  transform: translate(-50%, -100%);
+  pointer-events: auto;
+}
+
+.role-card[data-below='true'] {
+  transform: translate(-50%, 3.5rem);
+}
+
+.role-card p {
+  margin: 0;
+}
+
+.role-card-name {
+  font-weight: var(--weight-bold);
+}
+
+.role-card-title {
+  color: var(--text-muted);
+}
+
+.role-card-doing {
+  margin-block: 0.25rem !important;
+}
+
+.studio-era {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  margin: 0;
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+}
+
+.studio-era-word {
+  color: var(--text-muted);
+}
+
+/* The written facts under the room are for screen readers and the keyboard: hidden until focus is in
+   them, then drawn as rows (the board, 17 October 2026: the role cards carry them for the eye). */
+.studio-facts:not(:focus-within) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.studio-facts {
+  margin-top: var(--space-2);
+  font-size: var(--size-small);
+}
+
+.studio-facts li {
+  padding-block: var(--space-1);
+  border-top: 1px solid var(--hairline);
+}
+
+.studio-fact-name {
+  font-weight: var(--weight-strong);
+  margin-inline-end: 0.5em;
+}
+
+.studio-fact-role {
+  color: var(--text-muted);
+}
+
+.studio-fact-doing {
+  display: block;
+}
+
+/* The pipe: a row per event, its kind as a glyph and a word, who, rarity and when under it. */
+.pipe-title {
+  font-size: var(--size-lead);
+}
+
+.pipe-intro {
+  margin-top: 0.25rem;
+  color: var(--text-muted);
+  font-size: var(--size-small);
+}
+
+.pipe-rows {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pipe-row {
+  padding-block: 0.75em;
+  border-top: 1px solid var(--hairline);
+}
+
+.pipe-row:last-child {
+  border-bottom: 1px solid var(--hairline);
+}
+
+.pipe-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+}
+
+.pipe-text {
+  margin: 0.25rem 0 0;
+  line-height: var(--leading-title);
+}
+
+.pipe-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75em;
+  margin: 0.375rem 0 0;
+  color: var(--text-muted);
+  font-size: var(--size-small);
+}
+
+.pipe-older,
+.list-more {
+  margin-top: var(--space-2);
+}
+
+/* Nothing in the pipe yet: one quiet slot where the rows will land, not a blank column. */
+.pipe-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  border: 1px dashed var(--hairline);
+  border-radius: var(--radius);
+  padding: var(--space-2);
+  color: var(--text-muted);
+}
+
+.person-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: inherit;
+}
+
+/* A player's frame: a ring whose pattern names its tier or rarity, written beside it where it matters. */
+.person-frame {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+.person-frame .avatar {
+  display: block;
+}
+
+.person-frame[data-frame='none'] {
+  border-color: var(--line);
+}
+
+.person-frame[data-frame='regular'],
+.person-frame[data-frame='uncommon'] {
+  border-width: 4px;
+  border-style: double;
+}
+
+.person-frame[data-frame='backer'],
+.person-frame[data-frame='rare'] {
+  border-width: 3px;
+  border-style: dashed;
+}
+
+.person-frame[data-frame='patron'],
+.person-frame[data-frame='producer'] {
+  border-width: 3px;
+  outline: 1px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.person-frame[data-frame='executive'],
+.person-frame[data-frame='legend'],
+.person-frame[data-frame='legendary'] {
+  border-width: 6px;
+  border-style: double;
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+/* Rarity on the card: a word on a tab over the top edge, and a pattern inside the edge. Common keeps
+   the plain edge; uncommon adds an inner rule, rare a double rule, legendary a hatched frame with a
+   sheen that sweeps it on hover. Never colour alone: the word is always there. */
+.rarity-notch {
+  position: absolute;
+  top: -0.85rem;
+  right: var(--space-3);
+  z-index: 1;
+  padding: 0.0625rem 0.5em;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+  line-height: var(--leading-title);
+}
+
+.rarity-tag {
+  white-space: nowrap;
+}
+
+.rarity-edge {
+  position: absolute;
+  inset: 5px;
+  border-radius: calc(var(--radius-card) - 5px);
+  pointer-events: none;
+}
+
+[data-rarity='uncommon'] > .rarity-edge {
+  border: 1px solid var(--ink);
+}
+
+[data-rarity='rare'] > .rarity-edge {
+  border: 4px double var(--ink);
+}
+
+[data-rarity='legendary'] > .rarity-edge {
+  overflow: hidden;
+  padding: 5px;
+  background: repeating-linear-gradient(-45deg, var(--ink) 0 1.5px, transparent 1.5px 5px);
+  -webkit-mask: linear-gradient(var(--ink) 0 0) content-box, linear-gradient(var(--ink) 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(var(--ink) 0 0) content-box exclude, linear-gradient(var(--ink) 0 0);
+}
+
+[data-rarity='legendary'] > .rarity-edge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, var(--paper) 50%, transparent 65%);
+  transform: translateX(-120%);
+}
+
+.card[data-rarity] .card-index {
+  padding-top: 0.25rem;
+}
+
+/* The Machine card: always open, drawn like a card, with its preset amounts as chips. */
+.machine-card {
+  position: relative;
+  max-width: var(--measure);
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-card);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.machine-card .card-index {
+  margin-bottom: var(--space-1);
+}
+
+.machine-body {
+  margin: var(--space-1) 0 var(--space-2);
+}
+
+.machine-amounts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
+/* The presets are choices, not actions: outlined like the filter chips, so the coin Fund button is
+   the one filled control. Pressed takes the 3px edge inside the same box, so no chip changes size. */
+.machine-amounts .amount,
+.machine-amounts .amount:hover:not(:disabled) {
+  min-width: 0;
+  white-space: nowrap;
+  min-height: var(--target);
+  padding: 0 0.25em;
+  justify-content: center;
+  border: 1px solid var(--field);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.machine-amounts .amount:hover:not(:disabled) {
+  background: var(--paper-hover);
+}
+
+.machine-amounts .amount[aria-pressed='true'],
+.machine-amounts .amount[aria-pressed='true']:hover:not(:disabled) {
+  padding: 0 calc(0.25em - 2px);
+  border: 3px solid currentColor;
+}
+
+/* On /contribute the card takes the band's width and the notes under it keep their distance. */
+.contribute > .machine-card {
+  max-width: none;
+  margin-bottom: var(--space-3);
+}
+
+.machine-action {
+  margin: var(--space-2) 0 var(--space-1);
+}
+
+/* Given room (/contribute, the full width), the card sets what it is on the left and how to fund it
+   on the right, so a wide card is never a short block with an empty half. */
+/* A container query reads the card's own width only from inside it, so the card is always a
+   wrapping row and its halves take the full line until the card is wide enough to share it. */
+.machine-card {
+  container-type: inline-size;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-4);
+}
+
+.machine-card > .machine-about,
+.machine-card > .machine-fund {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+/* On a narrow card a chip is about 50px wide: the pressed chip drops its check glyph (its 3px edge
+   still says pressed), so "$100" never breaks across two lines. */
+@container (max-width: 26rem) {
+  .machine-amounts .amount > .glyph {
+    display: none;
+  }
+}
+
+@container (min-width: 44rem) {
+  .machine-card > .machine-about,
+  .machine-card > .machine-fund {
+    flex-basis: 0;
+  }
+}
+
+/* Goals: one long track of lifetime funding, the milestones as ticks on it and rows under it. */
+.goals-lifetime {
+  font-size: var(--size-lead);
+}
+
+.goals-figure {
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.goals-track {
+  position: relative;
+  margin-block: var(--space-3) var(--space-5);
+}
+
+.goals-track .funding-bar {
+  height: 1rem;
+}
+
+.goals-ticks {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each milestone is a zero-width point at its share of the track: the tick is centred on it, and the
+   label starts at it and moves back by the same share of its own width, so a label at either end
+   stays inside the track. Labels that would touch another carry data-hidden (lib/ticks.ts). */
+.goals-ticks li {
+  position: absolute;
+  top: -0.375rem;
+  left: var(--at);
+  width: 0;
+}
+
+.goals-tick {
+  display: block;
+  width: 2px;
+  height: 1.75rem;
+  background: var(--ink);
+  transform: translateX(-50%);
+}
+
+.collection-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+.collection-count {
+  display: inline-flex;
+  gap: 0.5em;
+  align-items: center;
+}
+
+.goals-ticks li:last-child .goals-tick {
+  transform: translateX(-100%);
+}
+
+.goals-tick-label {
+  position: absolute;
+  top: 2rem;
+  left: 0;
+  font-size: var(--size-small);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transform: translateX(calc(var(--at) * -1));
+}
+
+.goals-tick-label[data-hidden] {
+  visibility: hidden;
+}
+
+.goals-ticks li[data-state='later'] .goals-tick {
+  opacity: 0.45;
+}
+
+.goals-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.goal {
+  display: grid;
+  gap: var(--space-1);
+  padding-block: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+
+.goal h3 {
+  font-size: var(--size-lead);
+}
+
+.goal p {
+  margin: 0.375rem 0 0;
+}
+
+.goal-rail {
+  display: flex;
+  gap: var(--space-2);
+  margin: 0 !important;
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+}
+
+.goal-amount {
+  font-variant-numeric: tabular-nums;
+}
+
+.goal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--size-small);
+}
+
+.goal[data-state='later'] h3 {
+  color: var(--text-muted);
+}
+
+@media (min-width: 48rem) {
+  .goal {
+    grid-template-columns: var(--rail) 1fr;
+  }
+
+  .goal-rail {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+}
+
+.plain-list {
+  margin-bottom: var(--space-2);
+  padding-left: 1.25em;
+  list-style: disc;
+}
+
+.plain-list li + li {
+  margin-top: 0.375rem;
+}
+
+.steps-list {
+  padding-left: 1.5em;
+}
+
+.steps-list li + li {
+  margin-top: 0.375rem;
+}
+
+/* Studio history: each era as a blueprint, paper lines on the blueprint ground. */
+.blueprint {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-card);
+  background: var(--blueprint);
+  color: var(--paper);
+  --focus-colour: var(--paper);
+}
+
+.blueprint-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-1);
+}
+
+.blueprint-head p {
+  margin: 0;
+}
+
+.blueprint-era {
+  display: flex;
+  gap: var(--space-1);
+  align-items: baseline;
+}
+
+.blueprint-index {
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+}
+
+.blueprint-name {
+  font-size: var(--size-h2);
+  font-weight: var(--weight-bold);
+}
+
+.blueprint-when {
+  font-size: var(--size-small);
+}
+
+.blueprint-room {
+  margin-block: var(--space-2);
+}
+
+.blueprint-facts {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--size-small);
+}
+
+.blueprint-facts dt {
+  font-weight: var(--weight-strong);
+}
+
+.blueprint-facts dd {
+  margin: 0.25rem 0 0;
+}
+
+@media (min-width: 48rem) {
+  .blueprint-facts {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.era-stepper {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: var(--space-3);
+}
+
+.era-range {
+  border: 0;
+  padding: 0;
+  accent-color: var(--ink);
+}
+
+.era-rows {
+  padding: 0;
+  list-style: none;
+}
+
+.era-rows li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.era-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: var(--target);
+  padding: 0.5em 1.25em;
+  border: 1px solid var(--field);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-weight: var(--weight-strong);
+  cursor: pointer;
+}
+
+/* Forms: suggestions, the player's profile. */
+.form {
+  display: grid;
+  gap: var(--space-1);
+  max-width: var(--measure);
+}
+
+.form label {
+  margin-top: var(--space-1);
+  font-weight: var(--weight-strong);
+}
+
+.form p {
+  margin: 0;
+}
+
+.field-count {
+  justify-self: end;
+}
+
+.check-row {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.check-row input {
+  width: 1.25rem;
+  min-height: 1.25rem;
+  margin: 0;
+  accent-color: var(--ink);
+}
+
+.notice-plain {
+  display: flex;
+  gap: var(--space-1);
+  align-items: flex-start;
+  max-width: var(--measure-text);
+  padding: var(--space-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  font-size: var(--size-small);
+}
+
+.notice-plain .glyph {
+  flex: none;
+  margin-top: 0.125rem;
+}
+
+.list-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.inline-select {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-1);
+  align-items: center;
+  font-weight: var(--weight-strong);
+}
+
+.inline-select select {
+  width: auto;
+}
+
+/* Suggestions: the upvotes beside each, its state as a glyph and a word. */
+.suggestions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.suggestion {
+  display: grid;
+  grid-template-columns: 4rem 1fr;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+
+.suggestion h3 {
+  margin-top: 0.375rem;
+  font-size: var(--size-body);
+}
+
+.suggestion p {
+  margin: 0.375rem 0 0;
+}
+
+.suggestion-index,
+.suggestion-meta,
+.seed-meta,
+.seed-index {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem var(--space-1);
+}
+
+.suggestion-index .tag {
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+}
+
+.upvote-button {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  min-width: var(--target);
+  min-height: var(--target);
+  padding: 0.25em 0.5em;
+  border: 1px solid var(--field);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-weight: var(--weight-strong);
+  cursor: pointer;
+}
+
+.upvote-button[aria-pressed='true'] {
+  border-width: 3px;
+  border-color: currentColor;
+  padding: calc(0.25em - 2px) calc(0.5em - 2px);
+}
+
+.upvote-button:hover:not(:disabled) {
+  background: var(--paper-hover);
+}
+
+.upvote-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-strong);
+}
+
+.upvote-static {
+  margin: 0;
+  text-align: center;
+}
+
+/* Seeds: a grid of boxes like the team's, the Play button at each foot. */
+.seed-grid,
+.badge-grid,
+.collection-grid {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-2) 0 0;
+}
+
+.seed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.seed h3 {
+  font-size: var(--size-lead);
+}
+
+.seed p {
+  margin: 0;
+}
+
+.seed-code code {
+  font-size: 0.9em;
+  overflow-wrap: anywhere;
+}
+
+.seed-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: auto;
+  padding-top: var(--space-1);
+}
+
+.seed-score {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+@media (min-width: 48rem) {
+  .seed-grid,
+  .collection-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .badge-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 72rem) {
+  .seed-grid,
+  .collection-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .badge-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Profiles: the avatar in its frame beside the level, the XP bar in ink (XP is never money). */
+.profile-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.profile-id {
+  flex: 1 1 16rem;
+}
+
+.profile-id p {
+  margin: 0;
+}
+
+.flair {
+  font-size: var(--size-lead);
+  font-weight: var(--weight-bold);
+}
+
+.xp {
+  margin-top: var(--space-2);
+}
+
+.xp-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  align-items: baseline;
+  font-weight: var(--weight-strong);
+}
+
+.xp-level {
+  font-size: var(--size-lead);
+  font-weight: var(--weight-bold);
+}
+
+.xp-figure {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.xp-bar {
+  position: relative;
+  height: 0.625rem;
+  margin-block: var(--space-1) 0.375rem;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-tile);
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.xp-bar-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  transform: translateX(calc(var(--fill) - 100%));
+}
+
+.badge-tile {
+  display: grid;
+  gap: 0.25rem;
+  justify-items: start;
+  padding: var(--space-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.badge-medal {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+}
+
+.badge-name {
+  font-weight: var(--weight-bold);
+}
+
+.collection-suit + .collection-suit {
+  margin-top: var(--space-4);
+}
+
+.collection-suit h3 {
+  display: flex;
+  gap: var(--space-1);
+  align-items: baseline;
+  font-size: var(--size-body);
+}
+
+.collected {
+  position: relative;
+  display: grid;
+  gap: var(--space-1);
+  justify-items: start;
+  padding: var(--space-3);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-card);
+  background: var(--paper);
+}
+
+.collected .rarity-tag {
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+}
+
+.collected-title {
+  font-weight: var(--weight-bold);
+}
+
+.me-editor {
+  max-width: none;
+}
+
+.me-preview {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+}
+
+.me-fields {
+  display: grid;
+  gap: var(--space-1);
+  max-width: var(--measure);
+}
+
+@media (min-width: 48rem) {
+  .me-editor {
+    grid-template-columns: 12rem minmax(0, 1fr);
+    gap: var(--space-4);
+    align-items: start;
+  }
+}
+
+.me-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: var(--space-3);
+}
+
+/* The FAQ: the topics as links, then each question and its answer. */
+/* Six topics: two to a row on a phone, three from 48rem, so every row is full. Links stay underlined. */
+.faq-index ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 48rem) {
+  .faq-index ul {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.faq-index a {
+  display: inline-flex;
+  min-height: var(--target);
+  align-items: center;
+  text-decoration: underline;
+}
+
+.faq-item {
+  max-width: var(--measure-text);
+  padding-block: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+
+.faq-item h3 {
+  margin-bottom: var(--space-1);
+}
+
+.faq-item p {
+  margin: var(--space-1) 0 0;
+}
+
+/* The broadcast overlay: one 1920 by 1080 frame, zoomed to fit a smaller window. */
+.page[data-bare='true'] {
+  min-height: 0;
+}
+
+main.broadcast {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  width: 1920px;
+  height: 1080px;
+  max-width: none;
+  overflow: hidden;
+  zoom: var(--broadcast-scale);
+}
+
+main.broadcast > .band {
+  padding: var(--space-3) var(--space-5);
+  max-width: none;
+}
+
+main.broadcast > .band + .band {
+  margin-top: 0;
+}
+
+/* Both bands are grids that place their own parts; the bands' stacking margin does not apply. */
+main.broadcast > .band > * {
+  margin: 0;
+}
+
+.broadcast-head {
+  display: grid !important;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.broadcast-brand {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  margin: 0;
+  font-size: var(--size-lead);
+  font-weight: var(--weight-bold);
+}
+
+.broadcast-pitch {
+  font-size: var(--size-h2);
+}
+
+.broadcast-fund {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.broadcast-fund p {
+  display: grid;
+  margin: 0;
+  text-align: right;
+}
+
+.broadcast-fund-line {
+  color: var(--text-muted);
+}
+
+.broadcast-url {
+  font-size: var(--size-h2);
+  font-weight: var(--weight-bold);
+}
+
+.qr {
+  width: 8.5rem;
+  height: 8.5rem;
+}
+
+.qr-ground {
+  fill: var(--paper);
+}
+
+.qr-module {
+  fill: var(--ink);
+}
+
+/* The overlay's body: the room large on the left with the three cards to fund under it, the pipe a
+   ruled column down the right, as tall as both, so a short feed leaves no hollow. */
+.broadcast-body {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 34rem;
+  gap: var(--space-4);
+  min-height: 0;
+}
+
+.broadcast-main {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  min-height: 0;
+}
+
+.broadcast-room {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.broadcast-room .studio {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.broadcast-room .studio-stage {
+  flex: 1;
+  min-height: 0;
+}
+
+.broadcast-room .room {
+  height: 100%;
+}
+
+.broadcast-side {
+  min-height: 0;
+  overflow: hidden;
+  border-inline-start: 1px solid var(--hairline);
+  padding-inline-start: var(--space-4);
+}
+
+.broadcast-cards h2 {
+  font-size: var(--size-lead);
+}
+
+.broadcast-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  margin-top: var(--space-2);
+}
+
+/* Motion of the final state: transform and opacity only, under no-preference only. The legendary
+   sheen sweeps the hatched frame once per hover and never runs on its own. */
+@media (prefers-reduced-motion: no-preference) {
+  .card:hover[data-rarity='legendary'] > .rarity-edge::after,
+  .collected:hover[data-rarity='legendary'] > .rarity-edge::after {
+    transform: translateX(120%);
+    transition: transform var(--dur-reveal) var(--ease-scene);
+  }
+
+  .xp-bar-fill {
+    transition: transform var(--dur-move) var(--ease-out);
+  }
+
+  .upvote-button,
+  .era-pick {
+    transition: transform var(--dur-quick) var(--ease-out);
+  }
+
+  .upvote-button:active:not(:disabled),
+  .era-pick:active {
+    transform: scale(0.97);
+  }
 }

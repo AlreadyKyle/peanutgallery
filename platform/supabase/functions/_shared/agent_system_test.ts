@@ -836,7 +836,9 @@ Deno.test("criterion 7, SQL half: the job queue", OPTS, async (t) => {
       await s.signInAs(BOARD_EMAIL, "aal1");
       const jobs = (await s.row<{ j: { name: string; runs: { id: string; status: string }[] }[] }>(`select public.board_jobs() as j`)).j;
       // The migrations register draft_card and studio_ranking (agent-workflows), janitor and upkeep_merge (agent-upkeep).
-      assertEquals(jobs.map((j) => j.name), ["draft_card", "janitor", "studio_ranking", "tidy_up", "upkeep_merge"]);
+      // community-core adds curator_triage (docs/specs/final-state.md, docs/specs/community-core.md).
+      // operations adds benchmark_review (docs/specs/operations.md).
+      assertEquals(jobs.map((j) => j.name), ["benchmark_review", "curator_triage", "draft_card", "janitor", "studio_ranking", "tidy_up", "upkeep_merge"]);
       const tidy = jobs.find((j) => j.name === "tidy_up")!;
       assertEquals(tidy.runs.length, 10);
       // Nine runs from this test, then the newest of the five old ones.
