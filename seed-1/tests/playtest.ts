@@ -10,6 +10,8 @@
 // only the sim; nothing here is the game's code.
 import { pathToFileURL } from 'node:url';
 import { loadConfigFromDir } from '../bots/config';
+import { depthMark } from '../bots/depth';
+import type { DepthMark } from '../bots/depth';
 import {
   apply,
   availableUnits,
@@ -202,6 +204,12 @@ export interface Pacing {
   longestQuiet: number;
   /** Distinct kinds of new thing seen in the first hour. */
   kindsFirstHour: number;
+  /**
+   * When the run last met a new mechanic (a unit, the weather, gems, a fork, or the unlock that opens
+   * orders or dust devils; bots/depth.ts says why) and how many multiplier-only unlocks it opened after.
+   * Reported for the table, never held to a bar.
+   */
+  depth: DepthMark;
 }
 
 function firstAt<T extends { at: number }>(rows: T[], test: (row: T) => boolean): number | null {
@@ -212,7 +220,7 @@ function perMinute(rows: { at: number }[], from: number, to: number): number {
   return Math.round((rows.filter((row) => row.at > from && row.at <= to).length / ((to - from) / 60)) * 10) / 10;
 }
 
-export function pacing(run: Run): Pacing {
+export function pacing(run: Run, config: SimConfig): Pacing {
   const choices = run.decisions.filter((d) => d.kind !== 'buy');
   const buys = run.decisions.filter((d) => d.kind === 'buy');
   const windows: number[] = [];
@@ -238,6 +246,7 @@ export function pacing(run: Run): Pacing {
     momentsPer2Min: { min: sorted[0] ?? 0, median: sorted[Math.floor(sorted.length / 2)] ?? 0 },
     longestQuiet: quiet,
     kindsFirstHour: new Set(run.moments.filter((m) => m.at <= 3600).map((m) => m.kind)).size,
+    depth: depthMark(config, run.moments.filter((m) => m.kind === 'unlock').map((m) => ({ id: m.what, atSeconds: m.at }))),
   };
 }
 
@@ -257,6 +266,12 @@ function time(seconds: number | null): string {
   return `${Math.floor(seconds / 60)} m ${String(seconds % 60).padStart(2, '0')} s`;
 }
 
+function depthCell(mark: DepthMark): string {
+  const at = mark.lastNewMechanic === null ? 'never' : `${time(mark.lastNewMechanic.atSeconds)} (${mark.lastNewMechanic.id})`;
+  const unreached = mark.newMechanicsNotReached > 0 ? `, ${mark.newMechanicsNotReached} not reached` : '';
+  return `${at}; ${mark.multipliersAfter}${unreached}`;
+}
+
 /** The markdown table the pull request carries: before (another config) and after (the live config). */
 export function table(before: SimConfig, after: SimConfig): string {
   const rows: string[] = [];
@@ -265,8 +280,9 @@ export function table(before: SimConfig, after: SimConfig): string {
   };
   line(['Measure (seed 20260914)', 'Bar', 'Before, active', 'After, active', 'Before, casual', 'After, casual']);
   line(['---', '---', '---', '---', '---', '---']);
+  const configs = [before, after, before, after];
   const runs = [play(before, ACTIVE, 3600), play(after, ACTIVE, 3600), play(before, CASUAL, 3600), play(after, CASUAL, 3600)];
-  const p = runs.map(pacing);
+  const p = runs.map((run, i) => pacing(run, configs[i]!));
   const cell = (f: (x: Pacing) => string): string[] => p.map(f);
   line(['First purchase (first choice)', 'by 30 s', ...cell((x) => time(x.firstBuy))]);
   line(['First unlock (something new)', 'by 60 s', ...cell((x) => time(x.firstUnlock))]);
@@ -283,6 +299,7 @@ export function table(before: SimConfig, after: SimConfig): string {
   line(['New things per 2 min, first hour (min / median)', 'something new every 2 min', ...cell((x) => `${x.momentsPer2Min.min} / ${x.momentsPer2Min.median}`)]);
   line(['Longest stretch with nothing new, first hour', '', ...cell((x) => time(x.longestQuiet))]);
   line(['Kinds of new thing in the first hour', 'new mechanics across the hour', ...cell((x) => String(x.kindsFirstHour))]);
+  line(['Last new mechanic, first hour; multiplier-only unlocks after it', '', ...cell((x) => depthCell(x.depth))]);
   const back = [returnSession(before, ACTIVE), returnSession(after, ACTIVE), returnSession(before, CASUAL), returnSession(after, CASUAL)];
   line(['2-minute return after 8 h away: new things / choices', 'a payoff and a reason to return', ...back.map((b) => `${b.payoffs} / ${b.choices}`)]);
   return rows.join('\n');
