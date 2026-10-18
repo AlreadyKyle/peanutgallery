@@ -30,14 +30,17 @@ export const SESSION_PATTERN = /^cs_(live|test)_[A-Za-z0-9]{10,250}$/;
  * the play counts (docs/specs/play-counts.md); the next twelve are the benchmarks' aggregate counters
  * (docs/specs/operations.md): a load from a save 1 or 7 days old, a session reaching 2 or 4 minutes,
  * a seed saved or opened from a link, a home load and its dwell buckets, the broadcast's load and its
- * QR source, and a click on a Discord link. The last three are Daily Dust's (docs/specs/daily-dust.md):
- * a run started, finished and shared. Each is one daily total with nothing that names a person.
+ * QR source, and a click on a Discord link. Then Daily Dust's three (docs/specs/daily-dust.md): a run
+ * started, finished and shared. The from_ names are landings from a channel's tagged link
+ * (docs/specs/channel-counters.md). Each is one daily total with nothing that names a person.
  */
 export const PLAY_EVENTS = [
   'dust_load', 'dust_share', 'card_share', 'dust_next_card',
   'dust_return_1d', 'dust_return_7d', 'dust_session_2m', 'dust_session_4m', 'dust_seed_save', 'dust_seed_open',
   'home_load', 'home_dwell_mid', 'home_dwell_long', 'broadcast_load', 'broadcast_qr', 'discord_click',
   'dust_daily_start', 'dust_daily_finish', 'dust_daily_share',
+  'from_x', 'from_bsky', 'from_threads', 'from_mastodon', 'from_discord', 'from_yt', 'from_tiktok', 'from_ig', 'from_linkedin',
+  'from_reddit', 'from_hn', 'from_itch', 'from_ph', 'from_creator',
 ] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CARD_PATH = /^\/api\/card\/([^/]+)$/;

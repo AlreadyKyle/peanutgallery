@@ -4,7 +4,7 @@ import { awaySeconds, parseSavedAt, parseSavedState } from '../sim/save';
 import { chosenOption, createSim, devilReward, findPerk, orderBonus, step } from '../sim/sim';
 import type { SimState } from '../sim/types';
 import { AccessibleControls } from './controls';
-import { countEvent, onceEach, returnEvent, SessionClock } from './count';
+import { countEvent, onceEach, returnEvent, SessionClock, sourceEvent, withoutSource } from './count';
 import { createDailyGame, DAILY_KEY, DAILY_PARAM, dailyFromSearch, freshDaily, parseDaily, type DailyAsk, type DailyRecord } from './daily';
 import { attachDailyEntry, DailyRun } from './daily-ui';
 import { describeForkEffect, describePerk, devilCaughtWords, milestoneWords, orderWords, weatherView } from './depth';
@@ -391,3 +391,10 @@ startNextCard();
 startWhatsNew();
 // One Dust load counted, with nothing that names the player (docs/specs/play-counts.md).
 countEvent('dust_load');
+// A landing from a channel's tagged link, counted once and the tag dropped, so a reload or a copied
+// address does not count again (docs/specs/channel-counters.md). An unknown tag is left as it is.
+const landing = sourceEvent(window.location.search);
+if (landing !== null) {
+  countOnce(landing);
+  window.history.replaceState(null, '', window.location.pathname + withoutSource(window.location.search) + window.location.hash);
+}
