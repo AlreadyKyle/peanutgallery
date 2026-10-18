@@ -51,7 +51,17 @@ for (const [label, width] of [['mobile', 375], ['desktop', 1440]] as const) {
   });
 }
 
-for (const path of ['/', '/how-it-works']) {
+// Home draws the still only (the board, 18 October 2026: in the small frame the loop read as a blank
+// panel), so the loop and its control are How it works' alone.
+test("home's explainer is the still, with no loop and no loop control", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await settle(page, '/');
+  await expect(page.getByRole('button', { name: 'Play the video' })).toBeVisible();
+  await expect(page.locator('.explainer-loop')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /the preview/ })).toHaveCount(0);
+});
+
+for (const path of ['/how-it-works']) {
   test(`the explainer's preview loop pauses and plays from the keyboard on ${path}`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await settle(page, path);
@@ -68,7 +78,9 @@ for (const path of ['/', '/how-it-works']) {
     await page.keyboard.press('Space');
     await expect(page.getByRole('button', { name: 'Pause the preview' })).toBeFocused();
   });
+}
 
+for (const path of ['/', '/how-it-works']) {
   test(`under reduced motion the explainer stays a still with no loop control on ${path}`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await settle(page, path);

@@ -49,15 +49,7 @@ function Count({ n, words }: { n: number; words: { one: string; many: string; re
  * are open and how many are building. It never says the studio is paused (docs/PLAN.md §10
  * decision 62): the public site shows no paused notice.
  */
-function StatusLine({ studio, view }: { studio: StudioState; view: HomeView | null }) {
-  if (studio.state === 'loading' && view === null) {
-    return (
-      <p className="status-line" aria-busy="true">
-        {legal.loadingFigures}
-      </p>
-    );
-  }
-  if (view === null) return <p className="status-line">{unavailableLine(studio)}</p>;
+function StatusLine({ view }: { view: HomeView }) {
   const { fund, now } = view.groups;
   return (
     <p className="status-line">
@@ -80,7 +72,7 @@ function StatusLine({ studio, view }: { studio: StudioState; view: HomeView | nu
   );
 }
 
-function Hero({ studio, live }: { studio: StudioState; live: ReturnType<typeof useLiveHome> }) {
+function Hero() {
   const env = siteEnv();
   return (
     <div className="hero hero-home">
@@ -99,19 +91,20 @@ function Hero({ studio, live }: { studio: StudioState; live: ReturnType<typeof u
           </a>
         )}
       </p>
-      {/* The studio's state, under the actions. */}
-      <div className="hero-status">
-        <HeroStatus studio={studio} live={live} />
-      </div>
     </div>
   );
 }
 
-/** The studio's state in one line, its stale notice and the announcer for screen readers. */
-function HeroStatus({ studio, live }: { studio: StudioState; live: ReturnType<typeof useLiveHome> }) {
+/**
+ * The studio's state in one line, its stale notice and the announcer for screen readers. It opens the
+ * Fund station, over the cards it counts, not the plate (the board, 18 October 2026: the line is not
+ * needed above the fold).
+ */
+function StudioStatus({ studio, live }: { studio: StudioState; live: ReturnType<typeof useLiveHome> }) {
   return (
     <>
-      <StatusLine studio={studio} view={live.view} />
+      {/* While there is no snapshot the station's own line says it is loading or unavailable. */}
+      {live.view === null ? null : <StatusLine view={live.view} />}
       <StaleNotice studio={studio} />
       <Announcer message={live.message} />
     </>
@@ -143,7 +136,8 @@ function ShowcaseSection() {
           </div>
         </section>
       )}
-      <ExplainerVideo />
+      {/* The still, not the loop: at this size the loop's white scene read as a blank panel. */}
+      <ExplainerVideo still />
     </div>
   );
 }
@@ -157,6 +151,9 @@ function FundSection({ studio, live, index }: { studio: StudioState; live: Retur
   const signedIn = useSignedIn();
   return (
     <StationPart id="fund" index={index} title={copy.flow.fundTitle} intro={copy.flow.fundIntro}>
+      <div className="fund-status">
+        <StudioStatus studio={studio} live={live} />
+      </div>
       <CardsStatus
         count={view !== null ? view.groups.fund.length : null}
         unavailable={view === null && studio.state !== 'loading'}
@@ -258,9 +255,9 @@ export function Landing() {
           signed in. The pipe sits under the panel. */}
       <div className="band floor-plate">
         {player === null ? (
-          <Hero studio={studio} live={live} />
+          <Hero />
         ) : (
-          <WelcomePanel profile={player} snapshot={view?.snapshot ?? null} status={<HeroStatus studio={studio} live={live} />} />
+          <WelcomePanel profile={player} snapshot={view?.snapshot ?? null} />
         )}
         {/* While the snapshot loads, the room's label keeps its row, so the panel's heading holds still. */}
         {view === null ? (
