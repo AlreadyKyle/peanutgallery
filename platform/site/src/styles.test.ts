@@ -333,8 +333,8 @@ describe('colour (DESIGN.md, Colour), measured from tokens.css', () => {
         '.button.btn-coin:active',
         'main > .band:first-child',
         '.page:has(> main > .band:first-child) > .topbar',
-        // The live studio's paper screen on home's plate resets the roles to paper's, Contribute's hover with them.
-        '.hero-home ~ .live-studio .studio-stage',
+        // The live studio on home's plate resets the roles to paper's, Contribute's hover with them.
+        '.floor-plate .live-studio .studio-stage',
       ].sort(),
     );
     // The signal plate's only amber is the hover it gives Contribute there.
@@ -374,7 +374,8 @@ describe('colour (DESIGN.md, Colour), measured from tokens.css', () => {
 describe('bands', () => {
   const SIGNAL_GROUND = ['main > .band:first-child', '.page:has(> main > .band:first-child) > .topbar'];
   const INK_GROUND = ['main > .band:nth-child(2n + 3)', '.page:has(> main > .band:last-child:nth-child(even)) > .site-footer'];
-  const PAPER_GROUND = ['main > .band:nth-child(even)', '.page:has(> main > .band:last-child:nth-child(odd)) > .site-footer'];
+  // The sticky top bar draws its own ground, since the page scrolls under it; a signal plate turns it signal.
+  const PAPER_GROUND = ['main > .band:nth-child(even)', '.page:has(> main > .band:last-child:nth-child(odd)) > .site-footer', '.topbar'];
   const block = (selectors: string[]) => ALL_RULES.find((rule) => selectorsOf(rule).join('|') === selectors.join('|'));
   const grounded = (token: string) =>
     ALL_RULES.filter(
