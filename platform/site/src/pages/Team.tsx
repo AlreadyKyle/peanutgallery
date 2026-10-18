@@ -128,7 +128,7 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
 export function Team() {
   const studio = useStudio();
   return (
-    <main className="wide">
+    <main className="wide team-page">
       <div className="band">
         <PageHeader title={team.title} lede={team.lede}>
           <StaleNotice studio={studio} />
