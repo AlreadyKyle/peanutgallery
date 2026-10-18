@@ -216,8 +216,13 @@ export type Enrichment = (typeof ENRICHMENTS)[number];
  * and counts, never card text. Home's Next up lane says when the Game Designer is drafting.
  */
 export type Supply = {
-  /** A draft run is queued or running now. */
+  /** A draft run is queued or running now, made today (see stalled). */
   drafting: boolean;
+  /**
+   * A draft run has waited since an earlier New York day: the studio is not taking work, so the site
+   * says nothing is being drafted and promises no start time (never a paused notice, decision 62).
+   */
+  stalled: boolean;
   /** Fewer cards are open than the floor asks for. */
   short: boolean;
   /** Why no draft may be queued now (daily_limit, not_short, ...), or null when one may. */
@@ -524,8 +529,13 @@ export function supplyFrom(value: unknown): Supply | null {
   const doc = value as Record<string, unknown>;
   const count = (key: string) => (typeof doc[key] === 'number' && Number.isFinite(doc[key]) ? (doc[key] as number) : 0);
   const textOr = (key: string) => (typeof doc[key] === 'string' && doc[key] !== '' ? (doc[key] as string) : null);
+  // public_supply says drafting while any draft run is queued or running, however old, and runs_today
+  // counts the draft runs made since the studio's New York midnight. A queued run with none made today
+  // has waited since an earlier day: nothing is drafting it.
+  const stalled = doc.drafting === true && count('runs_today') === 0;
   return {
-    drafting: doc.drafting === true,
+    drafting: doc.drafting === true && !stalled,
+    stalled,
     short: doc.short === true,
     reason: textOr('reason'),
     runs_today: count('runs_today'),

@@ -82,7 +82,13 @@ export function documentRoute(pathname: string, params: URLSearchParams): Parsed
   if (profile) {
     const bad = only(params, []);
     if (bad) return refuse(bad);
-    const handle = decodeURIComponent(profile[1]!);
+    // A malformed escape (%E0%A4%A) makes decodeURIComponent throw; it names no handle.
+    let handle: string;
+    try {
+      handle = decodeURIComponent(profile[1]!);
+    } catch {
+      return { ok: false, status: 404, error: 'Not found' };
+    }
     if (!HANDLE.test(handle)) return { ok: false, status: 404, error: 'Not found' };
     return { ok: true, value: { rpc: 'community_profile', args: { p_handle: handle }, seconds: 30, staleSeconds: 60 } };
   }

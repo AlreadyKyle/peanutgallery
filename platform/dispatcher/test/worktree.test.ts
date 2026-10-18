@@ -34,8 +34,10 @@ import {
   protectedPaths,
   readFileAtSha,
   removeWorktree,
+  RESOLVE_ORDER,
   scratchPath,
   setGitRunner,
+  shadowsLockedFile,
   shortId,
   singleLineTitle,
   snapshotGitState,
@@ -75,6 +77,12 @@ describe('pure helpers', () => {
     return file.split('\n').map((line) => line.trim()).filter((line) => line.length > 0 && !line.startsWith('#'));
   }
 
+  // GATE_RESOLVE_ORDER in the gate's lib/common.sh, the order the gate's shadow rule follows.
+  function gateResolveOrder(): string[] {
+    const file = readFileSync(path.resolve(import.meta.dirname, '..', '..', 'gate', 'lib', 'common.sh'), 'utf8');
+    return (/^GATE_RESOLVE_ORDER='([^']*)'$/m.exec(file)?.[1] ?? '').split(' ');
+  }
+
   it('keeps the kernel list equal to the gate file', () => {
     expect([...KERNEL_PATHS]).toEqual(gateList('kernel-paths.txt'));
   });
@@ -108,6 +116,56 @@ describe('pure helpers', () => {
     for (const file of DESIGN_PATHS) expect(isKernelPath(file), file).toBe(false);
     expect(protectedPaths(site)).toEqual(expect.arrayContaining(['platform/site/src/routes.tsx', 'platform/site/public', 'platform/site/brand']));
     expect(protectedPaths(seed)).toEqual(expect.arrayContaining(['seed-1/render/favicon.svg', 'seed-1/e2e', 'seed-1/playwright.config.ts']));
+  });
+
+  it('refuses a module that shadows a kernel or design source file, as the gate does, before any gate run', () => {
+    // Vite and Vitest try .mjs, .js, .mts, .ts, .jsx, .tsx and .json in that order for an import
+    // without an extension, so format.js beside the kernel format.ts replaces it and still typechecks.
+    expect([...RESOLVE_ORDER]).toEqual(gateResolveOrder());
+    const site = lanePaths('platform', 'code');
+    const seed = lanePaths('seed-1', 'code');
+    for (const file of [
+      'platform/site/src/lib/format.js',
+      'platform/site/src/lib/payment.mjs',
+      'platform/site/src/lib/format.mts',
+      'platform/site/src/lib/snapshot-keys.ts',
+      'platform/site/src/components/Funding.ts',
+      'Platform/Site/src/lib/Format.JS',
+      'seed-1/sim/rng.js',
+    ]) {
+      expect(isKernelPath(file), file).toBe(true);
+    }
+    expect(outsideLane(['platform/site/src/lib/format.js', 'platform/site/src/pages/Landing.tsx'], site)).toEqual(['platform/site/src/lib/format.js']);
+    expect(outsideLane(['seed-1/sim/rng.mjs', 'seed-1/render/scene.ts'], seed)).toEqual(['seed-1/sim/rng.mjs']);
+    for (const file of [
+      'platform/site/src/routes.ts',
+      'platform/site/src/routes.js',
+      'platform/site/src/components/Card.ts',
+      'platform/site/src/components/Glyph.jsx',
+      'platform/site/src/lib/reveal.mjs',
+      'platform/site/src/lib/motion.js',
+    ]) {
+      expect(isDesignPath(file), file).toBe(true);
+      expect(outsideLane([file, 'platform/site/src/pages/Landing.tsx'], site), file).toEqual([file]);
+    }
+    // Resolved after the locked file, a different name, a test or a type file: not a shadow.
+    for (const file of [
+      'platform/site/src/lib/format.tsx',
+      'platform/site/src/lib/format.cjs',
+      'platform/site/src/lib/format.d.ts',
+      'platform/site/src/lib/formats.js',
+      'platform/site/src/lib/format.test.ts',
+      'platform/site/src/components/Funding.tsx.bak',
+      'platform/site/src/lib/newpage.js',
+      'platform/site/src/lib/motion.tsx',
+      'platform/site/src/tokens.ts',
+      'seed-1/render/favicon.ts',
+    ]) {
+      expect(isKernelPath(file), file).toBe(false);
+      expect(isDesignPath(file), file).toBe(false);
+    }
+    expect(shadowsLockedFile('platform/gate.js', 'platform/gate')).toBe(false);
+    expect(shadowsLockedFile('.github.js', '.github')).toBe(false);
   });
 
   it('makes the design checks kernel', () => {

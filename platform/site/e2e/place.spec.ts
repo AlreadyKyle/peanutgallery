@@ -5,7 +5,7 @@ import { expect, overflowsHorizontally, test } from './fixtures';
 import { BUILDING_CARD_ID, LIVE_CARD_ID, OPEN_CARD_ID, SESSIONS, SUPPORTER_STUDIO } from './supporter-studio';
 
 // Mob Machine as a place (docs/specs/place.md): the top bar knows who is here, home is the studio's
-// floor with the room's stations as links, Fund first and Ideas beside it, /me is the player's desk, and
+// floor with the rail's stations as links, Fund first and Ideas beside it, /me is the player's desk, and
 // what a contribution gets you is said where people pay and once they have. Set E2E_PLACE_SHOTS to a
 // folder to also save the pages' frames, signed out and signed in, at 375, 768 and 1440px.
 test.use({ studio: SUPPORTER_STUDIO });
@@ -16,9 +16,9 @@ test('signed out, the top bar offers Sign in and the floor names every station',
   await page.goto('/');
   await expect(page.locator('.you-chip')).toHaveText('Sign in');
   await expect(page.locator('.you-chip')).toHaveAttribute('href', '/me');
-  // The room's tags go to its five stations, Fund first; the rail lists Next up too.
-  const tags = page.locator('.station-tags a');
-  await expect(tags).toHaveCount(5);
+  // The room is one clean scene with no labels floating over it (the board, 18 October 2026); the rail
+  // lists the six stations, Fund first.
+  await expect(page.locator('.floor-plate .station-tags, .floor-plate .station-pill')).toHaveCount(0);
   await expect(page.locator('.floor-stations a')).toHaveCount(6);
   expect(await page.locator('[data-station-part]').evaluateAll((parts) => parts.map((part) => part.getAttribute('data-station-part')))).toEqual([
     'fund',
@@ -37,8 +37,8 @@ test('signed out, the top bar offers Sign in and the floor names every station',
   const perks = page.locator('[data-station-part="fund"] .perks');
   await expect(perks.getByText('As a guest', { exact: true })).toBeVisible();
   await expect(perks.getByText('10 XP for every dollar, more on rarer cards.')).toBeVisible();
-  // Pressing a station in the room goes to its part of the floor.
-  await page.locator('.station-tags a[href="#shipped"]').click();
+  // Pressing a station on the rail goes to its part of the floor.
+  await page.locator('.floor-stations a[href="#shipped"]').click();
   await expect(page).toHaveURL(/#shipped$/);
   await expect(page.locator('[data-station-part="shipped"] h2')).toBeInViewport();
   expect(await overflowsHorizontally(page)).toBe(false);

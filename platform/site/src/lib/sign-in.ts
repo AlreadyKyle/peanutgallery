@@ -47,15 +47,16 @@ function ask(): Promise<boolean | null> {
 
 /**
  * True unless the studio said sign-in is closed. Starts from this tab's answer, then the last one this
- * browser stored, and asks once a tab. An answer that does not come counts as open: the sign-in form
- * still says so when it is not.
+ * browser stored, and asks once a tab. A first visit draws no prompt until the answer comes, so while
+ * sign-in is closed nothing appears and then vanishes, and the top bar holds still. An answer that
+ * does not come counts as open: the sign-in form still says so when it is not.
  */
 export function useSignInOpen(): boolean {
-  const [open, setOpen] = useState<boolean>(() => known ?? stored() ?? true);
+  const [open, setOpen] = useState<boolean>(() => known ?? stored() ?? false);
   useEffect(() => {
     let live = true;
     void ask().then((answer) => {
-      if (live && answer !== null) setOpen(answer);
+      if (live) setOpen(answer ?? true);
     });
     return () => {
       live = false;

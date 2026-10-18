@@ -107,6 +107,8 @@ export const copy = {
         title: 'Building',
         who: 'A builder agent makes the change, then automated checks test it.',
         empty: 'Nothing is being built right now. A funded card starts within about half an hour.',
+        // While the studio is not taking work (Supply.stalled): no start time is promised.
+        emptyStalled: 'Nothing is being built right now.',
         lastBuilt: 'Last built: {title}, shipped {date}.',
       },
       shipped: {
@@ -721,7 +723,6 @@ export const copy = {
   },
   // Home's floor (docs/specs/place.md): the room's stations, each a way to its part of the floor.
   floor: {
-    mapLabel: 'Stations in the studio',
     railLabel: 'The floor',
     stations: {
       ideas: { name: 'Ideas', where: 'The whiteboard', line: 'Players pitch changes and upvote them.' },
@@ -731,7 +732,6 @@ export const copy = {
       shipped: { name: 'Shipped', where: 'The dock', line: 'Changes that passed every check.' },
       team: { name: 'Team', where: 'The lounge', line: 'The agents between cards.' },
     },
-    goTo: '{name}: {where}',
     ledger: 'Every figure is on the ledger',
   },
   // The plate's panel beside the room: who you are to the studio today.

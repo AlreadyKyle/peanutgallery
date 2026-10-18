@@ -918,6 +918,15 @@ for file in platform/site/src/tokens.css platform/site/src/components/Card.tsx p
   printf 'platform/site/src/pages/Landing.tsx\n%s\n' "$file" > "$T/kernel-design.txt"
   expect "kernel-guard: $file is a design path" 1 "^FAIL: kernel-guard path=$file rule=design-path\$" -- bash "$KERNEL" "$T/kernel-design.txt"
 done
+# A module that resolves ahead of a design source file replaces it as a kernel shadow does: routes.ts
+# beside routes.tsx changes what the kernel App.tsx routes.
+for file in platform/site/src/routes.ts platform/site/src/routes.js platform/site/src/components/Card.ts platform/site/src/components/Glyph.jsx \
+  platform/site/src/lib/reveal.mjs platform/site/src/lib/motion.js Platform/Site/src/Routes.MTS; do
+  printf 'platform/site/src/pages/Landing.tsx\n%s\n' "$file" > "$T/kernel-design-shadow.txt"
+  expect "kernel-guard: $file shadows a design file and fails" 1 "^FAIL: kernel-guard path=$file rule=design-path\$" -- bash "$KERNEL" "$T/kernel-design-shadow.txt"
+done
+printf 'platform/site/src/lib/motion.tsx\nplatform/site/src/tokens.ts\nplatform/site/src/routes.d.ts\nplatform/site/src/components/Card.test.tsx\n' > "$T/kernel-design-noshadow.txt"
+expect "kernel-guard: a module that resolves after a design file, or is not a module, passes" 0 '^PASS: kernel-guard files=4$' -- bash "$KERNEL" "$T/kernel-design-noshadow.txt"
 printf 'platform/site/src/pages/Landing.tsx\nplatform/site/src/components/Cards.tsx\nplatform/site/src/tokens.css.md\nplatform/site/publicity.ts\nplatform/site/brands/x.svg\nseed-1/render/favicon.ts\nplatform/site/src/lib/motions.ts\n' > "$T/kernel-design-near.txt"
 expect "kernel-guard: names that only resemble a design path pass" 0 '^PASS: kernel-guard files=7$' -- bash "$KERNEL" "$T/kernel-design-near.txt"
 printf 'platform/site/src/routes.tsx\nplatform/gate/x.sh\n' > "$T/kernel-design-first.txt"

@@ -33,6 +33,11 @@ export function draftingLine(snapshot: Snapshot): { text: string; drafting: bool
   return { text: copy.flow.draftingIdle, drafting: false };
 }
 
+/** Building's empty line: when a funded card starts, unless the studio is not taking work now. */
+export function buildingEmptyLine(snapshot: Snapshot): string {
+  return snapshot.supply?.stalled === true ? copy.flow.lanes.building.emptyStalled : copy.flow.lanes.building.empty;
+}
+
 /** A lane's heading: its step on the rail, its name and how many cards it holds. */
 function LaneHead({ lane, step, count }: { lane: FlowLane; step: number; count: number }) {
   return (
@@ -81,7 +86,7 @@ function LaneBody({ lane, cards, snapshot, lastShipped }: { lane: FlowLane; card
   if (lane === 'building') {
     return (
       <EmptyTile>
-        <p>{copy.flow.lanes.building.empty}</p>
+        <p>{buildingEmptyLine(snapshot)}</p>
         {lastShipped === undefined ? null : (
           <p className="card-meta">
             {copy.flow.lanes.building.lastBuilt.replace('{title}', lastShipped.title).replace('{date}', formatDate(shippedAt(lastShipped)))}
