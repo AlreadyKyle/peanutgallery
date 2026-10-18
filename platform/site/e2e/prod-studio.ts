@@ -5,7 +5,7 @@ import { LIVE_STUDIO } from './live-studio';
  * The studio as production had it on 10 Oct 2026 (docs/specs/home-flow.md): the machine had just
  * drafted, funded, built and shipped three agent cards and used its four drafts for the day, so no
  * card was open, funded or building. Every launch card has shipped, and the roadmap holds only board
- * work. Home must still show cards in its flow: Next up and Shipped, and a tile in each empty lane.
+ * work. Home must still show cards in its flow: Ideas and Shipped, and a tile in each empty station.
  * Test data only: no public page ever draws a fixture.
  */
 const cards = LIVE_STUDIO.cards.map((card) =>

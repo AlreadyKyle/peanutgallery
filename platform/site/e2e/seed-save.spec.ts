@@ -15,6 +15,9 @@ async function answerCommunity(page: Page, posts: Post[]) {
     const url = new URL(request.url());
     if (request.method() === 'POST') {
       const body = request.postData() ? (JSON.parse(request.postData()!) as unknown) : null;
+      // The top bar's you slot reads the player's profile on every page (docs/specs/place.md); the
+      // writes are what this spec counts.
+      if (url.pathname === '/api/community/rpc/my_profile') return route.fulfill({ status: 503, contentType: json, body: '{"error":"not in the e2e fixtures"}' });
       posts.push({ path: url.pathname, body, auth: (await request.allHeaders()).authorization ?? null });
       if (url.pathname === '/api/community/rpc/save_seed') return route.fulfill({ status: 200, contentType: json, body: '{"id":"5eed0000-0000-4000-8000-000000000001"}' });
       if (url.pathname === '/api/community/auth/otp') return route.fulfill({ status: 200, contentType: json, body: '{"sent":true}' });

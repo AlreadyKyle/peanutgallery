@@ -34,7 +34,7 @@ test('signed out, the top bar offers Sign in and the floor names every station',
   await expect(ideas.getByRole('link', { name: 'Pitch an idea' })).toHaveAttribute('href', '/suggest#suggest-send');
   // What you get sits with the cards to fund, and paying never asks for an account.
   const perks = page.locator('[data-station-part="fund"] .perks');
-  await expect(perks.getByText('As a guest')).toBeVisible();
+  await expect(perks.getByText('As a guest', { exact: true })).toBeVisible();
   await expect(perks.getByText('10 XP for every dollar, more on rare cards.')).toBeVisible();
   // Pressing a station in the room goes to its part of the floor.
   await page.locator('.station-tags a[href="#shipped"]').click();

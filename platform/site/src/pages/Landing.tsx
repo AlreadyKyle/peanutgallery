@@ -7,7 +7,8 @@ import { Perks } from '../components/Perks';
 import { useSignedIn } from '../lib/account';
 import { splitSentence } from '../components/Funding';
 import { Glyph } from '../components/Glyph';
-import { LiveStudio } from '../components/LiveStudio';
+import { LiveStudio, TwitchLink } from '../components/LiveStudio';
+import { twitchChannel } from '../lib/twitch';
 import { MachineCard } from '../components/MachineCard';
 import { Announcer } from '../components/Announcer';
 import { PoolLine } from '../components/PoolStat';
@@ -255,7 +256,15 @@ export function Landing() {
         ) : (
           <WelcomePanel profile={player} snapshot={view?.snapshot ?? null} status={<HeroStatus studio={studio} live={live} />} />
         )}
-        {view === null ? null : <LiveStudio snapshot={view.snapshot} stations={stationTags()} lit={lit} pipeSize={3} />}
+        {/* While the snapshot loads, the room's label keeps its row, so the panel's heading holds still. */}
+        {view === null ? (
+          <div className="live-studio-head live-studio-hold" aria-hidden="true">
+            <span className="live-studio-hold-title">{copy.studioRoom.title}</span>
+            <TwitchLink channel={twitchChannel()} />
+          </div>
+        ) : (
+          <LiveStudio snapshot={view.snapshot} stations={stationTags()} lit={lit} pipeSize={2} />
+        )}
       </div>
       {/* The stations in the machine's order, the rail with the room's small map beside them from
           64rem; then the first game. */}

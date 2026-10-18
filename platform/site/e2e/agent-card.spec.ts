@@ -1,5 +1,5 @@
 // A card the Game Designer drafted (docs/specs/agent-workflows.md): its full face among home's cards
-// to fund, its compact face in Next up carry "Written by the Game Designer, an
+// to fund, its compact face in the Ideas station carry "Written by the Game Designer, an
 // AI agent", and no card the board filed does; the byline ends above the funding bar. The full faces'
 // rhythm on a card grid is measured on the design guide (docs/specs/home-flow.md). Set
 // E2E_SCREENSHOTS to a folder to save each page at each width.
@@ -51,13 +51,13 @@ for (const viewport of WIDTHS) {
     test('the drafted cards say the Game Designer wrote them, and no other card says so', async ({ page }) => {
       await page.goto('/');
       // The dealt card among the cards to fund, a full face with its h3 title and summary, and the
-      // approved one waiting to open first in Next up.
+      // approved one waiting to open in the Ideas station.
       const face = page.locator(`.fund-grid li.card[data-card="${DEALT.id}"]`);
       await expect(face.locator('h3')).toHaveText(String(DEALT.title));
       await expect(face.locator('.card-summary')).toHaveText(String(DEALT.summary));
       await expect(face).not.toHaveAttribute('data-compact', 'true');
       await expect(face.locator('.card-byline')).toHaveText(BYLINE);
-      const waiting = page.locator(`li.flow-lane[data-lane="next"] li.card[data-card="${WAITING.id}"]`);
+      const waiting = page.locator(`[data-station-part="ideas"] li.card[data-card="${WAITING.id}"]`);
       await expect(waiting.locator('.card-byline')).toHaveText(BYLINE);
       await expect(waiting.locator('.card-meta').last()).toHaveText('Approved, opens soon');
       await expect(page.locator('.card-byline')).toHaveCount(2);

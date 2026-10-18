@@ -2,12 +2,13 @@ import { DISCORD_INVITE, PAYMENT_LINK, PLAY_URL } from './fixture-env';
 import { EMPTY_STUDIO } from './prod-studio';
 import { expect, overflowsHorizontally, test, WIDTHS } from './fixtures';
 
-// Home in the board's order, the top bar and Menu, /contribute and /ledger (docs/specs/home-and-design.md).
+// Home in the board's order, the top bar and Menu, /contribute and /ledger (docs/specs/home-and-design.md,
+// docs/specs/place.md: home is the studio's floor, its stations Ideas, Fund, Building and Shipped).
 for (const viewport of WIDTHS) {
   test.describe(`at ${viewport.width} px`, () => {
     test.use({ viewport });
 
-    test('home draws the pitch, the status line, the card flow, the team and the money, in that order', async ({ page }) => {
+    test('home draws the pitch, the status line, the floor stations, the team and the money, in that order', async ({ page }) => {
       await page.goto('/');
       const main = page.getByRole('main');
       const footer = page.getByRole('contentinfo');
@@ -21,8 +22,17 @@ for (const viewport of WIDTHS) {
       await expect(main.locator('p.status-line')).toHaveText('2 cards are open for funding.');
       await expect(main.getByRole('button', { name: 'Pause updates' })).toHaveCount(0);
 
-      // The live studio opens the cards band (docs/specs/final-state.md).
-      await expect(main.getByRole('heading', { level: 2 })).toHaveText(['The studio, live', 'Pick a card to fund', 'Play the first game', 'How the cards move', 'The team', 'Where the money goes']);
+      // The live studio sits on the plate (docs/specs/final-state.md); the floor's stations follow.
+      await expect(main.getByRole('heading', { level: 2 })).toHaveText([
+        'The studio, live',
+        'Ideas',
+        'Pick a card to fund',
+        'Building',
+        'Shipped',
+        'Play the first game',
+        'The team',
+        'Where the money goes',
+      ]);
       // The first game (docs/specs/home-game-tile.md): a still, its name, one line and Play.
       const game = page.getByRole('region', { name: 'Play the first game' });
       await expect(game.locator('.game-name')).toHaveText('Dust');
@@ -30,17 +40,16 @@ for (const viewport of WIDTHS) {
       expect(await game.locator('img.game-shot').evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
       await expect(game.getByRole('link', { name: 'Play Dust free' })).toHaveAttribute('href', PLAY_URL);
       // The cards to fund come first (docs/specs/home-flow.md): horizon now cards only, picked first,
-      // as full faces with fund links. Then three lanes in order; Building holds the funded card; no
+      // as full faces with fund links. Then Building, which holds the funded card, and Shipped; no
       // filter chips.
       const fund = page.getByRole('region', { name: 'Pick a card to fund' });
       await expect(fund.locator('ul.fund-grid > li.card h3')).toHaveText(['Quiet rooms: one more unlock', 'Rename the Gatherer to Sweeper']);
-      const lanes = main.locator('ol.flow-lanes > li.flow-lane');
-      await expect(lanes.locator('h3')).toHaveText([/^Next up/, /^Building/, /^Shipped/]);
+      const station = (id: string) => main.locator(`[data-station-part="${id}"]`);
       const links = await fund.getByRole('link', { name: 'Fund this card' }).evaluateAll((as) => as.map((a) => (a as HTMLAnchorElement).href));
       expect(links).toHaveLength(2);
       for (const href of links) expect(href).toMatch(new RegExp(`^${PAYMENT_LINK}\\?client_reference_id=[0-9a-f-]{36}$`));
       await expect(page.getByRole('group', { name: 'Show cards for' })).toHaveCount(0);
-      await expect(lanes.nth(1).getByText('A cheaper Cart')).toBeVisible();
+      await expect(station('building').getByText('A cheaper Cart')).toBeVisible();
 
       // The team strip: the first three roles on the team (lib/roster.ts teamStatus), each linking to its row on /team.
       const team = page.getByRole('region', { name: 'The team' });
@@ -48,14 +57,15 @@ for (const viewport of WIDTHS) {
       for (const href of await team.locator('a.member').evaluateAll((as) => as.map((a) => a.getAttribute('href')))) expect(href).toMatch(/^\/team#agent-/);
       await expect(team.getByRole('link', { name: 'Meet the whole team' })).toHaveAttribute('href', '/team');
 
-      await expect(lanes.nth(2).getByRole('heading', { level: 4 })).toHaveText([
+      await expect(station('shipped').getByRole('heading', { level: 4 })).toHaveText([
         'The unlock list fits any number of unlocks',
         'Save progress and resume on reload',
       ]);
-      // Next up: only approved agent cards waiting to open; the fixture's planned cards are backlog
-      // entries and board work, which never show (docs/specs/always-open.md).
-      await expect(lanes.nth(0).getByRole('heading', { level: 4 })).toHaveCount(0);
-      await expect(lanes.nth(0).locator('.flow-empty')).toBeVisible();
+      // Ideas' drafted cards: only approved agent cards waiting to open; the fixture's planned cards are
+      // backlog entries and board work, which never show (docs/specs/always-open.md). The Game
+      // Designer's line says what it is doing instead.
+      await expect(station('ideas').getByRole('heading', { level: 4 })).toHaveCount(0);
+      await expect(station('ideas').locator('.flow-agent')).toBeVisible();
 
       const money = page.getByRole('region', { name: 'Where the money goes' });
       await expect(money.locator('.pool-line')).toHaveText('$12.34 in the pool');
@@ -71,7 +81,7 @@ for (const viewport of WIDTHS) {
       await expect(page.getByRole('tooltip')).toHaveCount(0);
       await expect(page.getByRole('complementary')).toHaveCount(0);
       // A card's own page is linked only by the Watch links: here, one per shipped card (docs/specs/supporter-pages.md).
-      const shippedCount = await lanes.nth(2).locator('li.card').count();
+      const shippedCount = await station('shipped').locator('li.card').count();
       // The live studio (docs/specs/final-state.md) also links the cards its agents are working on,
       // in its written facts and its pipe; outside it the rule holds.
       await expect(page.locator('a[href^="/card/"]:not(.live-studio a)')).toHaveCount(shippedCount);
@@ -101,12 +111,16 @@ for (const viewport of WIDTHS) {
       for (const [name, href] of [
         ['How it works', '/how-it-works'],
         ['Team', '/team'],
-        ['Suggest', '/suggest'],
+        ['Ideas', '/suggest'],
         ['FAQ', '/faq'],
         ['Ledger', '/ledger'],
       ] as const) {
         await expect(nav.getByRole('link', { name, exact: true })).toHaveAttribute('href', href);
       }
+      // The you slot (docs/specs/place.md): Sign in beside the wordmark, or on a phone the menu's
+      // Your desk.
+      if (viewport.width < 480) await expect(nav.getByRole('link', { name: 'Your desk', exact: true })).toHaveAttribute('href', '/me');
+      else await expect(nav.getByRole('link', { name: 'Sign in', exact: true })).toHaveAttribute('href', '/me');
       // Discord, goals and seeds are in the footer, not the top bar (docs/specs/brand.md).
       await expect(nav.getByRole('link', { name: 'Discord' })).toHaveCount(0);
       await expect(nav.getByRole('link', { name: 'Home' })).toHaveCount(0);
@@ -186,9 +200,9 @@ test.describe('the Menu on a phone', () => {
 });
 
 // Home's plate is one picture (the board, 18 October 2026): one headline, the room whole and in view
-// when the page opens at common laptop sizes, the pitch hung from the room's caption line and the pipe's
-// foot on the room's foot, so no column leaves a hollow. The agents' written facts are for screen
-// readers and the keyboard only.
+// when the page opens at common laptop sizes. On the floor (docs/specs/place.md) the room takes the
+// wider left side, the pitch hangs from the room's top and the pipe's foot sits on the room's foot, so
+// no column leaves a hollow. The agents' written facts are for screen readers and the keyboard only.
 for (const size of [
   { width: 1280, height: 720 },
   { width: 1440, height: 810 },
@@ -199,26 +213,28 @@ for (const size of [
     const studio = page.locator('.live-studio');
     await expect(studio.locator('.studio-agent').first()).toBeVisible();
     const box = async (selector: string) => (await page.locator(selector).boundingBox())!;
-    const stage = await box('.studio-stage');
+    const stage = await box('.floor-plate .studio-stage');
     expect(stage.y + stage.height).toBeLessThanOrEqual(size.height);
     // One headline: the lede is the lead size, not a second display line.
     await expect(page.locator('main h1')).toHaveCount(1);
     expect(await page.locator('.hero-home .lede').evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeLessThanOrEqual(20);
-    // The pitch and the room's caption start on one line; the pipe sits on the pitch's text edge, its
-    // foot on the room's.
+    // The pitch starts level with the room's top, beside it; the pipe sits on the pitch's text edge,
+    // its foot on the room's.
     const h1 = await box('.hero-home h1');
-    const caption = (await studio.getByRole('heading', { name: 'The studio, live' }).boundingBox())!;
-    expect(Math.abs(h1.y - caption.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(h1.y - stage.y)).toBeLessThanOrEqual(1);
+    expect(h1.x).toBeGreaterThan(stage.x + stage.width);
     const pipe = await box('.home .pipe');
     expect(Math.abs(pipe.x - h1.x)).toBeLessThanOrEqual(1);
     expect(Math.abs(pipe.y + pipe.height - (stage.y + stage.height))).toBeLessThanOrEqual(1);
-    expect(pipe.x + pipe.width).toBeLessThan(stage.x);
+    // The room is the wider side.
+    expect(stage.width).toBeGreaterThan(pipe.width);
     // The plate draws no how-to line and no pipe intro: both are read out, not shown (the board,
     // 18 October 2026: the plate read as wordy).
     for (const quiet of ['.live-studio-head > p:not(.twitch)', '.home .pipe-intro']) {
       expect((await box(quiet)).height).toBeLessThanOrEqual(1);
     }
-    await expect(page.locator('.home .pipe .pipe-row')).toHaveCount(1);
+    // The newest rows that sit beside the room; the ledger keeps the rest.
+    await expect(page.locator('.home .pipe .pipe-row')).toHaveCount(2);
     const facts = studio.getByRole('list', { name: 'What each agent is doing' });
     await expect(facts).toHaveCount(1);
     expect((await facts.boundingBox())!.height).toBeLessThanOrEqual(1);
@@ -230,7 +246,7 @@ test('tells the snapshot in the pipe while the feed is empty', async ({ page }) 
   await page.route(/\/api\/community\/feed/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ events: [], next: null }) }));
   await page.goto('/');
   const pipe = page.locator('.home .pipe');
-  await expect(pipe.locator('.pipe-row')).toHaveCount(1);
+  await expect(pipe.locator('.pipe-row')).toHaveCount(2);
   await expect(pipe.locator('.pipe-empty')).toHaveCount(0);
 });
 

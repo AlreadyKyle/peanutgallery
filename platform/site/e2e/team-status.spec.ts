@@ -2,7 +2,7 @@ import { RUNNING_MODEL, runningModelsCheck } from '../scripts/team-models.mjs';
 import { DEFAULT_STUDIO, expect, test } from './fixtures';
 import { BUILDER_A, OPENS_SOON_ID, QA, SUPPORTER_STUDIO, VETOED_ID, VETO_REASON } from './supporter-studio';
 
-// /team from the roster's own columns through lib/roster.ts teamStatus, and home's Next up lane with an
+// /team from the roster's own columns through lib/roster.ts teamStatus, and home's Ideas station with an
 // opens-soon and a held card (docs/specs/supporter-pages.md, docs/specs/always-open.md).
 
 test.describe('while the studio is paused', () => {
@@ -133,12 +133,12 @@ test.describe('with one role paused by the board', () => {
   });
 });
 
-test.describe("home's Next up lane", () => {
+test.describe("home's Ideas station, where drafted cards wait", () => {
   test.use({ studio: SUPPORTER_STUDIO });
 
   test('shows an approved card waiting to be dealt as "Approved, opens soon" and leaves a vetoed one out', async ({ page }) => {
     await page.goto('/');
-    const next = page.locator('li.flow-lane[data-lane="next"]');
+    const next = page.locator('[data-station-part="ideas"]');
     const opening = next.locator(`li[data-card="${OPENS_SOON_ID}"]`);
     await expect(opening).toContainText('Approved, opens soon');
     await expect(next.locator(`li[data-card="${VETOED_ID}"]`)).toHaveCount(0);

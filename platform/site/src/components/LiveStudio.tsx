@@ -114,8 +114,8 @@ export function LiveStudio({
           hasOlder={feed.hasOlder}
           loadingOlder={feed.loadingOlder}
           onOlder={feed.loadOlder}
-          // On home the pipe sits under the pitch, its foot on the room's foot: the newest row only, and
-          // the ledger keeps the rest.
+          // On home the pipe sits under the panel, its foot on the room's foot: the newest rows only
+          // (pipeSize), and the ledger keeps the rest.
           pageSize={pipeSize}
           paging={false}
         />

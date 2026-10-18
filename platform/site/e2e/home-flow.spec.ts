@@ -4,29 +4,28 @@ import { PAYMENT_LINK } from './fixture-env';
 import { DEFAULT_STUDIO, expect, overflowsHorizontally, test, type StudioFixture } from './fixtures';
 import { DRAFTING_STUDIO, EMPTY_STUDIO, PROD_STUDIO } from './prod-studio';
 
-// Home's card band (docs/specs/home-flow.md): the cards to fund first, as full faces or the panel
-// that funds the next card in line, then three lanes in the order a card moves, and no lane is ever
+// Home's card band (docs/specs/home-flow.md), now the studio's floor (docs/specs/place.md): Ideas,
+// where the Game Designer drafts cards, then the cards to fund as full faces or the panel that funds
+// the next card in line, then Building and Shipped, in the order a card moves, and no station is ever
 // blank, whatever the studio holds. PROD_STUDIO is production as it was when the home page first
 // looked empty: everything shipped, nothing open and the drafts used up.
 
-const LANES = ['Next up', 'Building', 'Shipped'];
+const LANES = ['Ideas', 'Building', 'Shipped'];
 const VIEWPORTS = [320, 390, 768, 1280].map((width) => ({ width, height: 900 }));
 const SHOTS = process.env.FLOW_SHOTS === '1';
 
 async function lanes(page: import('@playwright/test').Page) {
-  const flow = page.getByRole('region', { name: 'How the cards move' });
-  await expect(flow).toBeVisible();
-  const items = flow.locator('ol.flow-lanes > li.flow-lane');
+  const items = page.locator('.floor-parts > [data-station-part]:not([data-station-part="fund"])');
   await expect(items).toHaveCount(3);
-  await expect(items.locator('h3.flow-title')).toHaveText(LANES.map((name) => new RegExp(`^${name} `)));
+  await expect(items.locator(':scope > h2')).toHaveText(LANES);
   return items;
 }
 
-/** Every lane holds at least one card or its tile saying what happens next. */
+/** Every station holds at least one card, its tile saying what happens next, or (Ideas) the Game Designer's line. */
 async function neverBlank(items: import('@playwright/test').Locator) {
   for (let i = 0; i < 3; i += 1) {
     const lane = items.nth(i);
-    const filled = (await lane.locator('li.card').count()) + (await lane.locator('.flow-empty').count());
+    const filled = (await lane.locator('li.card').count()) + (await lane.locator('.flow-empty').count()) + (await lane.locator('.flow-agent').count());
     expect(filled, `lane ${LANES[i]} is blank`).toBeGreaterThan(0);
     await expect(lane.locator('li.card').nth(3)).toHaveCount(0);
   }
@@ -43,14 +42,15 @@ for (const { label, studio } of CASES) {
   test.describe(`home flow, ${label}`, () => {
     test.use({ studio });
     for (const viewport of VIEWPORTS) {
-      test(`the cards to fund first, then three lanes, none blank, at ${viewport.width}px`, async ({ page }) => {
+      test(`Ideas, the cards to fund, Building and Shipped, none blank, at ${viewport.width}px`, async ({ page }) => {
         await page.setViewportSize(viewport);
         await page.goto('/');
         const h2 = page.getByRole('main').getByRole('heading', { level: 2 });
-        // The live studio opens the band (docs/specs/final-state.md); the cards to fund come next, above
-        // the first game's tile (decision 70).
+        // The live studio is on the plate (docs/specs/final-state.md); Ideas opens the floor and the cards
+        // to fund come next, above the first game's tile (decision 70).
         await expect(h2.nth(0)).toHaveText('The studio, live');
-        await expect(h2.nth(1)).toHaveText(copy.flow.fundTitle);
+        await expect(h2.nth(1)).toHaveText(copy.ideas.title);
+        await expect(h2.nth(2)).toHaveText(copy.flow.fundTitle);
         const items = await lanes(page);
         const fund = page.getByRole('region', { name: copy.flow.fundTitle });
         expect((await fund.locator('ul.fund-grid > li.card').count()) + (await fund.locator('.fund-empty').count())).toBeGreaterThan(0);
@@ -87,7 +87,6 @@ test.describe('home flow, production lanes', () => {
     const items = await lanes(page);
     // Production's planned cards are all backlog entries, which never show (docs/specs/always-open.md).
     await expect(items.nth(0).locator('li.card')).toHaveCount(0);
-    await expect(items.nth(0).locator('.flow-empty')).toHaveText(copy.flow.lanes.next.empty);
     await expect(items.nth(0).locator('.flow-agent')).toHaveText(copy.flow.draftingDone.replace('{n}', '4'));
     const fund = page.getByRole('region', { name: copy.flow.fundTitle });
     await expect(fund.locator('.fund-empty')).toContainText('Fund the next card in line');
@@ -103,7 +102,7 @@ test.describe('home flow, production lanes', () => {
 
 test.describe('home flow while drafting', () => {
   test.use({ studio: DRAFTING_STUDIO });
-  test('the Next up lane and the status line say the agents are drafting', async ({ page }) => {
+  test('the Ideas station and the status line say the agents are drafting', async ({ page }) => {
     await page.goto('/');
     const items = await lanes(page);
     await expect(items.nth(0).locator('.flow-agent[data-drafting]')).toHaveText(copy.flow.drafting);

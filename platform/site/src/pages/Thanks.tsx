@@ -107,6 +107,8 @@ function RewardBand({ id, answer, snapshot }: { id: string; answer: Recorded; sn
           <p data-note="ship-email">{words.shipEmail}</p>
         </>
       ) : null}
+      {/* Keep this card (docs/specs/place.md): sign in with the receipt's email and the card is claimed. */}
+      <KeepThisCard />
     </section>
   );
 }
@@ -159,11 +161,6 @@ function RecordedBody({ answer, snapshot }: { answer: Recorded; snapshot: Snapsh
   return (
     <>
       {reversed || watch === null ? null : <RewardBand id={watch} answer={answer} snapshot={snapshot} />}
-      {reversed ? null : (
-        <section className="section" aria-label={copy.perks.keepTitle}>
-          <KeepThisCard />
-        </section>
-      )}
       <section className="section" aria-labelledby="reached">
         <h2 id="reached">{words.reachedHeading}</h2>
         {reversed ? (

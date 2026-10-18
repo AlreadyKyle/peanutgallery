@@ -91,8 +91,8 @@ export function stationCounts(snapshot: Snapshot, groups: CardGroups, ideas: num
 /**
  * The rail beside the stations from 64rem: the room again as a small map, its lit station outlined,
  * and the stations as a list of links with what waits at each. It stays in view while the stations
- * scroll past, so the page reads as walking round the studio. Under 64rem it is not drawn: the room
- * on the plate carries the tags.
+ * scroll past, so the page reads as walking round the studio. Under 64rem the map is not drawn and the
+ * list is a strip of station links above the stations.
  */
 export function FloorRail({ snapshot, lit, counts }: { snapshot: Snapshot; lit: string | null; counts: Record<StationId, number | null> }) {
   const studio = useStudioDoc();

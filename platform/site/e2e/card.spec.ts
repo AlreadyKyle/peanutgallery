@@ -292,7 +292,7 @@ test.describe('the Watch links', () => {
       const watch = page.locator(`li.card[data-card="${id}"]`).getByRole('link', { name: "Watch how it's built" });
       await expect(watch).toHaveAttribute('href', `/card/${id}`);
     }
-    const shipped = page.locator('li.flow-lane[data-lane="shipped"]');
+    const shipped = page.locator('[data-station-part="shipped"]');
     const links = shipped.getByRole('link', { name: 'Watch how it was built' });
     await expect(links).not.toHaveCount(0);
     await expect(shipped.locator('li.card')).toHaveCount(await links.count());

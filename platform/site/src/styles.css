@@ -2643,6 +2643,7 @@ input[type='radio'] {
 }
 
 .home .live-studio-head > h2,
+.home .live-studio-hold-title,
 .home .pipe-title {
   margin: 0;
   font-size: var(--size-small);
@@ -2652,6 +2653,15 @@ input[type='radio'] {
 
 .home .live-studio-head > p {
   margin: 0;
+}
+
+/* The label's stand-in while the snapshot loads: the same line, unseen, and nothing in it takes focus. */
+.home .live-studio-hold {
+  visibility: hidden;
+}
+
+.home .live-studio-hold-title {
+  line-height: var(--leading-heading);
 }
 
 .home .live-studio-head > p:not(.twitch),
@@ -2739,7 +2749,8 @@ input[type='radio'] {
     display: contents;
   }
 
-  .home .live-studio-head {
+  .home .live-studio-head,
+  .home > .band.floor-plate > .live-studio-hold {
     grid-column: 1;
     grid-row: 1;
     margin-bottom: var(--space-2);
@@ -3408,6 +3419,13 @@ ol.timeline {
 
   main.sheet > .band:not(:first-child) > .thanks-reward > [data-note='ship-email'] {
     grid-row: 3;
+  }
+
+  /* Keep this card (docs/specs/place.md) across both columns under the reward, so neither side
+     stands empty beside it. */
+  main.sheet > .band:not(:first-child) > .thanks-reward > .perks-keep {
+    grid-column: 1 / -1;
+    grid-row: 5;
   }
 }
 
@@ -5187,6 +5205,7 @@ main.home > .band {
 .perks-list {
   margin: 0;
   padding-left: var(--space-3);
+  list-style: disc;
 }
 
 .perks-list li + li {
