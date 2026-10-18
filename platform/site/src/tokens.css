@@ -105,7 +105,7 @@
      now about 3.3 times the body at 1440px (was 2.4), a page heading about 5. */
   --size-lede: clamp(1.25rem, 1.1rem + 0.5vw, 1.5rem); /* 20px to 24px: a page plate's lede and a section's intro (home's pitch keeps --size-lead under it) */
   --size-h2: clamp(1.625rem, 1.2rem + 1.6vw, 2.5rem); /* 26px to 40px: a heading inside a part (a lane, a step, a card page's title) */
-  --size-section: clamp(1.75rem, 1rem + 3vw, 3.5rem); /* 28px to 56px: a section's heading */
+  --size-section: clamp(2rem, 1.25rem + 3vw, 3.5rem); /* 32px to 56px: a section's heading (32px on a phone, so it stands clear of the 20px lede) */
   --size-h1: clamp(2.5rem, 1.2rem + 4.8vw, 6rem); /* 40px to 96px: the page heading */
   --size-hero: clamp(2.375rem, 1rem + 2.6vw, 3.25rem); /* 38px to 52px: home's pitch, three lines beside the room (the board, 18 October 2026: tops out at 52px) */
 
@@ -163,5 +163,5 @@
      --dur-rise, its intro --stagger-reveal after it, and the cards of a grid follow one another. */
   --dur-rise: 720ms;
   --reveal-rise: 1.5rem;
-  --stagger-reveal: 90ms;
+  --stagger-reveal: 150ms;
 }

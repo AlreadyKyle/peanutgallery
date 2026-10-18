@@ -623,11 +623,20 @@ main > .band:not(:first-child) .contribute > h2 {
 }
 
 /* The intro reads as a lede (the production pass): one line under the heading at the lede's size, so
-   the heading, the intro and the body step down in three clear sizes. A sheet's text column keeps
-   its first paragraph at the body size, since there it is the text, not an intro. */
-main:not(.sheet) .section > h2 + p:not(:has(+ p:not(.sr-only), + h3, + h4)) {
+   the heading, the intro and the body step down in three clear sizes. Only an intro is a lede: the
+   one paragraph between a heading and what it introduces (a grid, a list, a form). A paragraph that
+   is the section's whole text, a muted note and a sheet's text column keep the body size. */
+main:not(.sheet) .section > h2 + p:not(.muted, .small):has(+ :not(p, h3, h4)) {
   font-size: var(--size-lede);
   line-height: var(--leading-title);
+}
+
+/* A sheet's headings label its reading column (from 64rem they stand in its left five twelfths), and
+   a framed panel's heading titles a part: both take the part size, so a clause never breaks into a
+   word a line. */
+main.sheet h2,
+.how-rules > h2 {
+  font-size: var(--size-h2);
 }
 
 /* A link to a section (/#fund) lands with its rule and number in view, not cut by the window's top. */

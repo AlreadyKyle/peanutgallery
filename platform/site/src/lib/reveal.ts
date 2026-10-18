@@ -15,10 +15,13 @@ import { motionAllowed } from './motion';
 // stylesheet: a section is drawn as it is until the observer sees it nearing the window, so the
 // first paint is complete, and under reduced motion nothing changes at all.
 
-const SELECTOR = 'main > .band > .section, main > .band > section, .floor-parts > section, .card-grid > li, .seed-grid > li, .goal';
+const SELECTOR = 'main > .band > .section, main > .band > section, .floor-parts > section, .how-steps > li, .card-grid > li, .seed-grid > li, .goal';
 
 /** The parts of a section that rise: its label, its heading and its one intro, in reading order. */
-const LOCKUP = ':scope > .station-index, :scope > h2, :scope > h2 + p, :scope > .live-studio-head';
+const LOCKUP = ':scope > .station-index, :scope > h2, :scope > h2 + p, :scope > .live-studio-head, :scope > .how-text > h2, :scope > .how-text > h2 + p';
+
+/** The cards of a grid, dealt one after another rather than raised. */
+const DEALT = '.card-grid > li, .seed-grid > li';
 
 const CONTROL = 'a, button, input, select, textarea, summary, [tabindex]';
 
@@ -48,7 +51,7 @@ export function useScrollReveal(): void {
     const seen = new WeakSet<Element>();
     const fade = ms('--dur-reveal', '480ms');
     const rise = ms('--dur-rise', '720ms');
-    const step = ms('--stagger-reveal', '90ms');
+    const step = ms('--stagger-reveal', '150ms');
     const distance = token('--reveal-rise', '1.5rem');
     const easing = token('--ease-scene', 'cubic-bezier(0.22, 1, 0.36, 1)');
     // The observer's first answer for each part says where it is when it is first watched, before
@@ -71,7 +74,7 @@ export function useScrollReveal(): void {
           observer.unobserve(el);
           // Already on screen when first seen: drawn as it is.
           if (el.getBoundingClientRect().top < window.innerHeight) continue;
-          const grid = el.matches('li') ? el.parentElement : null;
+          const grid = el.matches(DEALT) ? el.parentElement : null;
           const index = grid === null ? 0 : (dealt.get(grid) ?? 0);
           if (grid !== null) dealt.set(grid, index + 1);
           el.animate?.([{ opacity: 0 }, { opacity: 1 }], {
