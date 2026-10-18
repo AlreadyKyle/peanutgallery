@@ -5020,6 +5020,14 @@ main.home > .band {
   color: var(--paper);
 }
 
+/* A tag can float past the room's edge onto the dark plate, so the focused tag carries its own paper
+   ground and the ring keeps 3:1 against it wherever it sits. */
+.station-tag > a:focus-visible {
+  border-radius: 999px;
+  background: var(--paper);
+  outline-offset: 0;
+}
+
 .station-ring {
   fill: none;
   stroke: var(--ink);
