@@ -98,9 +98,9 @@ export function LiveStudio({ snapshot }: { snapshot: Snapshot }) {
           hasOlder={feed.hasOlder}
           loadingOlder={feed.loadingOlder}
           onOlder={feed.loadOlder}
-          // On home the pipe sits under the pitch, its foot on the room's foot: the two newest rows, and
+          // On home the pipe sits under the pitch, its foot on the room's foot: the newest row only, and
           // the ledger keeps the rest.
-          pageSize={2}
+          pageSize={1}
           paging={false}
         />
       </div>

@@ -115,9 +115,11 @@
   --space-3: 1.5rem;
   --space-4: 2.5rem;
   --space-5: 4rem;
-  /* A band's block padding and the space between sections in one band: 48px on a phone, about 69px
-     at 768px, 96px from about 1070px (the board, 23 Sep 2026: more vertical room). */
-  --band-pad: clamp(3rem, 9vw, 6rem);
+  --space-6: 6rem; /* between a section's blocks that read as separate groups */
+  /* A band's block padding and the space between sections in one band: 64px on a phone, about 86px
+     at 768px, 122px at 1280px and 133px at 1440px, 144px at most (the board, 18 October 2026: the
+     site read as dense; every section gets room to breathe, as a printed sheet does). */
+  --band-pad: clamp(4rem, 2rem + 7vw, 9rem);
 
   /* Layout */
   --wrap: 76rem; /* 1216px: wide enough that the page fills a 1440px screen */
