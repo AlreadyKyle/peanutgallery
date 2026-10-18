@@ -111,33 +111,38 @@ function StudioStatus({ studio, live }: { studio: StudioState; live: ReturnType<
 }
 
 /**
- * The first game and the explainer, side by side from 64rem: the game's box art, its name, one line
- * and Play (decision 68), and the video that shows how a card becomes a change in it. Without a play
- * address the video takes the row alone.
+ * The first game and the explainer under one heading at the section size, side by side from 80rem: the
+ * game's box art, its name, one line and Play (decision 68), and the video that shows how a card
+ * becomes a change in it. Without a play address the video takes the row alone, with no heading.
  */
 function ShowcaseSection() {
   const env = siteEnv();
+  // The still, not the loop: at this size the loop's white scene read as a blank panel.
+  if (env.playUrl === '') {
+    return (
+      <div className="showcase">
+        <ExplainerVideo still />
+      </div>
+    );
+  }
   return (
-    <div className="showcase">
-      {env.playUrl === '' ? null : (
-        <section className="section game-tile" aria-labelledby="game">
-          <img className="game-shot" src="/games/dust-box-art.svg" width={375} height={500} alt={copy.game.alt} />
-          <div className="game-text">
-            <h2 id="game">{copy.game.title}</h2>
-            <p className="game-name">{copy.game.name}</p>
-            <p>{copy.game.line}</p>
-            <p>
-              <a className="button" href={env.playUrl}>
-                <Glyph name="cartridge" />
-                {copy.game.play}
-              </a>
-            </p>
-          </div>
-        </section>
-      )}
-      {/* The still, not the loop: at this size the loop's white scene read as a blank panel. */}
+    <section className="section showcase" aria-labelledby="game">
+      <h2 id="game">{copy.game.title}</h2>
+      <div className="game-tile">
+        <img className="game-shot" src="/games/dust-box-art.svg" width={375} height={500} alt={copy.game.alt} />
+        <div className="game-text">
+          <p className="game-name">{copy.game.name}</p>
+          <p>{copy.game.line}</p>
+          <p>
+            <a className="button" href={env.playUrl}>
+              <Glyph name="cartridge" />
+              {copy.game.play}
+            </a>
+          </p>
+        </div>
+      </div>
       <ExplainerVideo still />
-    </div>
+    </section>
   );
 }
 
