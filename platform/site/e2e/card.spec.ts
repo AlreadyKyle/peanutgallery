@@ -47,7 +47,10 @@ test.describe('a live card', () => {
     await expect(facts.locator('[data-fact="funded"] dd')).toHaveText('$2.00 of $2.00');
     await expect(facts.locator('[data-fact="contributors"] dd')).toHaveText('30');
     await expect(facts.locator('[data-fact="cost"] dd')).toHaveText('$1.24');
-    await expect(facts.locator('[data-fact="time"] dd')).toHaveText('40 minutes');
+    // The stamp line over the facts says how long the build took and what it cost, in one line; the
+    // fixture's times are on the hour in UTC, and the browser runs in its own zone, so only the shape is fixed.
+    await expect(facts.locator('[data-fact="stamp"]')).toHaveText(/^Live 40 minutes after work started, \d\d:00 to \d\d:40, cost \$1\.24$/);
+    await expect(facts.locator('[data-fact="time"]')).toHaveCount(0);
     await expect(facts.locator('[data-fact="gate"] dd')).toContainText('Passed');
     const commit = facts.locator('[data-fact="commit"]');
     await expect(commit).toHaveText(`Merged as the studio's commit ${COMMIT.slice(0, 7)}`);
@@ -300,6 +303,89 @@ test.describe('the Watch links', () => {
     await links.first().click();
     await expect(page).toHaveURL(/\/card\/[0-9a-f-]{36}$/);
     await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('Not found');
+  });
+});
+
+test.describe('the state line and the story', () => {
+  test('a building Dust card says its build clock in whole minutes, with a plain link to play Dust and no Fund button', async ({ page }) => {
+    // Work on the building card started at 14:02 UTC (supporter-studio.ts).
+    await page.clock.setFixedTime(new Date('2026-09-21T14:44:59Z'));
+    await page.goto(`/card/${BUILDING_CARD_ID}`);
+    const facts = page.getByRole('region', { name: 'The facts' });
+    const clock = facts.locator('[data-fact="clock"]');
+    await expect(clock).toHaveText('Building, 42 min in');
+    const play = facts.getByRole('link', { name: 'Play Dust while the agents work' });
+    await expect(play).toHaveAttribute('href', 'https://play.mobmachine.games/?from=card');
+    // Plain text: no pill, no colour of its own, nothing that moves, and no money beside it.
+    expect(await clock.evaluate((el) => [getComputedStyle(el).borderStyle, getComputedStyle(el).animationName, getComputedStyle(el).color === getComputedStyle(el.parentElement!).color])).toEqual(['none', 'none', true]);
+    await expect(page.getByRole('link', { name: 'Fund this card' })).toHaveCount(0);
+    await expect(page.locator('iframe')).toHaveCount(0);
+  });
+
+  test('a checks card says Being checked with its minutes, and a live card no clock', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-09-21T15:05:00Z'));
+    await page.goto(`/card/${CHECKS_CARD_ID}`);
+    await expect(page.locator('[data-fact="clock"]')).toHaveText('Being checked, 60 min in');
+    await page.goto(`/card/${LIVE_CARD_ID}`);
+    await expect(page.locator('[data-fact="stamp"]')).toBeVisible();
+    await expect(page.locator('[data-fact="clock"]')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Play Dust while the agents work' })).toHaveCount(0);
+  });
+
+  test('the clock moves on the live poll, never on its own', async ({ page }) => {
+    await page.clock.install({ time: new Date('2026-09-21T14:44:00Z') });
+    await page.goto(`/card/${BUILDING_CARD_ID}`);
+    const clock = page.locator('[data-fact="clock"]');
+    await expect(clock).toHaveText('Building, 42 min in');
+    await page.clock.runFor(60_000);
+    await expect(clock).toHaveText('Building, 43 min in');
+  });
+
+  test("each of an agent's steps carries its 24px avatar and links its name to its box on /team", async ({ page }) => {
+    await page.goto(`/card/${LIVE_CARD_ID}`);
+    const rows = page.getByRole('region', { name: 'What the agents did' }).locator('ol.timeline > li');
+    await expect(rows.first().locator('.timeline-avatar svg')).toHaveAttribute('width', '24');
+    await expect(rows.first().locator('.timeline-avatar')).toHaveAttribute('aria-hidden', 'true');
+    const name = rows.first().getByRole('link', { name: 'Builder A' });
+    await expect(name).toHaveAttribute('href', /^\/team#agent-/);
+    await name.click();
+    await expect(page).toHaveURL(/\/team#agent-/);
+  });
+
+  test('the brief the agents get is a closed disclosure', async ({ page }) => {
+    await page.goto(`/card/${LIVE_CARD_ID}`);
+    const brief = page.getByRole('region', { name: 'What the agents are told' });
+    await expect(brief.getByText('Fixture intent for the agents.')).toBeHidden();
+    const summary = brief.getByText('Read the brief the agents get');
+    expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await summary.click();
+    await expect(brief.getByText('Fixture intent for the agents.')).toBeVisible();
+  });
+
+  test("the card's title is the page's biggest type, and on a phone the plate leaves it to the face", async ({ page }) => {
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(`/card/${OPEN_CARD_ID}`);
+      await expect(page.locator('.replay .card-solo li.card')).toHaveCount(1);
+      const sizes = await page.locator('main :is(h1, .section > h2:not(.sr-only))').evaluateAll((hs) => hs.map((h) => parseFloat(getComputedStyle(h).fontSize)));
+      const [title, ...headings] = sizes;
+      for (const size of headings) expect(size, `${width}px`).toBeLessThan(title!);
+      const h1 = page.getByRole('heading', { level: 1 });
+      await expect(h1).toHaveCount(1);
+      const fund = page.locator('.replay .card-solo').getByRole('link', { name: 'Fund this card' });
+      if (width === 390) {
+        // Read out, not drawn: the face under the plate carries the title, and its Fund this card is in the first screen.
+        expect((await h1.boundingBox())!.height).toBeLessThanOrEqual(1);
+        expect((await fund.boundingBox())!.y + 44).toBeLessThanOrEqual(844);
+      } else {
+        expect((await h1.boundingBox())!.height).toBeGreaterThan(30);
+      }
+    }
+    // A planned card draws no face, so it keeps its title on a phone.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/card/${PLANNED_CARD_ID}`);
+    await expect(page.locator('[data-planned]')).toBeVisible();
+    expect((await page.getByRole('heading', { level: 1 }).boundingBox())!.height).toBeGreaterThan(20);
   });
 });
 
