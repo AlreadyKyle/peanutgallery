@@ -142,7 +142,9 @@ function Planned({ detail }: { detail: CardDetail }) {
 function Detail({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }) {
   return (
     <>
-      <section aria-labelledby="card-face">
+      {/* From 64rem the face stays in view in its own column while the facts scroll beside it, so its
+          height is not meant to match theirs (DESIGN.md, No dead space). */}
+      <section className="card-face-column" aria-labelledby="card-face" data-balance="ignore">
         <h2 id="card-face" className="sr-only">
           {words.cardHeading}
         </h2>
@@ -188,19 +190,20 @@ export function CardPage() {
   if (state.state === 'not-found') return <NotFound body={words.notFound} />;
   const known = snapshot?.cards.find((card) => card.id === id.toLowerCase());
   const title = state.state === 'ready' ? state.detail.card.title : (known?.title ?? words.cardTitle);
-  const summary = state.state === 'ready' ? state.detail.card.summary : null;
   // The body arrives after first paint, so the signal plate never grows to fill a short window: the
   // title renders once, where it stays, and the paper band takes the height left over (styles.css).
+  // The plate carries no lede: the face under it says the summary, and a short plate puts the face's
+  // Fund this card in view when the page opens (docs/specs/brand.md, the second review).
   return (
-    <main className="title-stays">
+    <main className="title-stays card-page">
       <div className="band">
         <p className="back">
-          <Link className="target" to="/">
+          <Link className="target" to="/#fund">
             <Glyph name="arrow-left" />
             {words.back}
           </Link>
         </p>
-        <PageHeader title={title} lede={summary === null || summary.trim() === '' ? undefined : summary} />
+        <PageHeader title={title} />
         {state.state === 'ready' ? <ShareCard title={title} url={`${window.location.origin}/card/${state.detail.card.id}`} /> : null}
       </div>
       <div className="band">

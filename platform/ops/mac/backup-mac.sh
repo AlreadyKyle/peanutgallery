@@ -197,9 +197,9 @@ dump_all() {
   # schema.sql and data.sql name public and every schema a migration creates: pg_dump --schema dumps
   # nothing a named schema depends on, so a schema left out makes schema.sql fail to restore
   # (platform/ops/test/mac.test.mjs checks both lines against the migrations).
-  "$PG_BIN/pg_dump" --no-password --schema-only --quote-all-identifiers --schema=public --schema=money \
+  "$PG_BIN/pg_dump" --no-password --schema-only --quote-all-identifiers --schema=public --schema=money --schema=community \
     | sed -E 's/^CREATE SCHEMA "/CREATE SCHEMA IF NOT EXISTS "/' > "$dir/schema.sql"
-  "$PG_BIN/pg_dump" --no-password --data-only --quote-all-identifiers --schema=public --schema=money --file="$dir/data.sql"
+  "$PG_BIN/pg_dump" --no-password --data-only --quote-all-identifiers --schema=public --schema=money --schema=community --file="$dir/data.sql"
   if [ "$(env_value BACKUP_SKIP_AUTH)" = 1 ]; then
     files="roles schema data history_schema history_data identity"
     say "the auth schema is not dumped (BACKUP_SKIP_AUTH=1): a restore signs the board in afresh"

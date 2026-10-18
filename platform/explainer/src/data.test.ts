@@ -68,6 +68,8 @@ describe("the video's cast and cards", () => {
 
   it('uses the plain split labels', () => {
     expect(script.agents).toBe('The agents');
-    expect(script.studio).toBe(copy.categories.studio);
+    // The site's suit chips now read Game, Studio and so on (docs/specs/final-state.md, Card suits); the
+    // video keeps its own plain labels.
+    expect(script.studio).toBe('The studio');
   });
 });

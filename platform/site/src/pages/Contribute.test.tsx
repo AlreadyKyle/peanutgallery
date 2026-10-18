@@ -58,8 +58,14 @@ function source(cards: Card[], paused = false, order: string[] = cards.filter(ca
 }
 
 /** Every link to checkout on the page: the first choice and each card. */
+// The Machine card (docs/specs/final-state.md, Card suits) is a second way to Fund the next card in
+// line and goes to the same address; the choices are counted without it, and it is checked on its own.
 function checkoutLinks(): HTMLElement[] {
-  return screen.getAllByRole('link').filter((link) => (link.getAttribute('href') ?? '').startsWith(STRIPE));
+  return screen.getAllByRole('link').filter((link) => (link.getAttribute('href') ?? '').startsWith(STRIPE) && link.closest('.machine-card') === null);
+}
+
+function machineLink(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('.machine-card a');
 }
 
 function renderContribute(src: StudioSource | null) {
@@ -234,6 +240,9 @@ describe('Contribute split slider (docs/specs/split-slider.md)', () => {
       `${STRIPE}?client_reference_id=split70`,
       `${STRIPE}?client_reference_id=g1_split70`,
     ]);
+
+    // The Machine card takes no card id: the waterfall places it exactly as Fund the next card in line.
+    expect(machineLink()?.getAttribute('href')).toBe(`${STRIPE}?client_reference_id=split70`);
 
     fireEvent.change(slider, { target: { value: '0' } });
     expect(checkoutLinks()[0]?.getAttribute('href')).toBe(`${STRIPE}?client_reference_id=split100`);

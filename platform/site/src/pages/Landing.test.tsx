@@ -303,16 +303,18 @@ describe('Landing', () => {
 
     await screen.findByRole('region', { name: copy.team.title });
     await lanesDrawn();
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([copy.flow.fundTitle, copy.game.title, copy.flow.title, copy.team.title, legal.moneyHeading]);
-    // Four bands: the pitch (signal), the cards (paper: the cards to fund, the first game, then how
+    // The live studio sits on the plate under the pitch, in view when the page opens (docs/specs/brand.md, Home).
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([copy.studioRoom.title, copy.flow.fundTitle, copy.game.title, copy.flow.title, copy.team.title, legal.moneyHeading]);
+    // Four bands: the pitch and the live studio (signal), the cards (paper: the cards to fund, the first game, then how
     // they move), the team (ink) and the money (paper).
     const bands = [...container.querySelectorAll<HTMLElement>('main > *')];
     expect(bands.map((band) => band.className)).toEqual(['band', 'band', 'band', 'band']);
     expect(bands[0]!.querySelector('h1')).not.toBeNull();
+    expect([...bands[0]!.querySelectorAll('h2')].map((h) => h.id)).toEqual(['studio']);
     expect([...bands[1]!.querySelectorAll('h2')].map((h) => h.id)).toEqual(['fund', 'game', 'flow']);
-    // The first game's tile: its name, a still with alt text, and Play to the game (decision 68).
+    // The first game's tile: its name, its box art with alt text, and Play to the game (decision 68).
     expect(screen.getByRole('link', { name: copy.game.play }).getAttribute('href')).toBe('https://play.example');
-    expect(screen.getByRole('img', { name: copy.game.alt }).getAttribute('src')).toBe('/games/dust.png');
+    expect(screen.getByRole('img', { name: copy.game.alt }).getAttribute('src')).toBe('/games/dust-box-art.svg');
     expect(screen.getByText(legal.agentShareLine, { exact: false })).toBeTruthy();
     expect(bands[2]!.querySelector('h2')?.id).toBe('team');
     expect(bands[3]!.querySelector('h2')?.id).toBe('money');
@@ -338,10 +340,11 @@ describe('Landing', () => {
     expect(screen.queryByRole('complementary')).toBeNull();
     expect(screen.queryByText(legal.fixedRulesIntro)).toBeNull();
     // Each card page link is a Watch link: on the building face and on each shipped face (supporter-pages).
-    const watch = [...container.querySelectorAll('a[href^="/card/"]')].map((a) => a.textContent);
+    // The live studio and the pipe link cards too (docs/specs/final-state.md); they are counted apart.
+    const watch = [...container.querySelectorAll('a[href^="/card/"]')].filter((a) => a.closest('.live-studio') === null).map((a) => a.textContent);
     expect(watch.length).toBeGreaterThan(0);
     expect(new Set(watch)).toEqual(new Set([copy.cardPage.watchBuilt, copy.cardPage.watchWasBuilt]));
-  });
+  }, 20_000); // About 1.2 s alone; pnpm verify runs every package at once, and under that load it passed 5 s.
 
   it('says in one status line how many cards are open and building, with the figures at 600', async () => {
     renderLanding(fakeSource());
@@ -426,8 +429,11 @@ describe('Landing', () => {
     expect(within(building).queryByRole('progressbar')).toBeNull();
     // No brief on a card; the agreement is said once, under the fund grid, and nowhere else.
     expect(document.querySelector('details.brief')).toBeNull();
-    expect(within(fund).getAllByText(/By funding you accept/)).toHaveLength(1);
-    expect(screen.getAllByText(/By funding you accept/)).toHaveLength(1);
+    // The Machine card (docs/specs/final-state.md) is its own checkout link and carries its own
+    // agreement line; outside it, the agreement is said once.
+    const outsideMachine = (els: HTMLElement[]) => els.filter((el) => el.closest('.machine-card') === null);
+    expect(outsideMachine(within(fund).getAllByText(/By funding you accept/))).toHaveLength(1);
+    expect(outsideMachine(screen.getAllByText(/By funding you accept/))).toHaveLength(1);
   });
 
   it('shows three cards to fund and links See all n open cards to /contribute', async () => {
@@ -550,7 +556,7 @@ describe('Landing', () => {
     const bands = [...container.querySelectorAll('main > .band')];
     expect(bands).toHaveLength(3);
     expect(bands[2]!.querySelector('h2')?.id).toBe('money');
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([copy.flow.fundTitle, copy.flow.title, legal.moneyHeading]);
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([copy.studioRoom.title, copy.flow.fundTitle, copy.flow.title, legal.moneyHeading]);
   });
 
   it('lists the latest three shipped cards, newest first, saying what each cost and who funded it', async () => {

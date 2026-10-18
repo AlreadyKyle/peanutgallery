@@ -1,4 +1,5 @@
 import { DISCORD_INVITE, PAYMENT_LINK, PLAY_URL } from './fixture-env';
+import { EMPTY_STUDIO } from './prod-studio';
 import { expect, overflowsHorizontally, test, WIDTHS } from './fixtures';
 
 // Home in the board's order, the top bar and Menu, /contribute and /ledger (docs/specs/home-and-design.md).
@@ -20,11 +21,12 @@ for (const viewport of WIDTHS) {
       await expect(main.locator('p.status-line')).toHaveText('2 cards are open for funding.');
       await expect(main.getByRole('button', { name: 'Pause updates' })).toHaveCount(0);
 
-      await expect(main.getByRole('heading', { level: 2 })).toHaveText(['Pick a card to fund', 'Play the first game', 'How the cards move', 'The team', 'Where the money goes']);
+      // The live studio opens the cards band (docs/specs/final-state.md).
+      await expect(main.getByRole('heading', { level: 2 })).toHaveText(['The studio, live', 'Pick a card to fund', 'Play the first game', 'How the cards move', 'The team', 'Where the money goes']);
       // The first game (docs/specs/home-game-tile.md): a still, its name, one line and Play.
       const game = page.getByRole('region', { name: 'Play the first game' });
       await expect(game.locator('.game-name')).toHaveText('Dust');
-      await expect(game.getByRole('img', { name: /^Dust in play/ })).toBeVisible();
+      await expect(game.getByRole('img', { name: /^The box art for Dust/ })).toBeVisible();
       expect(await game.locator('img.game-shot').evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
       await expect(game.getByRole('link', { name: 'Play Dust free' })).toHaveAttribute('href', PLAY_URL);
       // The cards to fund come first (docs/specs/home-flow.md): horizon now cards only, picked first,
@@ -70,7 +72,9 @@ for (const viewport of WIDTHS) {
       await expect(page.getByRole('complementary')).toHaveCount(0);
       // A card's own page is linked only by the Watch links: here, one per shipped card (docs/specs/supporter-pages.md).
       const shippedCount = await lanes.nth(2).locator('li.card').count();
-      await expect(page.locator('a[href^="/card/"]')).toHaveCount(shippedCount);
+      // The live studio (docs/specs/final-state.md) also links the cards its agents are working on,
+      // in its written facts and its pipe; outside it the rule holds.
+      await expect(page.locator('a[href^="/card/"]:not(.live-studio a)')).toHaveCount(shippedCount);
       await expect(page.getByRole('link', { name: 'Watch how it was built' })).toHaveCount(shippedCount);
       await expect(footer.getByText('AI agents build free games you can play in a browser.', { exact: false })).toBeVisible();
       await expect(footer.getByText('Everything here is made for all ages.', { exact: false })).toBeVisible();
@@ -97,11 +101,14 @@ for (const viewport of WIDTHS) {
       for (const [name, href] of [
         ['How it works', '/how-it-works'],
         ['Team', '/team'],
+        ['Suggest', '/suggest'],
+        ['FAQ', '/faq'],
         ['Ledger', '/ledger'],
-        ['Discord', DISCORD_INVITE],
       ] as const) {
         await expect(nav.getByRole('link', { name, exact: true })).toHaveAttribute('href', href);
       }
+      // Discord, goals and seeds are in the footer, not the top bar (docs/specs/brand.md).
+      await expect(nav.getByRole('link', { name: 'Discord' })).toHaveCount(0);
       await expect(nav.getByRole('link', { name: 'Home' })).toHaveCount(0);
       await expect(nav.getByRole('link', { name: 'Board' })).toHaveCount(0);
       expect(await overflowsHorizontally(page)).toBe(false);
@@ -175,6 +182,59 @@ test.describe('the Menu on a phone', () => {
     expect(bar?.height ?? 0).toBeLessThanOrEqual(61);
     await page.getByRole('button', { name: 'Menu' }).click();
     await expect(page.getByRole('navigation', { name: 'Site' }).getByRole('link', { name: 'Play', exact: true })).toHaveAttribute('href', PLAY_URL);
+  });
+});
+
+// Home's plate is one picture (the board, 18 October 2026): one headline, the room whole and in view
+// when the page opens at common laptop sizes, the pitch hung from the room's caption line and the pipe's
+// foot on the room's foot, so no column leaves a hollow. The agents' written facts are for screen
+// readers and the keyboard only.
+for (const size of [
+  { width: 1280, height: 720 },
+  { width: 1440, height: 810 },
+]) {
+  test(`shows the whole room beside the pitch above the fold at ${size.width} by ${size.height}`, async ({ page }) => {
+    await page.setViewportSize(size);
+    await page.goto('/');
+    const studio = page.locator('.live-studio');
+    await expect(studio.locator('.studio-agent').first()).toBeVisible();
+    const box = async (selector: string) => (await page.locator(selector).boundingBox())!;
+    const stage = await box('.studio-stage');
+    expect(stage.y + stage.height).toBeLessThanOrEqual(size.height);
+    // One headline: the lede is the lead size, not a second display line.
+    await expect(page.locator('main h1')).toHaveCount(1);
+    expect(await page.locator('.hero-home .lede').evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeLessThanOrEqual(20);
+    // The pitch and the room's caption start on one line; the pipe sits on the pitch's text edge, its
+    // foot on the room's.
+    const h1 = await box('.hero-home h1');
+    const caption = (await studio.getByRole('heading', { name: 'The studio, live' }).boundingBox())!;
+    expect(Math.abs(h1.y - caption.y)).toBeLessThanOrEqual(1);
+    const pipe = await box('.home .pipe');
+    expect(Math.abs(pipe.x - h1.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(pipe.y + pipe.height - (stage.y + stage.height))).toBeLessThanOrEqual(1);
+    expect(pipe.x + pipe.width).toBeLessThan(stage.x);
+    const facts = studio.getByRole('list', { name: 'What each agent is doing' });
+    await expect(facts).toHaveCount(1);
+    expect((await facts.boundingBox())!.height).toBeLessThanOrEqual(1);
+  });
+}
+
+// A feed that answers with nothing yet still shows the cards' own story, never an empty pipe.
+test('tells the snapshot in the pipe while the feed is empty', async ({ page }) => {
+  await page.route(/\/api\/community\/feed/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ events: [], next: null }) }));
+  await page.goto('/');
+  const pipe = page.locator('.home .pipe');
+  await expect(pipe.locator('.pipe-row')).toHaveCount(2);
+  await expect(pipe.locator('.pipe-empty')).toHaveCount(0);
+});
+
+test.describe('a studio with no cards', () => {
+  test.use({ studio: EMPTY_STUDIO });
+
+  test("draws one quiet slot where the pipe's rows will land", async ({ page }) => {
+    await page.route(/\/api\/community\/feed/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ events: [], next: null }) }));
+    await page.goto('/');
+    await expect(page.locator('.home .pipe .pipe-empty')).toHaveText('Quiet so far. Every coin, new card and shipment lands here as it happens.');
   });
 });
 

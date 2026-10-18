@@ -48,7 +48,10 @@ function beforeSupporterPages(snapshot: Snapshot): unknown {
   return {
     ...rest,
     cards: rest.cards.map(({ opens_at: _o, board_vetoed: _v, board_veto_reason: _r, board_work: _w, ...card }) => card),
-    roles: rest.roles.map(({ status: _s, trigger: _t, paused: _p, paused_reason: _pr, code_only: _c, ...role }) => role),
+    // community-core's Curator and Art Director joined the roster after the golden (docs/specs/final-state.md).
+    roles: rest.roles
+      .filter((role) => role.name !== 'Curator' && role.name !== 'Art Director')
+      .map(({ status: _s, trigger: _t, paused: _p, paused_reason: _pr, code_only: _c, ...role }) => role),
     events: rest.events.map(({ line_key: _k, ...event }) => event),
   };
 }

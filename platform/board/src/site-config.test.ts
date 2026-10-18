@@ -104,3 +104,27 @@ describe('the board app is self-contained', () => {
     }
   });
 });
+
+describe('the games admin', () => {
+  it("keeps the board's copy of each game's box art equal to the public site's, so the image policy stays 'self'", () => {
+    const board = readFileSync(resolve(root, 'public/games/dust-box-art.svg'), 'utf8');
+    expect(board).toBe(readFileSync(resolve(root, '../site/public/games/dust-box-art.svg'), 'utf8'));
+    expect(board.startsWith('<svg')).toBe(true);
+    expect(board).not.toMatch(/<script|href="http/);
+  });
+});
+
+describe('the motion pass (the public site standard, brought to the board)', () => {
+  const css = readFileSync(resolve(root, 'src/styles.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+
+  it('moves only transform, inside prefers-reduced-motion: no-preference, with the tokens, and holds no keyframes', () => {
+    const block = css.match(/@media \(prefers-reduced-motion: no-preference\) \{([\s\S]*?\n)\}/);
+    expect(block).not.toBeNull();
+    const outside = css.replace(block![0], '');
+    expect(outside).not.toMatch(/transition\s*:|animation\s*:/);
+    for (const line of block![1]!.match(/transition\s*:[^;]+;/g) ?? []) {
+      expect(line).toMatch(/^transition\s*:\s*transform var\(--dur-[a-z]+\) var\(--ease-[a-z]+\);$/);
+    }
+    expect(css).not.toMatch(/@keyframes|infinite|view-transition|@starting-style|linear\(/);
+  });
+});

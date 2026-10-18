@@ -11,10 +11,21 @@ const SUFFIXES: ReadonlyArray<{ value: number; suffix: string }> = [
   { value: 1e6, suffix: 'M' },
 ];
 
+const EXPONENT_FROM = 1e21;
+
+// "1.50e21": three significant figures, never the raw float.
+function exponent(amount: number): string {
+  const [mantissa, power] = amount.toExponential(2).split('e+');
+  return `${mantissa}e${power}`;
+}
+
 export function groupThousands(whole: number): string {
   // A figure that is not a finite number shows as 0 rather than "not a number" or "Infinity".
   if (!Number.isFinite(whole)) return '0';
   if (whole < 0) return `-${groupThousands(-whole)}`;
+  // Past 1e21 a number's own text is already an exponent ("4.3088693800637674e+98"); show it the way
+  // dust shows one instead of putting commas into it.
+  if (whole >= EXPONENT_FROM) return exponent(whole);
   const digits = Math.floor(whole).toString();
   let out = '';
   for (let i = 0; i < digits.length; i += 1) {
@@ -25,15 +36,10 @@ export function groupThousands(whole: number): string {
   return out;
 }
 
-const EXPONENT_FROM = 1e21;
-
 export function formatDust(amount: number): string {
   if (!Number.isFinite(amount)) return '0';
   if (amount < 0) return `-${formatDust(-amount)}`;
-  if (amount >= EXPONENT_FROM) {
-    const [mantissa, exponent] = amount.toExponential(2).split('e+');
-    return `${mantissa}e${exponent}`;
-  }
+  if (amount >= EXPONENT_FROM) return exponent(amount);
   for (let i = 0; i < SUFFIXES.length; i += 1) {
     const entry = SUFFIXES[i]!;
     if (amount < entry.value) continue;
@@ -54,7 +60,7 @@ export function formatRate(perSecond: number): string {
 }
 
 export function formatPercent(multiplier: number): string {
-  return `${Math.round((multiplier - 1) * 100)}%`;
+  return `${groupThousands(Math.round((multiplier - 1) * 100))}%`;
 }
 
 export function fill(template: string, values: Record<string, string>): string {

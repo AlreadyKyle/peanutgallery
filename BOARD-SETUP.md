@@ -32,6 +32,11 @@ pauses or stays as it is.
   tiers ship (`docs/PLAN.md` §5 Canada admin).
 - **Accounts only a person holds:** regenerating the GitHub tokens before they expire (Reference,
   below), passkeys on every account, and the offline backup key.
+- **For the final state** (`docs/specs/final-state.md`, `docs/strategy/roadmap.md` Phase 1): an
+  account with a transactional email provider for profile sign-in links, its key put in `.env`
+  (sessions wire it up); and a Twitch channel in the studio's name, so the board can stream
+  /broadcast from OBS when it chooses. The studio waits on neither: without email, profiles stay
+  off behind their flag; without the channel, /broadcast simply is not streamed.
 
 ## Pause when the board site is down
 

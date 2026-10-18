@@ -37,9 +37,10 @@ export const OPTIONAL_KEYS = [
 ];
 
 // Copied from .env when set, and checked with the dispatcher's own pattern (config.ts): the Discord
-// webhooks the outbound lane posts to (docs/specs/studio-reports.md). Unset, a lane is inert. Each
-// address is a bearer secret, so a refusal names the key only.
-export const DISCORD_KEYS = ['DISCORD_WEBHOOK_SHIPS', 'DISCORD_WEBHOOK_WEEKLY'];
+// webhooks the outbound lane posts to (docs/specs/studio-reports.md) and the announcements lane's
+// (docs/specs/operations.md). Unset, a lane is inert. Each address is a bearer secret, so a refusal
+// names the key only.
+export const DISCORD_KEYS = ['DISCORD_WEBHOOK_SHIPS', 'DISCORD_WEBHOOK_WEEKLY', 'DISCORD_WEBHOOK_URL'];
 export const DISCORD_WEBHOOK = /^https:\/\/((ptb|canary)[.])?discord(app)?[.]com\/api\/webhooks\/[0-9]+\/[A-Za-z0-9_-]+$/;
 
 // Optional models that, when set, need a row in PRICE_TABLE_JSON, as loadConfig requires.

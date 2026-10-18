@@ -112,6 +112,7 @@ export const TIERS = {
     'platform/ops/peanutgallery-quota.service',
     'platform/ops/peanutgallery-quota.timer',
     'platform/ops/test/jobs.test.mjs',
+    'platform/ops/test/load.test.mjs',
     'platform/ops/test/mac.test.mjs',
     'platform/ops/test/ops.test.mjs',
     'platform/supabase/functions/_shared/agent_system_test.ts',

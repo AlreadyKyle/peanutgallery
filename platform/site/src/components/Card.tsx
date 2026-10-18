@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom';
-import { categoryOf, faceOf, sourceLabel, type Face } from '../lib/cards';
+import { faceOf, sourceLabel, type Face } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { legal } from '../lib/legal';
 import type { Card, Snapshot } from '../lib/source';
+import { rarityOf, suitOf } from '../lib/suits';
 import { CardMoney, shippedCaption, type CardMode, type SpecRow } from './Funding';
-import { Glyph, StateTag, SuitTag } from './Glyph';
+import { Glyph, RarityTag, StateTag, SuitTag } from './Glyph';
 
 // The card, the one object on the page (DESIGN.md, The card). A white face with a 2px ink edge; a
 // corner index with the suit and the state, the title and summary, then the money and the action
@@ -83,10 +84,17 @@ export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, r
   const byline = writtenBy(card, snapshot);
   const Title = compact ? 'h4' : 'h3';
   const summary = compact || blank(card.summary) ? null : <p className="card-summary">{card.summary}</p>;
+  const rarity = rarityOf(card);
   return (
-    <li className="card" data-face={shown} data-card={card.id} data-compact={compact ? 'true' : undefined}>
+    <li className="card" data-face={shown} data-card={card.id} data-compact={compact ? 'true' : undefined} data-rarity={rarity}>
+      {/* The rarity (docs/specs/final-state.md, Rarity): an edge pattern inside the card's edge and its
+          word on a tab over the top edge. It changes the face and XP only. */}
+      <span className="rarity-edge" aria-hidden="true" />
+      <span className="rarity-notch">
+        <RarityTag rarity={rarity} />
+      </span>
       <p className="card-index">
-        <SuitTag suit={categoryOf(card)} />
+        <SuitTag suit={suitOf(card)} />
         <StateTag face={shown} stamp={stamp && shown === 'live'} />
       </p>
       {/* In home's flow a card sits under its lane's h3, so its title is an h4. */}

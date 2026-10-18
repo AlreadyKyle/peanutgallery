@@ -12,8 +12,9 @@ const host = new URL(SUPABASE_URL).host;
 const storageKey = `sb-${host.split('.')[0]}-auth-token`;
 const EMAIL = 'board@mobmachine.games';
 
-// The calls the old page made that this panel never makes (docs/specs/optional-board.md).
-const RETIRED = ['board_heartbeat', 'board_needs_you', 'board_roles', 'card_is_public', 'set_role_pause', 'set_card_veto', 'set_caps'];
+// The calls the old page made that this panel never makes (docs/specs/optional-board.md). set_role_pause
+// left the list: the final state's Agents admin turns a role on and off (docs/specs/final-state.md, Admin).
+const RETIRED = ['board_heartbeat', 'board_needs_you', 'board_roles', 'card_is_public', 'set_card_veto', 'set_caps'];
 
 async function watchPolicy(page: Page): Promise<string[]> {
   const reports: string[] = [];
@@ -90,6 +91,52 @@ const FINDINGS = [
   },
 ];
 
+// One queued suggestion, with the Curator's triage, as board_suggestions gives it (docs/specs/community-core.md).
+const SUGGESTION = {
+  id: 's0000000-0000-4000-8000-000000000001', area: 'dust', title: 'Night mode', body: 'The sand could glow at night.', state: 'clustered', declineReason: null, held: false,
+  votes: 4, createdAt: '2026-10-09T10:00:00Z', author: 'supporter-1', clusterId: 'k0000000-0000-4000-8000-000000000001', clusterKey: 'night-mode', cardId: null,
+  triage: { kind: 'feature', fit: 0.8, flags: [], summary: 'Glowing sand at night.', clusterKey: 'night-mode' }, cursor: '1|s',
+};
+
+// board_games and board_agent_roster as 20261017220000_board_games_admin.sql answers them.
+const GAMES = [
+  {
+    folder: 'seed-1', name: 'Dust', status: 'live', accepting_cards: true, featured: true, blurb: 'An idle game you play in a browser.',
+    play_url: 'https://play.mobmachine.games', box_art: '/games/dust-box-art.svg',
+    plays: { load_event: 'dust_load', share_event: 'dust_share', loads: { day: 40, week: 40, month: 40, total: 40 }, shares: { day: 6, week: 6, month: 6, total: 6 } },
+    admin_log: [{ at: '2026-10-09T09:00:00Z', actor: EMAIL, action: 'feature_game', reason: 'Our first game', details: { from: false, to: true, unfeatured: null } }],
+    open_count: 1, shipped_count: 1,
+    open_cards: [{ id: CARD.id, title: 'An e2e card', stage: 'funded', horizon: 'now', updated_at: '2026-10-09T10:00:00Z' }],
+    shipped_cards: [{ id: 'c-live', title: 'Night sky', live_at: '2026-10-08T10:00:00Z', commit_sha: 'abc1234' }],
+    latest_deploy: { sha: 'abc1234ffff', is_green: true, smoke_result: 'ok', created_at: '2026-10-09T11:00:00Z' },
+    latest_green_deploy: { sha: 'abc1234ffff', created_at: '2026-10-09T11:00:00Z' },
+  },
+];
+const AGENTS = [
+  {
+    id: 'r-builder-a', name: 'Builder A', title: 'Builder A', model: 'claude-e2e', tools: ['Read', 'Edit', 'Bash', 'Glob', 'Grep', 'Write'], write_access: true, agent_class: 'builder',
+    description: 'Builds funded game cards in the paths each card allows.', species_note: 'A badger with a hard hat.', avatar_url: null, trigger: null, budget_share: 0.125,
+    state: 'active', status: 'running', paused: false, paused_reason: null, paused_at: null, jobs: ['build_card'],
+    spend: { day_usd: 1.5, week_usd: 4, month_usd: 12.25, total_usd: 40 },
+    caps: { role_day_usd: 1.5, role_month_usd: 12.25, studio_day_usd: 3, studio_month_usd: 50, daily_cap_usd: 100, monthly_cap_usd: 500 },
+    runs_day: { succeeded: 3, failed: 1, skipped: 0, queued: 0, running: 0 },
+    runs_week: { succeeded: 9, failed: 2, skipped: 0, last_at: '2026-10-09T11:00:00Z' },
+    recent_runs: [{ id: 'run-1', job: 'build_card', status: 'failed', origin: 'schedule', card_id: null, reason: 'tests', created_at: '2026-10-09T11:00:00Z', started_at: null, finished_at: null }],
+    pause_history: [{ at: '2026-10-08T07:00:00Z', actor: EMAIL, paused: true, reason: 'Flaky test' }],
+  },
+  {
+    id: 'r-host', name: 'Host', title: 'Host', model: 'claude-e2e-small', tools: [], write_access: false, agent_class: 'web_only',
+    description: 'Narrates the stream.', species_note: null, avatar_url: null, trigger: 'When the stream exists.', budget_share: 0,
+    state: 'active', status: 'planned', paused: false, paused_reason: null, paused_at: null, jobs: [],
+    spend: { day_usd: 0, week_usd: 0, month_usd: 0, total_usd: 0 },
+    caps: { role_day_usd: 0, role_month_usd: 0, studio_day_usd: 3, studio_month_usd: 50, daily_cap_usd: 100, monthly_cap_usd: 500 },
+    runs_day: { succeeded: 0, failed: 0, skipped: 0, queued: 0, running: 0 },
+    runs_week: { succeeded: 0, failed: 0, skipped: 0, last_at: null },
+    recent_runs: [],
+    pause_history: [],
+  },
+];
+
 const EVENTS = [{ id: 'e1', card_id: CARD.id, type: 'message', created_at: '2026-10-09T09:30:00Z', step: 'dealt', line_key: 'card_dealt' }];
 
 // A small SVG, as Supabase Auth returns it before supabase-js turns it into a data: URL.
@@ -153,6 +200,28 @@ async function answerSupabase(
         return json(null);
       case '/rest/v1/rpc/enqueue_manual_job':
         return json('run-queued-e2e');
+      case '/rest/v1/rpc/board_suggestions':
+        return json({ items: [SUGGESTION], next: null });
+      case '/rest/v1/rpc/board_decline_suggestion':
+        return json({ id: args.p_id, state: 'declined' });
+      case '/rest/v1/rpc/board_community_cards':
+        return json({ items: [{ id: CARD.id, title: 'An e2e card', stage: 'funded', suit: 'game', rarity: 'common', computedRarity: 'rare' }], next: null });
+      case '/rest/v1/rpc/board_games':
+        return json(GAMES);
+      case '/rest/v1/rpc/board_agent_roster':
+        return json(AGENTS);
+      case '/rest/v1/rpc/set_role_pause':
+        return json({ role: args.p_role, paused: args.p_paused });
+      case '/rest/v1/rpc/board_set_game_status':
+        return json({ folder: args.p_folder, status: args.p_status });
+      case '/rest/v1/rpc/board_set_game_accepting':
+        return json({ folder: args.p_folder, accepting_cards: args.p_accepting });
+      case '/rest/v1/rpc/board_set_game_featured':
+        return json({ folder: args.p_folder, featured: args.p_featured, unfeatured: null });
+      case '/rest/v1/rpc/board_set_game_blurb':
+        return json({ folder: args.p_folder, blurb: args.p_blurb === '' ? null : args.p_blurb });
+      case '/rest/v1/rpc/board_flags':
+        return json({ curator_triage: false, profiles_open: true });
       default:
         return route.fulfill({ status: 404, contentType: 'application/json', body: '{"message":"not in the e2e fixtures"}' });
     }
@@ -272,7 +341,8 @@ test('at the second factor the panel shows Status, Activity and Actions, and eve
   await expect(status.getByText('The caps are read-only here: they change by SQL.')).toBeVisible();
   await expect(status.getByText('Open cards: 6 of a floor of 6 · $5 or more: 0 of 1 · under $2: 6 of 1.')).toBeVisible();
   const sections = await page.locator('main > section').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')));
-  expect(sections).toEqual(['Status', 'Activity', 'Play and share counts', 'Actions']);
+  // community-core adds Community last, and board-live Games and agents before it (docs/specs/final-state.md).
+  expect(sections).toEqual(['Status', 'Activity', 'Play and share counts', 'Actions', 'Games and agents', 'Community']);
 
   // Play and share counts (docs/specs/play-counts.md): one row a day and the total, read once for 14 days.
   const counts = page.getByRole('region', { name: 'Play and share counts' });
@@ -418,5 +488,156 @@ for (const [who, role, aal] of [
     if (role === 'moderator') expect(seen.filter((line) => line.includes('/rest/v1/'))).toEqual(seen.filter((line) => /rpc\/(board_role|set_paused)$/.test(line)));
     for (const name of RETIRED) expect(seen).not.toContain(`POST /rest/v1/rpc/${name}`);
     expect(reports).toEqual([]);
+  });
+}
+
+test('the Community admin reads nothing until a tab is chosen, and declines a suggestion with its reason after the confirm, at 375 px', async ({ page }) => {
+  const reports = await watchPolicy(page);
+  const seen: string[] = [];
+  const bodies: Record<string, unknown>[] = [];
+  await answerSupabase(page, seen, { aal2: true, bodies });
+  await signIn(page, 'aal2');
+  await page.goto('/');
+  const community = page.getByRole('region', { name: 'Community' });
+  await expect(community.getByRole('button', { name: 'Suggestions' })).toBeVisible();
+  expect(seen.filter((line) => /rpc\/board_(suggestions|flags|community_users|seeds|moderation_log)$/.test(line))).toEqual([]);
+  await community.getByRole('button', { name: 'Suggestions' }).click();
+  const row = community.locator(`tr[data-suggestion="${SUGGESTION.id}"]`);
+  await expect(row).toContainText('Night mode');
+  await expect(row).toContainText('Glowing sand at night.');
+  await expect(row.getByRole('button', { name: 'Decline' })).toBeDisabled();
+  await expect(community.getByText(/^Type a reason first/)).toBeVisible();
+  // Every action sits inside the column, stacked, at a phone's width and a desktop's: the table never
+  // runs past its box.
+  for (const width of [375, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const box = (await community.boundingBox())!;
+    for (const name of ['Decline', 'Draft from cluster', 'Link card', 'Merge into']) {
+      const button = (await row.getByRole('button', { name }).boundingBox())!;
+      expect(button.x + button.width, `${name} at ${width} px`).toBeLessThanOrEqual(box.x + box.width + 1);
+    }
+    expect(await community.locator('.table-scroll').evaluate((el) => el.scrollWidth <= el.clientWidth), `${width} px`).toBe(true);
+  }
+  await page.setViewportSize({ width: 375, height: 812 });
+  // Merge and link pick from what is loaded; no field takes a typed id.
+  await expect(row.getByLabel('Card to link cluster night-mode to')).toContainText('An e2e card (funded)');
+  await expect(row.getByRole('textbox')).toHaveCount(0);
+  await community.getByLabel('Decline as').selectOption('duplicate');
+  await community.getByLabel(/^Reason for changes/).fill('Same as an open card');
+  const asked: string[] = [];
+  page.once('dialog', (dialog) => {
+    asked.push(dialog.message());
+    void dialog.accept();
+  });
+  await row.getByRole('button', { name: 'Decline' }).click();
+  await expect(community.getByRole('status')).toHaveText('Decline: done.');
+  expect(asked).toEqual(['Decline the suggestion "Night mode" as duplicate? It leaves the queue, and Release does not bring a declined suggestion back.']);
+  expect(bodies).toContainEqual({ path: '/rest/v1/rpc/board_decline_suggestion', body: { p_id: SUGGESTION.id, p_decline_reason: 'duplicate', p_reason: 'Same as an open card' } });
+  await community.getByRole('button', { name: 'Flags' }).click();
+  await expect(community.locator('tr[data-flag="curator_triage"]')).toContainText('false');
+  expect(await overflows(page)).toBe(false);
+  expect(reports).toEqual([]);
+});
+
+test('Games and agents reads nothing until a tab is chosen, shows the box art under the policy, and turns a role off with its reason, at 375 px', async ({ page }) => {
+  const reports = await watchPolicy(page);
+  const seen: string[] = [];
+  const bodies: Record<string, unknown>[] = [];
+  await answerSupabase(page, seen, { aal2: true, bodies });
+  await signIn(page, 'aal2');
+  await page.goto('/');
+  const roster = page.getByRole('region', { name: 'Games and agents' });
+  await expect(roster.getByRole('button', { name: 'Games' })).toBeVisible();
+  expect(seen.filter((line) => /rpc\/board_(games|agent_roster)$/.test(line))).toEqual([]);
+  await roster.getByRole('button', { name: 'Games' }).click();
+  const tile = roster.locator('li[data-game="seed-1"]');
+  await expect(tile).toContainText('Dust');
+  await expect(tile).toContainText('status: live');
+  const art = tile.getByRole('img', { name: 'Dust box art' });
+  await expect(art).toBeVisible();
+  expect(await art.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+  await roster.getByRole('button', { name: 'Agents' }).click();
+  const agent = roster.locator('li[data-role="Builder A"]');
+  await expect(agent).toContainText('claude-e2e');
+  await expect(agent).toContainText('$12.25 in 30 days');
+  await expect(agent).toContainText("$1.50 of the studio's $3.00 today, 2% of the daily cap of $100.00");
+  await expect(agent).toContainText('Builds funded game cards in the paths each card allows.');
+  await expect(roster.locator('[data-group="planned"] li[data-role="Host"]')).toContainText('Planned (When the stream exists.)');
+  if (process.env.BOARD_E2E_SHOTS) await roster.screenshot({ path: `${process.env.BOARD_E2E_SHOTS}/agents-375.png` });
+  await roster.getByLabel('Reason for turning a role on or off').fill('Too many failed builds');
+  await agent.getByRole('button', { name: 'Turn Builder A off' }).click();
+  await expect(roster.getByRole('status')).toHaveText('Builder A turned off.');
+  expect(bodies).toContainEqual({ path: '/rest/v1/rpc/set_role_pause', body: { p_role: 'r-builder-a', p_paused: true, p_reason: 'Too many failed builds' } });
+  expect(await overflows(page)).toBe(false);
+  expect(reports).toEqual([]);
+});
+
+test('Games changes a game only with a reason, each write sending its contract body, at 375 px under the policy', async ({ page }) => {
+  const reports = await watchPolicy(page);
+  const seen: string[] = [];
+  const bodies: Record<string, unknown>[] = [];
+  await answerSupabase(page, seen, { aal2: true, bodies });
+  await signIn(page, 'aal2');
+  await page.goto('/');
+  const roster = page.getByRole('region', { name: 'Games and agents' });
+  await roster.getByRole('button', { name: 'Games' }).click();
+  const tile = roster.locator('li[data-game="seed-1"]');
+  await expect(tile).toContainText('Featured');
+  await expect(tile).toContainText('Loads40 today');
+  await tile.getByText('Manage Dust').click();
+  // No reason yet: the buttons are marked and nothing is sent.
+  await expect(tile.getByRole('button', { name: 'Stop new cards' })).toHaveAttribute('aria-disabled', 'true');
+  await tile.getByRole('button', { name: 'Stop new cards' }).click({ force: true });
+  expect(seen.filter((line) => /rpc\/board_set_game/.test(line))).toEqual([]);
+  await roster.getByLabel('Reason for changes to a game (written to the moderation log)').fill('A crash on load');
+  await tile.getByLabel('Status').selectOption('paused');
+  await tile.getByRole('button', { name: 'Set status' }).click();
+  await expect(roster.getByRole('status')).toHaveText('Dust is paused.');
+  await tile.getByRole('button', { name: 'Stop new cards' }).click();
+  await expect(roster.getByRole('status')).toHaveText('Dust takes no new cards.');
+  await tile.getByRole('button', { name: 'Unfeature' }).click();
+  await expect(roster.getByRole('status')).toHaveText('Dust is no longer featured.');
+  await tile.getByLabel(/^Public blurb/).fill('A quarry idle game, free to play.');
+  await tile.getByRole('button', { name: 'Save blurb' }).click();
+  await expect(roster.getByRole('status')).toHaveText("Dust's blurb saved.");
+  expect(bodies.filter((b) => String(b.path).includes('board_set_game'))).toEqual([
+    { path: '/rest/v1/rpc/board_set_game_status', body: { p_folder: 'seed-1', p_status: 'paused', p_reason: 'A crash on load' } },
+    { path: '/rest/v1/rpc/board_set_game_accepting', body: { p_folder: 'seed-1', p_accepting: false, p_reason: 'A crash on load' } },
+    { path: '/rest/v1/rpc/board_set_game_featured', body: { p_folder: 'seed-1', p_featured: false, p_reason: 'A crash on load' } },
+    { path: '/rest/v1/rpc/board_set_game_blurb', body: { p_folder: 'seed-1', p_blurb: 'A quarry idle game, free to play.', p_reason: 'A crash on load' } },
+  ]);
+  await tile.getByText('Recent changes').click();
+  await expect(tile).toContainText('featured: Our first game');
+  // BOARD_E2E_SHOTS=<folder> keeps a screenshot of the managed tile to look at.
+  if (process.env.BOARD_E2E_SHOTS) await roster.screenshot({ path: `${process.env.BOARD_E2E_SHOTS}/games-375.png` });
+  expect(await overflows(page)).toBe(false);
+  expect(reports).toEqual([]);
+});
+
+for (const motion of ['reduce', 'no-preference'] as const) {
+  test(`the board's motion with prefers-reduced-motion: ${motion}`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: motion });
+    const seen: string[] = [];
+    await answerSupabase(page, seen, { aal2: true });
+    await signIn(page, 'aal2');
+    await page.goto('/');
+    const roster = page.getByRole('region', { name: 'Games and agents' });
+    const games = roster.getByRole('button', { name: 'Games' });
+    await expect(games).toBeVisible();
+    const transition = await games.evaluate((el) => getComputedStyle(el).transitionProperty);
+    await games.click();
+    await expect(roster.locator('li[data-game="seed-1"]')).toBeVisible();
+    const tile = roster.locator('li[data-game="seed-1"]');
+    await tile.hover();
+    if (motion === 'reduce') {
+      // Everything is drawn still: no transition, no animation, no lift.
+      expect(transition).toBe('all');
+      expect(await games.evaluate((el) => getComputedStyle(el).transitionDuration)).toBe('0s');
+      expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
+      expect(await tile.evaluate((el) => getComputedStyle(el).transform)).toBe('none');
+    } else {
+      expect(transition).toBe('transform');
+      await expect.poll(() => tile.evaluate((el) => getComputedStyle(el).transform)).toBe('matrix(1, 0, 0, 1, 0, -2)');
+    }
   });
 }

@@ -37,6 +37,13 @@
   --radius: 0.375rem;
   --target: 2.75rem;
   --focus: 3px solid var(--ink);
+
+  /* Motion, the public site's durations and easings (lib/motion.ts reads them). */
+  --dur-quick: 150ms;
+  --dur-move: 240ms;
+  --dur-reveal: 320ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-scene: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 * {
@@ -301,8 +308,16 @@ textarea {
   font: inherit;
 }
 
+/* An error stands apart from the lines around it in the board's own ink, no new colour: a boxed line
+   with a heavy left rule on the track grey, in strong type. */
 .error {
-  font-weight: var(--weight-bold);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--ink);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: var(--track);
+  color: var(--ink);
+  font-weight: var(--weight-strong);
 }
 
 /* Play and share counts: a small table that scrolls inside itself on a phone, never the page. */
@@ -339,4 +354,228 @@ tfoot th,
 tfoot td {
   font-weight: var(--weight-strong);
   border-bottom: none;
+}
+
+/* The Community admin's tables: the cells wrap, left aligned and top aligned, so the table fits the
+   column and every row's actions sit in view, stacked one under the other. On a phone each row
+   becomes a block: its cells one under the other, each named by its column. */
+table.wrap {
+  width: 100%;
+}
+
+/* break-word, not the body's anywhere: a short word such as "clustered" keeps its column wide enough
+   to stay whole, and only a word longer than the column breaks. */
+table.wrap th,
+table.wrap td {
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-align: left;
+  vertical-align: top;
+}
+
+/* A seed code is one long word: it may break anywhere, so it never widens the table. */
+table.wrap code {
+  overflow-wrap: anywhere;
+}
+
+table.wrap td p {
+  margin: var(--space-1) 0 0;
+}
+
+.act-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+  min-width: 11rem;
+  padding-block: var(--space-1);
+}
+
+@media (max-width: 40rem) {
+  table.wrap,
+  table.wrap tbody,
+  table.wrap tr,
+  table.wrap th,
+  table.wrap td {
+    display: block;
+    width: 100%;
+  }
+
+  /* The header row stays for screen readers; each cell carries its column's name instead. */
+  table.wrap thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  table.wrap tr {
+    padding-block: var(--space-1);
+    border-bottom: 1px solid var(--line);
+  }
+
+  table.wrap th,
+  table.wrap td {
+    padding: 0.125rem 0;
+    border-bottom: none;
+  }
+
+  table.wrap td[data-label]::before {
+    content: attr(data-label) ': ';
+    font-weight: var(--weight-strong);
+  }
+
+  .act-stack {
+    min-width: 0;
+  }
+}
+
+/* Games and agents (Roster.tsx) ------------------------------------------- */
+
+.game-grid,
+.agent-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.game-tile {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.box-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.game-facts p {
+  margin-bottom: var(--space-1);
+}
+
+@media (max-width: 30rem) {
+  .game-tile {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .box-art {
+    width: 7.5rem;
+  }
+}
+
+.agent {
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--line);
+}
+
+.agent:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.agent-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.125rem var(--space-2);
+  margin: 0 0 var(--space-1);
+  font-size: var(--size-small);
+}
+
+.facts dt {
+  font-weight: var(--weight-strong);
+}
+
+.facts dd {
+  margin: 0;
+}
+
+/* The game and agent admin (board-games-admin.md): the reason field keeps the forms' 16 px rhythm,
+   headings sit tight to their block, and a featured game carries one small ink badge. */
+.roster-panel > label {
+  margin-bottom: var(--space-2);
+}
+
+.game-facts h4,
+.agent h5 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--size-body);
+  font-weight: var(--weight-strong);
+  line-height: var(--leading-heading);
+}
+
+.agent-head h5 {
+  margin: 0;
+}
+
+.roster-group > h4 {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: var(--size-body);
+  font-weight: var(--weight-bold);
+}
+
+.badge {
+  display: inline-block;
+  margin-left: var(--space-1);
+  padding: 0 0.5em;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+  vertical-align: middle;
+}
+
+.agent-profile {
+  margin: 0 0 var(--space-1);
+  font-size: var(--size-small);
+}
+
+.game-facts .stack {
+  margin-top: var(--space-1);
+}
+
+details > summary {
+  min-height: var(--target);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: var(--weight-strong);
+}
+
+/* Motion (the public site's standard, DESIGN.md, Motion): a press scales the button to 0.97 and a game
+   tile lifts 2px under the pointer. Only transform moves, over the duration and easing tokens, and only
+   when the viewer has said nothing against motion; keyboard focus never animates. A tab change
+   cross-fades and a loaded panel or a section arriving fades in, by script (lib/motion.ts). */
+@media (prefers-reduced-motion: no-preference) {
+  button,
+  .game-tile {
+    transition: transform var(--dur-quick) var(--ease-out);
+  }
+
+  button:active:not(:disabled, [aria-disabled='true']) {
+    transform: scale(0.97);
+  }
+
+  .game-tile:hover {
+    transform: translateY(-2px);
+  }
 }

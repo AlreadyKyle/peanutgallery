@@ -28,9 +28,26 @@ export const PAGE_ROUTES: readonly NamedRoute[] = [
   ['contact', '/contact'],
   ['not-found', '/no-such-page'],
   ['guide', GUIDE],
+  // The final state's pages (docs/specs/final-state.md). With no community data they draw their
+  // honest unavailable states; /u/:handle is filled by a sample handle.
+  ['goals', '/goals'],
+  ['studio-history', '/studio/history'],
+  ['suggest', '/suggest'],
+  ['seeds', '/seeds'],
+  ['profile', '/u/sample-player'],
+  ['me', '/me'],
+  ['faq', '/faq'],
+  ['broadcast', '/broadcast'],
 ];
 
 export const PAGE_PATHS: readonly string[] = PAGE_ROUTES.map(([, path]) => path);
+
+/**
+ * Pages drawn without the top bar and footer (docs/specs/final-state.md, Channels): /broadcast is a
+ * 1920 by 1080 overlay a streaming tool loads, so the band order, which counts the top bar and the
+ * footer, does not apply to it. Every other check still draws it.
+ */
+export const BARE_PATHS: readonly string[] = ['/broadcast'];
 
 /** The supporter pages (/card/:id for the fixture's cards, /thanks by session), drawn on SUPPORTER_STUDIO. */
 export { SUPPORTER_ROUTES };

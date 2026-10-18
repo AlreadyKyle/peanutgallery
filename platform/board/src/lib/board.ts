@@ -314,8 +314,8 @@ export async function fetchBoardJobs(client: SupabaseClient): Promise<BoardJobs>
 }
 
 /** What a Janitor check found (docs/specs/agent-upkeep.md). */
-export type FindingKind = 'schema' | 'model' | 'cli' | 'scan' | 'producer';
-const FINDING_KINDS: readonly FindingKind[] = ['schema', 'model', 'cli', 'scan', 'producer'];
+export type FindingKind = 'schema' | 'model' | 'cli' | 'scan' | 'producer' | 'benchmark';
+const FINDING_KINDS: readonly FindingKind[] = ['schema', 'model', 'cli', 'scan', 'producer', 'benchmark'];
 
 export type Finding = {
   fingerprint: string;

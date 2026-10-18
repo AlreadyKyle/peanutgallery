@@ -31,7 +31,7 @@ These are two different states.
    - ~~The site shows a notice while the studio is paused.~~ Removed: the public site shows no paused notice (PLAN.md §10 decision 62).
 5. **The launch time is stamped.** The first Console credit purchase recorded at /board stamps `launched_at` (PLAN.md §10 decision 62); ~~the board has pressed Go live~~ (superseded, no button). The launch clip and the post drafts exist.
 
-Everything else is in `docs/BACKLOG.md`, and none of it is part of live: for example [the stream](BACKLOG.md#twitch-channel-and-stream-scenes), [the host](BACKLOG.md#the-host), [free voting](BACKLOG.md#free-voting-on-open-cards), [personal decisions](BACKLOG.md#personal-decisions-for-contributors), [display names through the name pipeline](BACKLOG.md#the-name-pipeline), [the image adapter](BACKLOG.md#image-adapter-for-studio-pictures), [the public seed-1 mirror](BACKLOG.md#public-mirror-of-the-game-with-a-license) and [a board rollback button](BACKLOG.md#board-rollback-button).
+Everything else is in `docs/BACKLOG.md`, and none of it is part of live: for example [the stream](BACKLOG.md#twitch-channel-and-stream-scenes), [the host](BACKLOG.md#the-host), [names inside the games through the name pipeline](BACKLOG.md#the-name-pipeline), [the image adapter](BACKLOG.md#image-adapter-for-studio-pictures), [the public seed-1 mirror](BACKLOG.md#public-mirror-of-the-game-with-a-license) and [a board rollback button](BACKLOG.md#board-rollback-button). The final state (`docs/specs/final-state.md`, PLAN.md §10 decision 75) is its own series after live, ordered in `docs/strategy/roadmap.md`.
 
 ## The order from here
 
@@ -140,6 +140,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 
 | Spec | Status | What is left |
 |---|---|---|
+| `specs/final-state.md` | agreed | the final-state series of four branches (strategy, dust-three, site-studio, community-core), each with its Verification quoted; then the migrations in production, the flags on and the live check (`docs/strategy/roadmap.md`, Phase 1) |
 | `specs/announcement.md` | agreed | the drafts in `docs/launch/` post now, with no clip (PLAN.md §10 decision 64, `specs/announce-now.md`) |
 | `specs/build-on-funding.md` | built | a player-funded card building unattended |
 | `specs/announce-now.md` | built | the three site lines and the game's og:image served in production |
@@ -151,6 +152,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 | `specs/split-slider.md` | agreed | the Agents/Studio split slider on /contribute, carried on `client_reference_id`; then the webhook deploy, the live check and the dropdown off the Payment Link |
 | `specs/always-open.md` | agreed | home's Next up holds only approved agent cards, no `/roadmap`, and the draft limit of 12 a day; then the migration in production and the live check |
 | `specs/play-counts.md` | agreed | daily totals of Dust loads, Share your run, card shares and clicks from Dust to a card, with no cookie, identifier or address, on the board's panel; left: `20261011500000_play_counts.sql` in production, both site deploys and the live check |
+| `specs/board-games-admin.md` | agreed | the board's games admin (status, new cards, featured, blurb, plays, each change logged) and a fuller agent roster (profile, roster status, spend against the caps, pause history); left: `20261017220000_board_games_admin.sql` in production, the board's deploy and the live check |
 | `specs/ship-notices.md` | agreed | one email per payment and shipped card, read from Stripe and never stored, with a one-click unsubscribe; left: the migration in production, the `NOTICES_ENV` secret and `STUDIO_REF` in the ops repository, the live check, and the first notice received |
 
 ## Standing facts for any session

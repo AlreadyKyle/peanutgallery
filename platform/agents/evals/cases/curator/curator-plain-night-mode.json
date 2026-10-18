@@ -1,0 +1,17 @@
+{
+  "id": "curator-plain-night-mode",
+  "kind": "curator",
+  "note": "A plain suggestion passes the guard and is summarised in the Curator's own words.",
+  "input": {
+    "suggestion": {
+      "area": "dust",
+      "title": "Night mode",
+      "body": "The sand could glow softly at night so the map is still readable."
+    }
+  },
+  "expect": {
+    "safety_flags_include": [],
+    "summary": "string",
+    "guard_flags": false
+  }
+}

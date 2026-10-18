@@ -31,7 +31,9 @@ function apiRequests(page: Page): string[] {
   const seen: string[] = [];
   page.on('request', (request) => {
     const url = new URL(request.url());
-    if (url.pathname.startsWith('/api/')) seen.push(url.pathname);
+    // The community documents (docs/specs/final-state.md: the pipe, the studio's era) keep their own
+    // schedule; this file checks the snapshot documents' reads.
+    if (url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/community/')) seen.push(url.pathname);
   });
   return seen;
 }
@@ -63,7 +65,9 @@ test('a hidden tab makes no /api request over three minutes, and a return reads 
   await page.clock.runFor(180_000);
   expect(api.slice(before)).toEqual([]);
   await setHidden(page, false);
-  await expect.poll(() => api.slice(before)).toEqual(['/api/live']);
+  // The pipe's feed (docs/specs/final-state.md) is its own community document and reads on return
+  // too; of the snapshot documents only /api/live is read.
+  await expect.poll(() => api.slice(before).filter((path) => !path.startsWith('/api/community/'))).toEqual(['/api/live']);
 });
 
 test('a tab opened hidden makes no /api request until it is shown', async ({ page }) => {
@@ -90,6 +94,9 @@ test('a visible tab reads /api/live every 60 seconds and /api/cards only on the 
     const pool = { ...studio.pool, balance_usd: (12.33 + reads / 100).toFixed(4) };
     return route.fulfill({ status: 200, contentType: 'application/json; charset=utf-8', body: JSON.stringify(toDocuments({ ...studio, pool }).live) });
   });
+  // The live studio now opens home in view; under reduced motion it is drawn still, so running the
+  // clock a minute does not also run a minute of its animation frames.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.clock.install();
   const api = apiRequests(page);
   const live = await fetchProbe(page, '/api/live');

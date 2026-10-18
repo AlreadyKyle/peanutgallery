@@ -1,5 +1,6 @@
 import { FundingBar, fundingCaption } from '../components/Funding';
 import { Guarded } from '../components/Guarded';
+import { MachineCard } from '../components/MachineCard';
 import { PageHeader } from '../components/PageHeader';
 import { StaleNotice } from '../components/StaleNotice';
 import { LinkedText } from '../components/TextPage';
@@ -100,13 +101,15 @@ export function Contribute() {
         ) : (
           <div className="contribute">
             <SplitSlider studioPct={studioPct} onChange={setStudioPct} />
-            <a className="choice choice-primary" href={fundLink(env.stripePaymentLinkUrl, null, studioPct)}>
-              <span className="choice-title">{legal.pickForMe}</span>
-              <span className="choice-body">{pickForMeBody(studio)}</span>
-            </a>
-            <p className="muted small">
-              <LinkedText text={legal.contributeAgreement} />
-            </p>
+            <div className="contribute-next">
+              <a className="choice choice-primary" href={fundLink(env.stripePaymentLinkUrl, null, studioPct)}>
+                <span className="choice-title">{legal.pickForMe}</span>
+                <span className="choice-body">{pickForMeBody(studio)}</span>
+              </a>
+              <p className="muted small">
+                <LinkedText text={legal.contributeAgreement} />
+              </p>
+            </div>
 
             <h2>{legal.orPickACard}</h2>
             {/* The cards' polite live region (WCAG 4.1.3), inline as this page is kernel: empty while
@@ -146,6 +149,8 @@ export function Contribute() {
                 );
               }}
             </Guarded>
+            {/* The Machine card (docs/specs/final-state.md): the same checkout as Fund the next card in line. */}
+            <MachineCard studioPct={studioPct} headingLevel={2} />
             <p className="muted small">{legal.split}</p>
             <p className="muted small">{legal.usdNote}</p>
           </div>

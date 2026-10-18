@@ -1,0 +1,1514 @@
+/* Dust's page, in the studio's line style: paper ground, ink text and 2px ink edges with a hard
+   offset shadow, the creature fills, and the Dust suit magenta as the one accent. No CSS animation
+   or transition moves anything: the HUD moves from the frame clock (render/hud.ts), so the gate's
+   frames draw the same pixels twice. */
+
+/* Atkinson Hyperlegible Next (SIL OFL 1.1, render/fonts/OFL.txt), the site's font, bundled here. */
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  src: url('./fonts/atkinson-hyperlegible-next-400-700.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --paper: #fdfcf8;
+  --ink: #151515;
+  --muted: #55524c;
+  --line: #d9d2c3;
+  --sand: #f1d99c;
+  --sand-light: #f8ecc9;
+  --magenta: #b0226a;
+  --magenta-down: #8c1a54;
+  --blue: #8db9e8;
+  --yellow: #f5dc7a;
+  --font: 'Atkinson Hyperlegible Next', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow-x: hidden;
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  background-image: radial-gradient(circle, #e6dfd0 1.1px, transparent 1.4px);
+  background-size: 22px 22px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--magenta);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The stage: the canvas fills it, the HUD and the shop sit over it. */
+#stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#game {
+  position: absolute;
+  inset: 0;
+  touch-action: manipulation;
+}
+
+#game canvas {
+  display: block;
+  cursor: pointer;
+}
+
+#status {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  margin: 0 16px;
+  text-align: center;
+  transform: translateY(-50%);
+}
+
+/* HUD */
+.hud {
+  position: absolute;
+  top: 10px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.hud-totals {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hud-total {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  transform-origin: left center;
+  text-shadow: 2px 0 0 var(--paper), -2px 0 0 var(--paper), 0 2px 0 var(--paper), 0 -2px 0 var(--paper);
+}
+
+.hud-unit {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--magenta);
+}
+
+.hud-rate {
+  margin-top: 2px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.hud-goal {
+  flex: 0 1 176px;
+  min-width: 140px;
+  padding: 6px 10px 7px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.hud-goal-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.hud-goal-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.hud-goal-name {
+  font-size: 14px;
+  font-weight: 700;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-goal-track {
+  height: 10px;
+  margin-top: 5px;
+  border: 2px solid var(--ink);
+  border-radius: 7px;
+  background: var(--sand-light);
+  overflow: hidden;
+}
+
+.hud-goal-fill {
+  height: 100%;
+  background: var(--magenta);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.hud-goal-left {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Floaters, the streak and the banner. */
+.fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.floater {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 22px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--ink);
+  text-shadow: 2px 0 0 var(--paper), -2px 0 0 var(--paper), 0 2px 0 var(--paper), 0 -2px 0 var(--paper), 2px 2px 0 var(--paper), -2px -2px 0 var(--paper), 2px -2px 0 var(--paper), -2px 2px 0 var(--paper);
+  transform-origin: 50% 100%;
+}
+
+.floater.big {
+  font-size: 28px;
+  color: var(--magenta);
+}
+
+.streak {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 2px 10px;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: var(--yellow);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 2px 2px 0 var(--ink);
+  transform-origin: 0 100%;
+}
+
+.banner {
+  position: absolute;
+  left: var(--banner-x, 50%);
+  top: var(--banner-y, 96px);
+  min-width: 220px;
+  max-width: calc(100% - 32px);
+  padding-bottom: 10px;
+  text-align: center;
+  background: var(--paper);
+  border: 2.5px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 4px 4px 0 var(--ink);
+  overflow: hidden;
+  transform-origin: 50% 0;
+}
+
+.banner-kicker {
+  padding: 4px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--paper);
+  background: var(--magenta);
+  border-bottom: 2.5px solid var(--ink);
+}
+
+.banner.welcome .banner-kicker {
+  color: var(--ink);
+  background: var(--blue);
+}
+
+.banner-title {
+  padding: 6px 18px 0;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.banner-body {
+  padding: 2px 18px 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* The shop: Strike and the units, over the bottom of the stage on a phone. The sheet never takes more
+   than its share of the stage, so the island always keeps a slice between the HUD and the sheet (the
+   HUD is about 90px tall; the island keeps at least 30% of the stage), and whatever does not fit
+   scrolls inside the shop below Strike. */
+.controls {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: max(170px, calc(70% - 96px));
+}
+
+/* Everything below Strike. The padding keeps the ink shadows inside the scroll box; the negative
+   margins take it back, so nothing moves. */
+.shop {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  margin: -4px -6px -6px -4px;
+  padding: 4px 6px 6px 4px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+/* More of the shop below the fold: its last row fades out instead of ending on a hard cut. */
+.shop.more {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 30px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 30px), transparent);
+}
+
+.shop > * {
+  flex: none;
+}
+
+.strike {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 6px 16px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--paper);
+  background: var(--magenta);
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.strike:hover {
+  background: var(--magenta-down);
+}
+
+.strike:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+
+.strike-hint {
+  font-size: 13px;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.units {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.unit {
+  position: relative;
+  min-height: 60px;
+  padding: 0;
+  text-align: left;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 2px 2px 0 var(--ink);
+  overflow: hidden;
+}
+
+.unit[hidden] {
+  display: none;
+}
+
+.unit:active,
+.unit.bump {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+.unit-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--sand-light);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.unit[aria-disabled='false'] .unit-fill {
+  background: var(--sand);
+}
+
+.unit-face {
+  position: relative;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 5px;
+  row-gap: 1px;
+  align-items: center;
+  padding: 6px 7px;
+}
+
+.unit-icon {
+  grid-row: 1;
+  grid-column: 1;
+  width: 26px;
+  height: 26px;
+}
+
+.unit-words {
+  grid-row: 1;
+  grid-column: 2;
+  min-width: 0;
+}
+
+.unit-name {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unit-description,
+.unit-rate {
+  display: none;
+}
+
+.unit-cost {
+  grid-row: 2;
+  grid-column: 1 / span 2;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.unit[aria-disabled='false'] .unit-cost {
+  color: var(--magenta);
+}
+
+.unit-owned {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.unit-new {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--paper);
+  background: var(--magenta);
+  border-radius: 999px;
+}
+
+.unit-new[hidden] {
+  display: none;
+}
+
+/* The unlock list shows in the side panel on a wide screen; on a phone it is read, not drawn. */
+.unlocks {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.unlocks-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0 0 6px;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.unlocks-count {
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+}
+
+.unlocks-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.unlock {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 8px;
+  padding: 6px 0 6px 18px;
+  position: relative;
+  border-top: 1.5px dashed var(--line);
+  font-size: 13px;
+}
+
+.unlock::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 10px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+}
+
+.unlock-name {
+  font-weight: 700;
+}
+
+.unlock-effect {
+  grid-column: 1;
+  color: var(--muted);
+}
+
+.unlock-at {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Footer: share, seed, the studio line, what's new and the next card. */
+footer {
+  flex: 0 0 auto;
+  padding: 6px 16px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--paper);
+  border-top: 2px solid var(--ink);
+}
+
+.share-row {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.share-row button {
+  min-height: 44px;
+  padding: 8px 18px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 22px;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.share-row button:hover {
+  background: var(--sand-light);
+}
+
+#seed-save {
+  background: var(--sand);
+}
+
+#share-status {
+  min-height: 1em;
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+#studio-line {
+  margin: 0;
+}
+
+#studio-line a,
+#whats-new a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--ink);
+}
+
+#whats-new,
+#next-card {
+  margin: 0;
+}
+
+#whats-new a,
+#next-card a {
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  color: var(--magenta);
+}
+
+#next-card a {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-height: 44px;
+}
+
+.next-card-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.next-card-track {
+  width: 120px;
+  height: 6px;
+  border: 1.5px solid var(--ink);
+  border-radius: 4px;
+  background: var(--paper);
+  overflow: hidden;
+}
+
+#next-card-fill {
+  width: 0;
+  height: 100%;
+  background: var(--magenta);
+}
+
+/* The seed offer a ?seed= link opens with. */
+#seed-offer {
+  max-width: min(360px, calc(100vw - 48px));
+  padding: 0;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2.5px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 5px 5px 0 var(--ink);
+}
+
+#seed-offer::backdrop {
+  background: rgba(21, 21, 21, 0.35);
+}
+
+#seed-offer .seed-offer-kicker {
+  margin: 0;
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--paper);
+  background: var(--magenta);
+  border-bottom: 2.5px solid var(--ink);
+}
+
+#seed-offer h2 {
+  margin: 12px 18px 4px;
+  font-size: 22px;
+}
+
+#seed-offer p {
+  margin: 0 18px 8px;
+}
+
+.seed-offer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 6px 18px 18px;
+}
+
+.seed-offer-actions button {
+  min-height: 44px;
+  padding: 8px 16px;
+  font-weight: 700;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.seed-offer-actions button.primary {
+  color: var(--paper);
+  background: var(--magenta);
+}
+
+/* A wide screen: the shop is a side panel on the right, the unlock list shows, the HUD stacks. */
+
+/* Under the HUD, outside its height so nothing here reframes the island: the first steps (or why a
+   purchase was refused) at the left, the weather at the right. Moved by render/hud.ts, never a CSS
+   animation. */
+.hud-below {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.hud-hint {
+  max-width: 62%;
+  padding: 4px 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--yellow);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 2px 2px 0 var(--ink);
+  transform-origin: 0 50%;
+}
+
+.hud-hint.flash {
+  background: var(--paper);
+}
+
+.hud-weather {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  max-width: 64%;
+  padding: 3px 10px 3px 6px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 2px 2px 0 var(--ink);
+  transform-origin: 100% 0;
+}
+
+.hud-weather-icon svg {
+  display: block;
+}
+
+.hud-weather-words {
+  min-width: 0;
+}
+
+.hud-weather-name {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.hud-weather-effect {
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--muted);
+}
+
+.hud-weather-left {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.banner.milestone .banner-kicker {
+  color: var(--ink);
+  background: var(--yellow);
+}
+
+.banner.season .banner-kicker {
+  color: var(--ink);
+  background: #cbbdee;
+}
+
+/* A unit's next milestone ("×2 at 25"). */
+.unit-next {
+  display: none;
+}
+
+/* Gems: press the pile for a new season, and perks. */
+.gems {
+  padding: 6px 8px 8px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.gems[hidden],
+.press-confirm[hidden] {
+  display: none;
+}
+
+.gems-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.gems-season {
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+}
+
+.gems-held {
+  margin: 1px 0 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.press,
+.press-yes,
+.press-no,
+.perk {
+  min-height: 44px;
+  font-weight: 700;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.press {
+  width: 100%;
+  padding: 6px 12px;
+  font-size: 15px;
+  background: #cbbdee;
+}
+
+.press[aria-disabled='true'] {
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--paper);
+  box-shadow: none;
+  border-style: dashed;
+}
+
+.press-confirm {
+  margin-top: 6px;
+  padding: 6px 8px 8px;
+  background: var(--sand-light);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+}
+
+.press-confirm-text {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.press-confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.press-yes {
+  flex: 1;
+  color: var(--paper);
+  background: var(--magenta);
+}
+
+.press-no {
+  flex: 1;
+  background: var(--paper);
+}
+
+.perks-heading {
+  margin: 6px 0 3px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* On a phone the perks fold behind a toggle so the island keeps its room. */
+.perks-toggle {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+}
+
+.perks-toggle::after {
+  content: ' ▾';
+}
+
+.gems.open .perks-toggle::after {
+  content: ' ▴';
+}
+
+.gems:not(.open) .perks-heading,
+.gems:not(.open) .perks {
+  display: none;
+}
+
+/* On a phone the perks scroll sideways inside the sheet; the page never does. */
+.perks {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 0 2px 4px 0;
+}
+
+.perk {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 8px;
+  max-width: 220px;
+  padding: 3px 10px;
+  text-align: left;
+  background: var(--paper);
+}
+
+.perk[aria-disabled='false'] {
+  background: var(--sand);
+}
+
+.perk.owned {
+  background: #e7f3e9;
+  border-style: solid;
+}
+
+.perk[aria-disabled='true']:not(.owned) {
+  color: var(--muted);
+}
+
+.perk-name {
+  font-size: 13px;
+}
+
+.perk-effect {
+  grid-column: 1 / span 2;
+  font-size: 11px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.perk-cost {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 11px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Save to gallery: a link that opens the site's seed gallery in a new tab, drawn like its neighbours. */
+.share-row .gallery-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 8px 18px;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: none;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 22px;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.share-row .gallery-link::after {
+  content: '↗';
+  margin-left: 5px;
+}
+
+.share-row .gallery-link:hover {
+  background: var(--sand-light);
+}
+
+@media (min-width: 860px) and (min-height: 520px) {
+  .hud {
+    top: 18px;
+    left: 26px;
+    right: 376px;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 28px;
+  }
+
+  .hud-total {
+    font-size: 60px;
+  }
+
+  .hud-unit {
+    font-size: 17px;
+  }
+
+  .hud-rate {
+    font-size: 16px;
+  }
+
+  .hud-goal {
+    flex: none;
+    width: 260px;
+    padding: 8px 12px 9px;
+  }
+
+  .hud-goal-name {
+    font-size: 16px;
+  }
+
+  .controls {
+    top: 18px;
+    right: 18px;
+    bottom: 18px;
+    left: auto;
+    max-height: none;
+    width: 330px;
+    padding: 14px;
+    gap: 10px;
+    overflow-y: auto;
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 18px;
+    box-shadow: 4px 4px 0 var(--ink);
+  }
+
+  /* The side panel scrolls as one; the shop lays out in it as if it were not there. */
+  .shop {
+    display: contents;
+  }
+
+  .units {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .unit {
+    min-height: 64px;
+  }
+
+  .unit-face {
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    grid-template-rows: auto;
+    column-gap: 10px;
+    padding: 8px 12px;
+  }
+
+  .unit-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .unit-name {
+    font-size: 16px;
+  }
+
+  .unit-description {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .unit-rate {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .unit-cost {
+    grid-row: 1;
+    grid-column: 3;
+    align-self: start;
+    font-size: 15px;
+    text-align: right;
+  }
+
+  .unit-owned {
+    right: 12px;
+    bottom: 8px;
+    font-size: 13px;
+  }
+
+  .unit-new {
+    top: auto;
+    bottom: 26px;
+    right: 10px;
+  }
+
+  .unlocks {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    margin-top: 6px;
+  }
+
+  .banner-title {
+    font-size: 34px;
+  }
+
+  .unit-rate-row {
+    display: block;
+  }
+
+  .unit-rate {
+    display: inline;
+  }
+
+  .unit-next {
+    display: inline;
+    margin-left: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--magenta);
+  }
+
+  .hud-below {
+    justify-content: flex-start;
+  }
+
+  .hud-weather {
+    margin-left: 0;
+  }
+
+  .perks {
+    display: grid;
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .perk {
+    grid-template-columns: 1fr auto;
+    column-gap: 8px;
+    max-width: none;
+  }
+
+  .perk-effect {
+    grid-column: 1;
+    white-space: normal;
+  }
+
+  .perks-heading {
+    margin: 8px 0 4px;
+  }
+
+  .perk-cost {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .perks-toggle {
+    display: none;
+  }
+
+  .gems:not(.open) .perks-heading {
+    display: block;
+  }
+
+  .gems:not(.open) .perks {
+    display: grid;
+  }
+}
+
+/* The dust devil's catch button: on a phone it hangs over the island just above the shop, outside its
+   height, so the island never reframes as a devil comes and goes; on a wide screen it sits under
+   Strike. A fork's options open the shop instead (render/controls.ts), so on a phone they scroll with
+   it and are never pushed above the screen. Moved by nothing but the state: no CSS animation. */
+.pops {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.pops > * {
+  pointer-events: auto;
+}
+
+.devil[hidden],
+.fork[hidden],
+.order[hidden] {
+  display: none;
+}
+
+.devil {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 6px 14px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--yellow);
+  border: 2.5px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+/* A swirl drawn in CSS borders: three nested rings, never an image. */
+.devil::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2.5px var(--yellow), inset 0 0 0 5px var(--ink);
+}
+
+.devil:active,
+.fork-option:active,
+.order-act:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+.fork {
+  padding: 0 8px 8px;
+  background: var(--paper);
+  border: 2.5px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 4px 4px 0 var(--ink);
+  overflow: hidden;
+}
+
+.fork-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin: 0 -8px 6px;
+  padding: 4px 10px;
+  border-bottom: 2.5px solid var(--ink);
+  background: var(--sand-light);
+}
+
+.fork-kicker {
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--paper);
+  background: var(--magenta);
+  border-radius: 999px;
+}
+
+.fork-title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.fork-note {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.fork-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.fork-option {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 54px;
+  padding: 6px 10px;
+  text-align: left;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-left-width: 7px;
+  border-radius: 12px;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.fork-option[data-side='0'] {
+  border-left-color: var(--blue);
+}
+
+.fork-option[data-side='1'] {
+  border-left-color: #cbbdee;
+}
+
+.fork-option[data-side='2'] {
+  border-left-color: var(--sand);
+}
+
+.fork-option:hover {
+  background: var(--sand-light);
+}
+
+.fork-option-name {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.fork-option-effect {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.fork-more {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.fork-more:empty {
+  display: none;
+}
+
+/* The order on the board. */
+.order {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'head act'
+    'body act';
+  align-items: center;
+  column-gap: 8px;
+  padding: 5px 6px 6px 10px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.order-heading {
+  grid-area: head;
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--magenta);
+}
+
+.order-filled {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+}
+
+.order-body {
+  grid-area: body;
+  display: grid;
+  grid-template-columns: auto minmax(24px, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.order-text {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.order-track {
+  height: 8px;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  background: var(--sand-light);
+  overflow: hidden;
+}
+
+.order-fill {
+  display: block;
+  height: 100%;
+  background: var(--magenta);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.order-count {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.order-act {
+  grid-area: act;
+  min-width: 76px;
+  min-height: 44px;
+  padding: 4px 10px;
+  font-size: 14px;
+  font-weight: 700;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.order-act[data-mode='swap'] {
+  font-weight: 400;
+  color: var(--muted);
+  box-shadow: none;
+  border-style: dashed;
+}
+
+.order-act[data-mode='rest'] {
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--sand-light);
+  box-shadow: none;
+}
+
+.order.ready .order-act {
+  color: var(--paper);
+  background: var(--magenta);
+}
+
+.order.ready {
+  background: var(--sand-light);
+}
+
+/* The whirl a caught dust devil leaves, left of the pile. */
+.hud-whirl {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 100% 100%;
+  padding: 3px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: var(--yellow);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 2px 2px 0 var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.banner.fork .banner-kicker,
+.banner.devil .banner-kicker {
+  color: var(--ink);
+  background: var(--yellow);
+}
+
+@media (min-width: 860px) and (min-height: 520px) {
+  .pops {
+    position: static;
+  }
+
+  .order-text {
+    white-space: normal;
+  }
+}
+
+/* A phone, or any screen too small for the side panel. A short screen keeps the stage at least 560px
+   tall (or the screen's height, if that is less) and lets the page scroll down to the footer, so the
+   island, the HUD and the sheet are never squeezed into what the footer leaves. A tall phone is
+   unchanged: the stage fills what the footer leaves, as before. */
+@media (max-width: 859.98px), (max-height: 519.98px) {
+  body {
+    height: auto;
+    min-height: 100%;
+  }
+
+  #stage {
+    flex: 1 0 auto;
+    min-height: min(560px, 100vh);
+    min-height: min(560px, 100svh);
+  }
+}
+
+/* The studio line on a narrow screen: the funding link takes its own line and the separator before it
+   is not drawn, so no line ends on a dangling dot (render/main.ts marks the separators). */
+@media (max-width: 599.98px) {
+  #studio-line .studio-sep-last {
+    display: none;
+  }
+
+  #studio-line .studio-next {
+    display: flex;
+    justify-content: center;
+    width: fit-content;
+    margin: 0 auto;
+  }
+}

@@ -112,7 +112,10 @@ test.describe('/contribute with an empty order', () => {
     const main = page.getByRole('main');
     await expect(main.locator('a.choice-primary')).toContainText('Your contribution waits in Not on a card yet and funds the next card that opens.');
     await expect(main.locator('ul.choices')).toHaveCount(0);
-    await expect(main.locator(`a[href^="${PAYMENT_LINK}"]`)).toHaveCount(1);
+    // The Machine card (docs/specs/final-state.md) is a second way into the same checkout, outside
+    // the card choices; the choices still offer exactly one link.
+    await expect(main.locator(`a[href^="${PAYMENT_LINK}"]:not(.machine-card a)`)).toHaveCount(1);
+    await expect(main.locator(`.machine-card a[href^="${PAYMENT_LINK}"]`)).toHaveCount(1);
     // Home agrees: no card is open for funding, and the fund section draws none, only its panel with
     // Contribute, which says where the money waits without repeating the status line.
     await page.goto('/');
@@ -134,7 +137,10 @@ test.describe('when public_money and public_stopped_cards fail', () => {
     const main = page.getByRole('main');
     await expect(main.getByText('Not available right now.')).toBeVisible();
     await expect(main.locator('a.choice-primary')).toHaveText('Fund the next card in lineYour contribution funds whatever the agents build next.');
-    await expect(main.locator(`a[href^="${PAYMENT_LINK}"]`)).toHaveCount(1);
+    // The Machine card (docs/specs/final-state.md) is a second way into the same checkout, outside
+    // the card choices; the choices still offer exactly one link.
+    await expect(main.locator(`a[href^="${PAYMENT_LINK}"]:not(.machine-card a)`)).toHaveCount(1);
+    await expect(main.locator(`.machine-card a[href^="${PAYMENT_LINK}"]`)).toHaveCount(1);
     await page.goto('/');
     await expect(page.locator('ul.fund-grid > li.card h3').first()).toBeVisible();
     await expect(page.getByRole('main').getByRole('link', { name: 'Fund this card' })).toHaveCount(0);

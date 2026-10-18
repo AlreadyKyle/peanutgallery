@@ -38,7 +38,7 @@ function LaneHead({ lane, step, count }: { lane: FlowLane; step: number; count: 
   return (
     <>
       <p className="flow-step" aria-hidden="true">
-        <span className="flow-step-number">{step}</span>
+        <span className="flow-step-number">{String(step).padStart(2, '0')}</span>
       </p>
       <h3 id={`lane-${lane}`} className="flow-title">
         {copy.flow.lanes[lane].title} <span className="flow-count">{countLine(count)}</span>
@@ -105,23 +105,37 @@ export const HOME_FUND_CARDS = 3;
  * order, the agreement under them, and a link to the rest on /contribute. With none open, a panel
  * that funds the next card in line, which is also what pays the agents to draft and build the next one.
  */
-export function FundNow({ cards, snapshot, changed = {} }: { cards: Card[]; snapshot: Snapshot; changed?: Readonly<Record<string, readonly SpecRow[]>> }) {
+export function FundNow({
+  cards,
+  snapshot,
+  changed = {},
+  machine = null,
+}: {
+  cards: Card[];
+  snapshot: Snapshot;
+  changed?: Readonly<Record<string, readonly SpecRow[]>>;
+  /** The Machine card, set beside the next card in line (docs/specs/brand.md, Home). */
+  machine?: ReactNode;
+}) {
   const env = siteEnv();
   if (cards.length === 0) {
     return (
-      <div className="fund-empty">
-        <p className="fund-empty-title">{legal.pickForMe}</p>
-        <p>{legal.fundEmptyBody}</p>
-        <p className="fund-empty-agent">
-          <Glyph name="pencil" />
-          <span>{draftingLine(snapshot).text}</span>
-        </p>
-        {env.stripePaymentLinkUrl === '' ? null : (
-          <Link className="button btn-coin" to="/contribute">
-            <CoinMark />
-            {copy.contribute}
-          </Link>
-        )}
+      <div className="fund-ways">
+        <div className="fund-empty">
+          <p className="fund-empty-title">{legal.pickForMe}</p>
+          <p>{legal.fundEmptyBody}</p>
+          <p className="fund-empty-agent">
+            <Glyph name="pencil" />
+            <span>{draftingLine(snapshot).text}</span>
+          </p>
+          {env.stripePaymentLinkUrl === '' ? null : (
+            <Link className="button btn-coin" to="/contribute">
+              <CoinMark />
+              {copy.contribute}
+            </Link>
+          )}
+        </div>
+        {machine}
       </div>
     );
   }
@@ -132,9 +146,14 @@ export function FundNow({ cards, snapshot, changed = {} }: { cards: Card[]; snap
         {shown.map((card) => (
           <CardFace key={card.id} card={card} snapshot={snapshot} changed={changed[card.id]} />
         ))}
-        {/* There is always more than one way to fund (decision 73): beside the open cards, the next
-            card in line, which needs no draft, so it is there however few cards are open. */}
-        <li className="fund-next">
+      </ul>
+      {shown.some((card) => liveFundLink(card, snapshot)) ? <FundAgreement /> : null}
+      {cards.length > HOME_FUND_CARDS ? <MoreLinkLine to="/contribute" words={copy.flow.fundMore.replace('{n}', String(cards.length))} /> : null}
+      {/* There is always more than one way to fund (decision 73): under the open cards, the next card
+          in line, which needs no draft, so it is there however few cards are open; the Machine card
+          sits beside it, so the two other ways share one row. */}
+      <div className="fund-ways">
+        <div className="fund-next">
           <p className="fund-empty-title">{legal.pickForMe}</p>
           <p>{legal.fundNextBody}</p>
           <p className="fund-empty-agent">
@@ -147,10 +166,9 @@ export function FundNow({ cards, snapshot, changed = {} }: { cards: Card[]; snap
               {copy.contribute}
             </Link>
           )}
-        </li>
-      </ul>
-      {shown.some((card) => liveFundLink(card, snapshot)) ? <FundAgreement /> : null}
-      {cards.length > HOME_FUND_CARDS ? <MoreLinkLine to="/contribute" words={copy.flow.fundMore.replace('{n}', String(cards.length))} /> : null}
+        </div>
+        {machine}
+      </div>
     </>
   );
 }

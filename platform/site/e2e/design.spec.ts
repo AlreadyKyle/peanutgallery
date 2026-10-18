@@ -5,7 +5,7 @@ import type { Locator, Page } from '@playwright/test';
 import { E2E_ORIGIN } from './fixture-env';
 import { DEFAULT_STUDIO, expect, overflowsHorizontally, test, type StudioFixture } from './fixtures';
 import { LIVE_STUDIO } from './live-studio';
-import { GUIDE, PAGE_PATHS, SUPPORTER_ROUTES } from './routes';
+import { BARE_PATHS, GUIDE, PAGE_PATHS, SUPPORTER_ROUTES } from './routes';
 import { SUPPORTER_STUDIO } from './supporter-studio';
 
 // The design system (docs/specs/design-system.md): the guide page, the bands, the on-ink rules,
@@ -199,6 +199,25 @@ test.describe('motion', () => {
     await nav.getByRole('button', { name: 'Menu' }).click();
     await nav.getByRole('link', { name: 'How it works' }).click();
     await page.waitForURL('**/how-it-works');
+    // The page transition (docs/specs/final-state.md, the motion pass: view transitions are allowed)
+    // plays once on the route change and ends; nothing keeps moving after it. The transition can
+    // start a few frames after the address changes, so the page has to stay still for half a second,
+    // not for one frame.
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          const start = performance.now();
+          let stillSince = start;
+          const tick = () => {
+            const now = performance.now();
+            if (document.getAnimations().length > 0) stillSince = now;
+            else if (now - stillSince >= 500) return resolve();
+            if (now - start > 5_000) return reject(new Error('the page was still moving after 5 seconds'));
+            requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        }),
+    );
     expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
   });
 
@@ -216,7 +235,10 @@ test.describe('motion', () => {
 
 test.describe('every route', () => {
   test('draws its bands signal, paper, then ink and paper in turn, the footer continuing, with every card in band 2', async ({ page }) => {
-    for (const path of ROUTES) {
+    // Eight more pages since the final state (docs/specs/final-state.md): a walk of every route needs longer.
+    test.setTimeout(120_000);
+    // A bare page (/broadcast, docs/specs/final-state.md) has no top bar or footer to count from.
+    for (const path of ROUTES.filter((p) => !BARE_PATHS.includes(p))) {
       await settle(page, path);
       const drawn = await grounds(page);
       expect(drawn, path).toEqual(expected(drawn.length - 2));
@@ -235,6 +257,8 @@ test.describe('every route', () => {
 
   for (const width of WIDTHS) {
     test(`has no horizontal scroll at ${width}px`, async ({ page }) => {
+      // Eight more pages since the final state (docs/specs/final-state.md): a walk of every route needs longer.
+      test.setTimeout(120_000);
       await page.setViewportSize({ width, height: 900 });
       for (const path of ROUTES) {
         await settle(page, path);
@@ -244,6 +268,8 @@ test.describe('every route', () => {
   }
 
   test('has no horizontal scroll at 375px with 200% text', async ({ page }) => {
+    // Eight more pages since the final state (docs/specs/final-state.md): a walk of every route needs longer.
+    test.setTimeout(120_000);
     await page.setViewportSize({ width: 375, height: 812 });
     for (const path of ROUTES) {
       await settle(page, path);
@@ -270,6 +296,8 @@ test.describe('bands with empty data', () => {
     await settle(page, '/');
     const money = page.locator('main > .band:nth-child(3)');
     await expect(money.getByRole('heading', { level: 2, name: 'Where the money goes' })).toBeVisible();
+    // The live studio sits on the plate (docs/specs/brand.md), even with no team to draw in it.
+    await expect(page.locator('main > .band:nth-child(1)').getByRole('heading', { level: 2 })).toHaveText(['The studio, live']);
     await expect(page.locator('main > .band:nth-child(2)').getByRole('heading', { level: 2 })).toHaveText(['Pick a card to fund', 'Play the first game', 'How the cards move']);
     expect(await page.locator('main > .band:not(:nth-child(2)) li.card').count()).toBe(0);
   });
@@ -278,6 +306,8 @@ test.describe('bands with empty data', () => {
 test.describe('accessibility (axe, WCAG 2.2 AA)', () => {
   for (const width of [375, 1440]) {
     test(`finds no violation on the guide and every page at ${width}px`, async ({ page }) => {
+      // Eight more pages since the final state (docs/specs/final-state.md): a walk of every route needs longer.
+      test.setTimeout(120_000);
       await page.setViewportSize({ width, height: 900 });
       for (const path of ROUTES) {
         await settle(page, path);

@@ -1,0 +1,23 @@
+export type LoadOptions = {
+  base: string;
+  paths: string[];
+  concurrency: number;
+  duration: number;
+  p95Ms: number;
+  p99Ms: number;
+  maxErrorRate: number;
+  timeoutMs: number;
+  production: boolean;
+};
+export type LoadResult = { path: string; ms: number; ok: boolean; status: number | string };
+export type LoadSummary = { requests: number; errors: number; errorRate: number; p50: number; p95: number; p99: number; max: number };
+export declare const DEFAULT_BASE: string;
+export declare const DEFAULT_PATHS: readonly string[];
+export declare const DEFAULTS: { concurrency: number; duration: number; p95Ms: number; p99Ms: number; maxErrorRate: number; timeoutMs: number };
+export declare function isProductionHost(host: string): boolean;
+export declare function parseLoadArgs(argv: readonly string[]): LoadOptions | { error: string };
+export declare function percentile(sorted: readonly number[], q: number): number;
+export declare function summarize(results: readonly { ms: number; ok: boolean }[]): LoadSummary;
+export declare function breaches(summary: LoadSummary, options: Pick<LoadOptions, 'p95Ms' | 'p99Ms' | 'maxErrorRate'>): string[];
+export declare function run(options: LoadOptions): Promise<{ results: LoadResult[]; seconds: number }>;
+export declare function report(options: LoadOptions, results: readonly LoadResult[], seconds: number): { lines: string[]; ok: boolean };
