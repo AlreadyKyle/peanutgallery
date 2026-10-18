@@ -1,0 +1,12 @@
+{
+  "name": "mobmachine",
+  "owner": { "name": "Mob Machine" },
+  "metadata": { "description": "Mob Machine's mods for Claude Code." },
+  "plugins": [
+    {
+      "name": "dust",
+      "source": "./platform/claude-mod",
+      "description": "Adds /dust, which opens Dust, Mob Machine's idle game, in your browser while Claude works."
+    }
+  ]
+}

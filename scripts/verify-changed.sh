@@ -30,6 +30,7 @@ fi
 if printf '%s\n' "$CHANGED" | grep -q '^platform/ops/'; then pnpm test:ops; fi
 if printf '%s\n' "$CHANGED" | grep -q '^platform/supabase/functions/'; then pnpm test:functions; fi
 if printf '%s\n' "$CHANGED" | grep -q '^platform/agents/'; then pnpm test:agents; fi
+if printf '%s\n' "$CHANGED" | grep -qE '^(platform/claude-mod|\.claude-plugin)/'; then node --test platform/claude-mod/tests/mod.test.mjs; fi
 pnpm secret-scan
 pnpm test:docs
 pnpm test:rename
