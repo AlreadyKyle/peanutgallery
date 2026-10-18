@@ -1,0 +1,37 @@
+{
+  "id": "spotlight-d405fb97-ccad-4f6f-8838--tiktok",
+  "createdAt": "2026-10-18T16:37:40.189Z",
+  "status": "pending",
+  "problems": [],
+  "moment": {
+    "kind": "spotlight",
+    "ref": "d405fb97-ccad-4f6f-8838-929dfb281343:2026-10-18",
+    "priority": 30,
+    "at": "2026-10-18T16:37:40.189Z"
+  },
+  "channel": "tiktok",
+  "variant": "plain",
+  "text": "Open for funding: Lower the Mill's starting price from 2200 to 1500 dust. The Mill gets cheaper to buy, so your first one arrives sooner after it opens. $0.52 of $0.78 so far.",
+  "link": "https://mobmachine.games/card/d405fb97-ccad-4f6f-8838-929dfb281343?from=tiktok",
+  "image": "https://mobmachine.games/api/card/d405fb97-ccad-4f6f-8838-929dfb281343/preview.png",
+  "video": null,
+  "clip": {
+    "kicker": "Open for funding in Dust",
+    "title": "Lower the Mill's starting price from 2200 to 1500 dust",
+    "summary": "The Mill gets cheaper to buy, so your first one arrives sooner after it opens.",
+    "role": "Builder A",
+    "suit": "game",
+    "rows": [
+      {
+        "label": "Funded so far",
+        "value": "$0.52 of $0.78",
+        "money": true
+      }
+    ],
+    "state": "open",
+    "funded": 0.6702564102564103,
+    "ctaTop": "Fund the next change, or just play",
+    "ctaUrl": "mobmachine.games"
+  },
+  "title": "Lower the Mill's starting price from 2200 to 1500 dust: open for funding"
+}

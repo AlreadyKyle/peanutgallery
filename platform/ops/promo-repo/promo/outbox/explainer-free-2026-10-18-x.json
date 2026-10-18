@@ -1,0 +1,18 @@
+{
+  "id": "explainer-free-2026-10-18-x",
+  "createdAt": "2026-10-18T16:37:40.189Z",
+  "status": "pending",
+  "problems": [],
+  "moment": {
+    "kind": "explainer",
+    "ref": "free:2026-10-18",
+    "priority": 15,
+    "at": "2026-10-18T16:37:40.189Z"
+  },
+  "channel": "x",
+  "variant": "plain",
+  "text": "Our games are free to play in a browser. Contributions pay for the agent work that changes them.",
+  "link": "https://mobmachine.games/?from=x",
+  "image": null,
+  "video": null
+}
