@@ -3,7 +3,7 @@ import { CardsStatus } from '../components/CardsStatus';
 import { EventList } from '../components/EventList';
 import { ExplainerVideo } from '../components/ExplainerVideo';
 import { FundNow } from '../components/Flow';
-import { BuildingStation, FloorRail, FLOOR_STATIONS, IdeasStation, NextStation, ShippedStation, StationPart, stationCounts, stationTags, useLitStation, useSignedInPanel, WelcomePanel } from '../components/Floor';
+import { BuildingStation, FloorRail, FLOOR_STATIONS, IdeasStation, NextStation, ShippedStation, StationPart, stationCounts, useLitStation, useSignedInPanel, WelcomePanel } from '../components/Floor';
 import { Perks } from '../components/Perks';
 import { useSignedIn } from '../lib/account';
 import { splitSentence } from '../components/Funding';
@@ -260,7 +260,7 @@ export function Landing() {
         )}
         {/* While the snapshot loads, the room is drawn empty in its own box and the pipe tells the feed,
             so nothing under them moves when the agents arrive. */}
-        <LiveStudio snapshot={view?.snapshot ?? null} stations={view === null ? [] : stationTags(view.snapshot)} lit={lit} pipeSize={2} />
+        <LiveStudio snapshot={view?.snapshot ?? null} pipeSize={2} />
       </div>
       {/* The stations in the machine's order, the rail with the room's small map beside them from
           64rem; then the first game. */}

@@ -287,16 +287,13 @@ function Sprite({ pulse, plan, onDone }: { pulse: Pulse; plan: RoomPlan; onDone:
   );
 }
 
-/** The pieces of the room a station tag can stand on (docs/specs/place.md, The floor). */
+/** The pieces of the room a station stands at (docs/specs/place.md, The floor). */
 export type StationPiece = 'whiteboard' | 'hopper' | 'desks' | 'dock' | 'sofa';
 
-/** A station tag: a labelled link standing on a piece of the room, to that station's part of the page. */
+/** A station's place in the room: its footprint is outlined on the rail's map while its part is in view. */
 export type StationTag = {
   readonly id: string;
   readonly piece: StationPiece;
-  readonly name: string;
-  readonly label: string;
-  readonly href: string;
 };
 
 /** A piece's footprint in the room's units: the desks as one block round all of them. */
@@ -309,15 +306,6 @@ export function pieceBox(plan: RoomPlan, piece: StationPiece): Box {
     return { x: left, y: back, w: right - left, d: front - back, h: Math.max(...plan.desks.map((desk) => desk.h)) };
   }
   return plan[piece];
-}
-
-/** How far over a piece's top its tag floats, in tiles: clear of the agent at a desk or on the sofa. */
-const TAG_LIFT = 1.25;
-
-/** Where a station's tag stands on screen: over the middle of its piece, above whoever works there. */
-export function tagPoint(plan: RoomPlan, piece: StationPiece): { sx: number; sy: number } {
-  const box = pieceBox(plan, piece);
-  return iso(box.x + box.w / 2, box.y + box.d / 2, (box.z ?? 0) + box.h + TAG_LIFT, TILE);
 }
 
 /** The outline of a lit station's footprint on the floor, a little wider than the piece. */
@@ -346,13 +334,13 @@ export type StudioRoomProps = {
   /** Write the list of facts under the room, for screen readers and the keyboard (the broadcast overlay leaves it out). */
   facts?: boolean;
   label?: string;
-  /** The stations' tags, each a link to its part of the page (home's floor); none elsewhere. */
+  /** The stations in the room (home's rail map); none elsewhere. The room carries no labels over them. */
   stations?: readonly StationTag[];
-  /** The station whose part of the page is in view: its tag and footprint are drawn lit. */
+  /** The station whose part of the page is in view: its footprint is outlined on the floor. */
   lit?: string | null;
   /**
    * False draws a picture of the room only (home's rail map): the agents still move, but nothing in
-   * it takes focus or a press, it carries no station tags, and the drawing is hidden from screen readers, since the room beside
+   * it takes focus or a press, and the drawing is hidden from screen readers, since the room beside
    * the pitch already carries every fact.
    */
   interactive?: boolean;
@@ -751,26 +739,6 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label,
               <Sprite key={pulse.id} pulse={pulse} plan={plan} onDone={spriteDone} />
             ))}
           </svg>
-          {stations.length === 0 || !interactive ? null : (
-            <ul className="station-tags" aria-label={copy.floor.mapLabel}>
-              {stations.map((station) => {
-                const p = tagPoint(plan, station.piece);
-                return (
-                  <li
-                    key={station.id}
-                    className="station-tag"
-                    data-station={station.id}
-                    data-lit={station.id === lit ? 'true' : undefined}
-                    style={{ left: `${(((p.sx - vb.x) / vb.w) * 100).toFixed(2)}%`, top: `${(((p.sy - vb.y) / vb.h) * 100).toFixed(2)}%` }}
-                  >
-                    <a href={station.href} aria-label={station.label} aria-current={station.id === lit ? 'location' : undefined}>
-                      <span className="station-pill">{station.name}</span>
-                    </a>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
           {activePlace !== null && activeAt !== null ? (
             <RoleCard
               place={activePlace}

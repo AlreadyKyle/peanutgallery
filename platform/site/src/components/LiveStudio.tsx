@@ -6,7 +6,7 @@ import type { Snapshot } from '../lib/source';
 import { twitchChannel, twitchUrl } from '../lib/twitch';
 import { Glyph } from './Glyph';
 import { Pipe } from './Pipe';
-import { EmptyRoom, StudioRoom, type Pulse, type StationTag } from './StudioRoom';
+import { EmptyRoom, StudioRoom, type Pulse } from './StudioRoom';
 
 // Home's opening section (docs/specs/final-state.md, The live studio): the room and the pipe beside
 // it. The room's era comes from /api/community/studio, the garage when that does not answer. The
@@ -53,16 +53,11 @@ export function TwitchLink({ channel }: { channel: string | null }) {
 
 export function LiveStudio({
   snapshot,
-  stations = [],
-  lit = null,
   pipeSize = 1,
   pipe = true,
 }: {
   /** Null while home's snapshot loads: the room is drawn empty in its own box and the pipe tells the feed. */
   snapshot: Snapshot | null;
-  /** Home's floor: the station tags standing on the room, each a link to its part of the page. */
-  stations?: readonly StationTag[];
-  lit?: string | null;
   /** How many of the pipe's newest rows to show. */
   pipeSize?: number;
   /** Draw the pipe here; home's floor draws it beside the pitch instead (FloorPipe). */
@@ -106,7 +101,7 @@ export function LiveStudio({
       </div>
       {/* The room is wide and the pipe a column: the pipe shows as many rows as sit beside the room. */}
       <div className="live-studio-grid">
-        {snapshot === null ? <EmptyRoom studio={studio} /> : <StudioRoom snapshot={snapshot} studio={studio} pulses={pulses} stations={stations} lit={lit} />}
+        {snapshot === null ? <EmptyRoom studio={studio} /> : <StudioRoom snapshot={snapshot} studio={studio} pulses={pulses} />}
         {pipe ? (
         <Pipe
           events={events}

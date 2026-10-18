@@ -9,7 +9,8 @@ import { legal } from '../lib/legal';
 import { canFund } from '../lib/payment';
 import type { Card, Snapshot, Supply } from '../lib/source';
 import { plannedLine } from './Card';
-import { draftingLine, FundNow, HOME_FUND_CARDS, MachineFlow } from './Flow';
+import { supplyFrom } from '../lib/source';
+import { buildingEmptyLine, draftingLine, FundNow, HOME_FUND_CARDS, MachineFlow } from './Flow';
 
 const STRIPE = 'https://buy.stripe.com/test-link';
 
@@ -59,7 +60,7 @@ function snapshot(cards: Card[], over: Partial<Snapshot> = {}): Snapshot {
 }
 
 function supply(over: Partial<Supply> = {}): Supply {
-  return { drafting: false, short: false, reason: null, runs_today: 0, run_limit: 3, next_check_at: null, ...over };
+  return { drafting: false, stalled: false, short: false, reason: null, runs_today: 0, run_limit: 3, next_check_at: null, ...over };
 }
 
 function renderFlow(snap: Snapshot) {
@@ -376,6 +377,22 @@ describe('draftingLine', () => {
     expect(draftingLine(snapshot([], { supply: supply({ reason: 'not_short' }) }))).toEqual({ text: copy.flow.draftingIdle, drafting: false });
     expect(draftingLine(snapshot([], { supply: null }))).toEqual({ text: copy.flow.draftingIdle, drafting: false });
     expect(draftingLine(snapshot([]))).toEqual({ text: copy.flow.draftingIdle, drafting: false });
+  });
+});
+
+describe('a draft that waited since an earlier day', () => {
+  it('is read as stalled: nothing is drafting, and Building promises no start time', () => {
+    // Production on 18 October 2026: a draft queued on 15 October that nothing has started.
+    const stalled = supplyFrom({ drafting: true, short: true, reason: 'already_queued', runs_today: 0, run_limit: 12, next_check_at: null });
+    expect(stalled).toMatchObject({ drafting: false, stalled: true });
+    expect(draftingLine(snapshot([], { supply: stalled }))).toEqual({ text: copy.flow.draftingIdle, drafting: false });
+    expect(buildingEmptyLine(snapshot([], { supply: stalled }))).toBe(copy.flow.lanes.building.emptyStalled);
+    expect(copy.flow.lanes.building.emptyStalled).not.toMatch(/hour|minute|soon/);
+    // A draft made today is drafting, and the promise stands.
+    const today = supplyFrom({ drafting: true, short: true, reason: 'already_queued', runs_today: 1, run_limit: 12, next_check_at: null });
+    expect(today).toMatchObject({ drafting: true, stalled: false });
+    expect(buildingEmptyLine(snapshot([], { supply: today }))).toBe(copy.flow.lanes.building.empty);
+    expect(supplyFrom({ drafting: false, runs_today: 0 })).toMatchObject({ drafting: false, stalled: false });
   });
 });
 
