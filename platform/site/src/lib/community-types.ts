@@ -161,6 +161,28 @@ export interface StudioDoc {
   readonly eras: readonly StudioEra[];
 }
 
+/** One card a player follows (docs/specs/card-follows.md). state is open until the card ships, then
+ *  sent (the one email went), covered (a ship notice to the same address went instead), no_address
+ *  or failed; sending while the job holds it. */
+export type FollowState = 'open' | 'sending' | 'sent' | 'covered' | 'no_address' | 'failed';
+
+export interface Follow {
+  readonly cardId: string;
+  readonly title: string;
+  readonly stage: string;
+  readonly suit: Suit;
+  readonly rarity: Rarity;
+  readonly state: FollowState;
+  readonly followedAt: string;
+  readonly liveAt: string | null;
+}
+
+export interface FollowsDoc {
+  readonly follows: readonly Follow[];
+  readonly open: number;
+  readonly cap: number;
+}
+
 export interface PageDoc<T> {
   readonly items: readonly T[];
   readonly next: string | null;
@@ -182,6 +204,9 @@ export interface PageDoc<T> {
  *   vote_suggestion(id, value smallint)             (1 or 0 to clear)
  *   save_seed(game, code, title, publish boolean) -> { id }
  *   vote_seed(id, value smallint)                   (1, -1 or 0 to clear)
+ *   follow_card(card_id) -> Follow & { following: true }   (docs/specs/card-follows.md)
+ *   unfollow_card(card_id) -> { cardId, following: false }
+ *   my_follows() -> FollowsDoc
  * The cards document gains `suit: Suit` and `rarity: Rarity` on every card.
  */
 export const COMMUNITY_API = '/api/community';

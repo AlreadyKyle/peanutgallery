@@ -3,12 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Beside the functions folder, not in it: Netlify deploys every file in netlify/functions as a function.
 import cardFunction from './functions/card.mts';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './lib/public-env';
-import { unsubscribeCopy } from './lib/unsubscribe';
+import { followUnsubscribeCopy, unsubscribeCopy } from './lib/unsubscribe';
 
 const ORIGIN = 'https://site.example';
 const PAYMENT = '00000000-0000-4000-8000-0000000000aa';
 const TOKEN = 'ab'.repeat(32);
 const LINK = `/api/unsubscribe?p=${PAYMENT}&t=${TOKEN}`;
+const USER = '00000000-0000-4000-8000-0000000000bb';
+const FOLLOW_LINK = `/api/unsubscribe?f=${USER}&t=${TOKEN}`;
 
 type Call = { url: string; init: RequestInit };
 
@@ -62,6 +64,10 @@ describe('GET /api/unsubscribe', () => {
       `/api/unsubscribe?p=${PAYMENT.toUpperCase()}&t=${TOKEN}`,
       `${LINK}&x=1`,
       `${LINK}&t=${TOKEN}`,
+      `/api/unsubscribe?f=not-a-uuid&t=${TOKEN}`,
+      `/api/unsubscribe?f=${USER}&p=${PAYMENT}`,
+      `${FOLLOW_LINK}&p=${PAYMENT}`,
+      `/api/unsubscribe?x=${USER}&t=${TOKEN}`,
     ]) {
       const response = await request(path);
       expectPage(response, 400);
@@ -107,5 +113,43 @@ describe('POST /api/unsubscribe', () => {
     expectPage(put, 405);
     expect(put.headers.get('Allow')).toBe('GET, POST');
     expect(calls).toHaveLength(0);
+  });
+});
+
+// docs/specs/card-follows.md: the same page for the emails about cards a player follows.
+describe('/api/unsubscribe for a follow email', () => {
+  it('answers GET with one button that posts to the same link, and changes nothing', async () => {
+    const calls = stubFetch(answering('true'));
+    const response = await request(FOLLOW_LINK);
+    expectPage(response, 200);
+    const html = await response.text();
+    expect(html).toContain(`<form method="post" action="/api/unsubscribe?f=${USER}&amp;t=${TOKEN}">`);
+    expect(html).toContain(followUnsubscribeCopy.button);
+    expect(html).toContain(`<h1>${followUnsubscribeCopy.title}</h1>`);
+    expect(html).not.toMatch(/<script|<style| style=/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('answers POST with follow_unsubscribe, the publishable key, the profile and the token, and confirms', async () => {
+    const calls = stubFetch(answering('true'));
+    const response = await oneClick(FOLLOW_LINK);
+    expectPage(response, 200);
+    expect(await response.text()).toContain(followUnsubscribeCopy.done);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe(`${SUPABASE_URL}/rest/v1/rpc/follow_unsubscribe`);
+    expect((calls[0]!.init.headers as Record<string, string>).apikey).toBe(SUPABASE_PUBLISHABLE_KEY);
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ p_user: USER, p_token: TOKEN });
+  });
+
+  it('answers 400 on a token the database refuses and 502 when Supabase fails', async () => {
+    stubFetch(answering('false'));
+    const refused = await oneClick(FOLLOW_LINK);
+    expectPage(refused, 400);
+    expect(await refused.text()).toContain(followUnsubscribeCopy.invalid);
+    vi.unstubAllGlobals();
+    stubFetch(answering('{"message":"boom"}', 500));
+    const failed = await oneClick(FOLLOW_LINK);
+    expectPage(failed, 502);
+    expect(await failed.text()).toContain(followUnsubscribeCopy.failed);
   });
 });

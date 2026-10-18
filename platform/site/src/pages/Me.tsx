@@ -9,6 +9,7 @@ import { adoptLinkErrorFromLocation, adoptSessionFromLocation, rpc, sendMagicLin
 import { CommunityError } from '../lib/community';
 import type { AvatarSpec, Profile } from '../lib/community-types';
 import { copy } from '../lib/copy';
+import { pendingFollowPath, unfollowCard, useFollows } from '../lib/follows';
 import { legal } from '../lib/legal';
 import { pendingSeedPath } from '../lib/seed-link';
 import { TIERS } from '../lib/xp';
@@ -214,6 +215,62 @@ function Claim({ onClaimed }: { onClaimed: () => void }) {
   );
 }
 
+/** The cards the player follows (docs/specs/card-follows.md), each with its state and Unfollow. */
+function Follows() {
+  const follows = useFollows();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const words = copy.follow;
+  const unfollow = (cardId: string) => {
+    setBusy(cardId);
+    setFailed(false);
+    unfollowCard(cardId)
+      .then(() => follows.reload())
+      .catch(() => setFailed(true))
+      .finally(() => setBusy(null));
+  };
+  return (
+    <section className="section" aria-labelledby="me-follows">
+      <h2 id="me-follows">{words.listTitle}</h2>
+      <p>{words.listLede}</p>
+      {follows.state === 'loading' ? (
+        <p className="muted" aria-busy="true">
+          {copy.me.loading}
+        </p>
+      ) : follows.state !== 'ready' ? (
+        <p className="muted">{words.listUnavailable}</p>
+      ) : follows.follows.length === 0 ? (
+        <p className="muted">{words.listEmpty}</p>
+      ) : (
+        <ul className="rows me-follows">
+          {follows.follows.map((follow) => (
+            <li key={follow.cardId} data-follow={follow.cardId}>
+              <p>
+                <Link to={`/card/${follow.cardId}`}>{follow.title}</Link>
+              </p>
+              <p className="small muted">{words.states[follow.state] ?? words.states.open}</p>
+              <p>
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  disabled={busy === follow.cardId}
+                  onClick={() => unfollow(follow.cardId)}
+                  aria-label={words.unfollowNamed.replace('{title}', follow.title)}
+                >
+                  {words.unfollow}
+                </button>
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p role="status" className="small">
+        {failed ? words.failed : ''}
+      </p>
+    </section>
+  );
+}
+
 export function Me() {
   const navigate = useNavigate();
   const [linkError, setLinkError] = useState<LinkError | null>(null);
@@ -221,9 +278,10 @@ export function Me() {
     // A link that expired or was used already says so, and the error leaves the address.
     const failed = adoptLinkErrorFromLocation();
     if (failed !== null) setLinkError(failed);
-    // A player who signed in to save a seed (/seeds?save=) goes back to finish the save.
+    // A player who signed in to save a seed (/seeds?save=) goes back to finish the save; one who
+    // signed in to follow a card goes back to the card (docs/specs/card-follows.md).
     if (!adoptSessionFromLocation()) return;
-    const back = pendingSeedPath();
+    const back = pendingSeedPath() ?? pendingFollowPath();
     if (back !== null) navigate(back, { replace: true });
   }, [navigate]);
   const me = useMyProfile();
@@ -268,6 +326,7 @@ export function Me() {
               <Editor profile={me.profile} onSaved={me.reload} />
             </section>
             <Claim onClaimed={me.reload} />
+            <Follows />
           </>
         )}
       </div>

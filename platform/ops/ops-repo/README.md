@@ -11,7 +11,7 @@ They run in a private repository, never in this one: this repository is public, 
 | `backup` | 06:17 daily | `platform/ops/mac/backup-mac.sh` with `BACKUP_PG_BIN=/usr/lib/postgresql/17/bin` (`postgresql-client-17` from the PostgreSQL apt repository) and `BACKUP_DIR=$RUNNER_TEMP/backups`, up to 3 attempts a minute apart, then the `.tar.age` uploaded as an artifact kept 90 days |
 | `controller` | 07:07 daily | `jobs/check-env.mjs controller`, then `node --env-file jobs/main.mjs controller` |
 | `quota` | 07:37 daily | `jobs/check-env.mjs quota`, then `node --env-file jobs/main.mjs quota` |
-| `notices` | 09:07 daily | `jobs/check-env.mjs notices`, then `node --env-file jobs/main.mjs notices`: the ship notices (`docs/specs/ship-notices.md`), at most 50 a run |
+| `notices` | 09:07 daily | `jobs/check-env.mjs notices`, then `node --env-file jobs/main.mjs notices`: the ship notices (`docs/specs/ship-notices.md`), then the emails for cards players follow (`docs/specs/card-follows.md`), at most 50 a run in all, payers first |
 
 `workflow_dispatch` with the input `job` runs any one of them at once. A failure posts "Mob Machine job <job> failed on GitHub Actions: <run URL>" to ntfy.
 

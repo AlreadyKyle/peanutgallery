@@ -1443,6 +1443,27 @@ button.link:hover:not(:disabled) {
   margin-top: var(--space-3);
 }
 
+/* Tell me when this ships, under the face on a card's own page, and the followed cards on /me
+   (docs/specs/card-follows.md): the title and its state over the Unfollow button, one per row. */
+.follow {
+  max-width: var(--measure);
+  margin-top: var(--space-3);
+}
+
+.follow > p:first-child {
+  margin-top: 0;
+}
+
+.rows.me-follows li {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.rows.me-follows li > p {
+  margin: 0;
+}
+
 /* Rows: body text, hairlines between them, a constant 0.5rem inline inset (room for the change
    marker) and 1rem above and below against the hairlines. The date, the rail and the meta line
    are small. Queued, Shipped, planned cards and the ledger's rows are rows, never cards. A list of

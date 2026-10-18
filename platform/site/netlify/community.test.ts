@@ -161,10 +161,28 @@ describe('the player RPCs', () => {
     expect(response.headers.get('Cache-Control')).toBe('no-store');
   });
 
-  it('allows exactly the player RPCs of the contract (and set_contribution_public)', () => {
-    expect(Object.keys(PLAYER_RPCS).sort()).toEqual(
-      ['claim_contributions', 'my_profile', 'save_seed', 'set_contribution_public', 'submit_suggestion', 'update_profile', 'vote_seed', 'vote_suggestion'],
-    );
+  it('allows exactly the player RPCs of the contract (and set_contribution_public, and the follows of docs/specs/card-follows.md)', () => {
+    expect(Object.keys(PLAYER_RPCS).sort()).toEqual([
+      'claim_contributions', 'follow_card', 'my_follows', 'my_profile', 'save_seed', 'set_contribution_public', 'submit_suggestion', 'unfollow_card',
+      'update_profile', 'vote_seed', 'vote_suggestion',
+    ]);
+    expect(PLAYER_RPCS.follow_card).toEqual(['card_id']);
+    expect(PLAYER_RPCS.unfollow_card).toEqual(['card_id']);
+    expect(PLAYER_RPCS.my_follows).toEqual([]);
+  });
+
+  it("passes a follow through with the player's token, and refuses one with another argument", async () => {
+    const card = '00000000-0000-4000-8000-0000000000c1';
+    const calls = stubFetch([{ body: { cardId: card, following: true, state: 'open' } }]);
+    const response = await post('/api/community/rpc/follow_card', { card_id: card }, { authorization: `Bearer ${TOKEN}` });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ cardId: card, following: true, state: 'open' });
+    expect(calls[0]!.url).toBe(`${SUPABASE_URL}/rest/v1/rpc/follow_card`);
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ card_id: card });
+    expect((calls[0]!.init.headers as Record<string, string>).Authorization).toBe(`Bearer ${TOKEN}`);
+    expect((await post('/api/community/rpc/follow_card', { card_id: card, user_id: 'x' }, { authorization: `Bearer ${TOKEN}` })).status).toBe(400);
+    expect((await post('/api/community/rpc/follow_card', { card_id: card })).status).toBe(401);
+    expect(calls).toHaveLength(1);
   });
 
   it('refuses another RPC, an unknown argument and a missing token before Supabase is called', async () => {

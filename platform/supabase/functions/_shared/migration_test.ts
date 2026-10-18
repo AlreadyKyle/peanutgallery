@@ -302,6 +302,10 @@ Deno.test("migrations on PGlite", {
         "20261017230000_board_moderation_fix.sql",
         // the pipe's history (docs/specs/community-core.md): the feed lines from before go-live.
         "20261018000000_feed_backfill.sql",
+        // card-follows (docs/specs/card-follows.md): "Tell me when this ships" for any profile.
+        "20261018010000_card_follows.sql",
+        // Daily Dust (docs/specs/daily-dust.md): three more aggregate counters.
+        "20261018020000_daily_dust_counters.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -4160,13 +4164,22 @@ Deno.test("migrations on PGlite", {
           "record_benchmark_review",
           "refresh_daily_metrics",
           "refresh_recent_metrics",
+          // card-follows (docs/specs/card-follows.md): the notices job's due list, claim, settle and stuck list.
+          "follow_notice_claim",
+          "follow_notice_settle",
+          "follow_notices_due",
+          "follow_notices_stuck",
         ];
         // community-core (docs/specs/final-state.md, docs/specs/community-core.md): the community
         // documents run for anon and authenticated, a player's RPCs for authenticated, and the board's
         // community admin for authenticated (each checks the board and the second factor); none of
         // them for the service role, so the dispatcher's key reads no player text but the Curator's batch.
         const communityDocs = ["community_feed", "community_goals", "community_profile", "community_seeds", "community_studio", "community_suggestions"];
-        const player = ["claim_contributions", "my_profile", "save_seed", "set_contribution_public", "submit_suggestion", "update_profile", "vote_seed", "vote_suggestion"];
+        const player = [
+          "claim_contributions", "my_profile", "save_seed", "set_contribution_public", "submit_suggestion", "update_profile", "vote_seed", "vote_suggestion",
+          // card-follows (docs/specs/card-follows.md): a player's follows.
+          "follow_card", "my_follows", "unfollow_card",
+        ];
         const communityBoard = [
           "board_community_cards", "board_community_users", "board_decline_suggestion", "board_delete_goal", "board_draft_from_cluster",
           "board_eras", "board_feature_seed", "board_flags", "board_goals", "board_link_cluster_card", "board_merge_clusters",
@@ -4186,7 +4199,9 @@ Deno.test("migrations on PGlite", {
         // which writes only with a matching token (docs/specs/ship-notices.md); its token function is
         // no role's, so it is listed with the trigger functions below. play-counts adds the counter the
         // site's /api/count calls, which adds one to a known event's daily total (docs/specs/play-counts.md).
-        const everyone = ["card_is_public", "count_play_event", "event_line_key", "public_supply", "ship_notice_unsubscribe", "site_card", "site_cards", "site_live", "site_reports", "thanks_for_session"];
+        // card-follows adds its own unsubscribe, which also writes only with a matching token
+        // (docs/specs/card-follows.md).
+        const everyone = ["card_is_public", "count_play_event", "event_line_key", "follow_unsubscribe", "public_supply", "ship_notice_unsubscribe", "site_card", "site_cards", "site_live", "site_reports", "thanks_for_session"];
         assertEquals(
           privileges.map((p) => p.proname),
           [

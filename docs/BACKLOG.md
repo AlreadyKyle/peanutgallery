@@ -50,20 +50,11 @@ game stages), and the news section (the feed). What it leaves for later is filed
 - intent: platform/agents/evals holds the draft set's nine cases, but no run has been recorded: there is no results folder and no baseline.json, so every prompt or rubric change passes with the advisory line that the baseline is missing. The board runs pnpm eval:replay -- --set draft --k 3 at the Mac on the founder's login (the runner refuses the studio key and CI) and files the result and the first baseline in a kernel pull request. It is not built yet.
 - kernel: yes
 
-### Aggregate counters for the benchmarks
-- bucket: platform
-- folder: platform
-- horizon: next
-- rank: 3
-- summary: Send the new daily counters from the site and the game: returning players, session length, home visits, dwell and where shares come from.
-- intent: The database side is built (docs/specs/operations.md): /api/count and count_play_event take the counters docs/strategy/benchmarks.md lists under Needs (a load from a save 1 or 7 days old, a session reaching 2 or 4 minutes, a seed saved or opened from a link, a home load and its dwell buckets, the broadcast's load and its QR source, a click on a Discord link), and public.daily_metrics keeps daily totals for the benchmark review. What is left is the senders: the game posts its returning, session and seed counters, the site posts the home load and dwell buckets and tags the broadcast's QR link and Discord links, each a beacon with no cookie, identifier or address, and the Privacy page names them. Until then those rows read not measured. It is not built yet.
-- kernel: no
-
 ### The review team on events
 - bucket: agents
 - folder: platform
 - horizon: next
-- rank: 4
+- rank: 3
 - summary: More of the review team joins the benchmark review: finance, product, games, art, upkeep and community each read their own areas.
 - intent: The benchmark review runs (docs/specs/operations.md): on events, a code-built scoreboard of every row docs/strategy/benchmarks.md can measure from the daily counts, and a Studio Head session only when a row is below its floor, whose likely cause and proposed adjustment land as findings the board lists. docs/strategy/operating-system.md designs a fuller team: the Head of Finance, Head of Product, Game Director, Art Director, Janitor, Community and HR each reviewing their own areas with their own inputs (rubric scores, frames, gate results, scorecards), a report stored in the repository, and the board's panel showing the scoreboard. It is not built yet.
 - kernel: yes
@@ -72,16 +63,16 @@ game stages), and the news section (the feed). What it leaves for later is filed
 - bucket: platform
 - folder: platform
 - horizon: next
-- rank: 5
+- rank: 4
 - summary: Download everything your profile holds, or delete it, from the profile page.
-- intent: Profiles arrive with docs/specs/final-state.md. A signed-in player can download their profile, suggestions, seeds, votes and badges as a file, and delete the profile; contributions stay on the ledger as Supporter n or Anonymous, because the ledger is the record. Until this exists, requests go to the contact address. It is not built yet.
+- intent: Profiles arrive with docs/specs/final-state.md. A signed-in player can download their profile, suggestions, seeds, votes, badges and followed cards (docs/specs/card-follows.md) as a file, and delete the profile; contributions stay on the ledger as Supporter n or Anonymous, because the ledger is the record. Until this exists, requests go to the contact address. It is not built yet.
 - kernel: yes
 
 ### Studio Head drafts cards from the roadmap
 - bucket: agents
 - folder: platform
 - horizon: next
-- rank: 6
+- rank: 5
 - summary: The Studio Head turns planned items into draft cards that are checked and opened for funding.
 - intent: The Studio Head picks planned cards from this backlog, the ledger and the shipped cards for the Game Designer to draft, each graded by the Game Director and meeting the definition of ready. Under docs/PLAN.md §10 decision 66 the dispatcher drafts the next seed-1 backlog card by rank and age whenever the card supply is short, and no model ranks (docs/specs/unattended-roles.md); the Studio Head choosing which planned card to draft, from the ledger and the shipped cards, is what is left. It is not built yet.
 - kernel: yes
@@ -90,7 +81,7 @@ game stages), and the news section (the feed). What it leaves for later is filed
 - bucket: agents
 - folder: platform
 - horizon: next
-- rank: 7
+- rank: 6
 - summary: The Studio Head reads each note from the board and turns it into a draft card, a scheduled item or a discard, with a reason.
 - intent: Board notes are the one free text a role with write access may read. Triage runs at the top of every hour and at planning, links the note to its outcome, and shows the reason only on /board; a discarded note stays discarded unless the board files it as a directive. Notes are stored today and nothing reads them, and the board's panel has no note form since docs/PLAN.md §10 decision 66, so this also waits on one. It is not built yet.
 - kernel: yes
@@ -545,4 +536,22 @@ game stages), and the news section (the feed). What it leaves for later is filed
 - rank: 50
 - summary: The site and the games in languages other than English, starting with the ones visitors use most.
 - intent: Every public string lives in copy files today. Translations would follow docs/COPY.md's rules in each language, pass the content filter in each, and be chosen from the browser's language with a switch. It is not built yet.
+- kernel: yes
+
+### The 48-hour Build
+- bucket: studio
+- folder: platform
+- horizon: later
+- rank: 51
+- summary: A live event where the studio takes one new game from pitch to first playable on stream, with the crowd picking the pitch and unlocking decor.
+- intent: A launch event for when the studio has real users, so strangers have one time to show up and a story with an ending. The studio streams from /broadcast while one New game runs Pitch, Prototype and First playable as their own cards; the crowd picks the pitch from two or three by funding them; /goals shows the event live; a second track of community achievements (seeds shared, suggestions made) unlocks earned decor, never money; the build's clock never appears near a funding control. The board raises it once distinct supporters and daily players show an audience to bring. It is not built yet.
+- kernel: no
+
+### A fair Daily Dust board
+- bucket: game
+- folder: seed-1
+- horizon: later
+- rank: 52
+- summary: A board for each day's Daily Dust run, listing a score only once the studio has replayed the run and checked it.
+- intent: Daily Dust is built (docs/specs/daily-dust.md): every UTC day everyone plays the same four-minute run from a seed made from the date and shares a result card, with no board. The score is worked out in the browser, so a board today would rank whoever edits their numbers. A fair board sends the run's inputs (each strike, purchase and choice with its sim second) and the config's version with the first finished run of the day, replays them on the server with the same sim before listing the score, and shows no name or a content-filtered one. It is not built yet.
 - kernel: yes

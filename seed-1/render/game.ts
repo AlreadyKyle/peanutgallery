@@ -3,7 +3,7 @@
 // (render/controls.ts) all read this one state and listen for its moments, so a strike from the canvas
 // and a strike from the keyboard are the same strike (tests/game.test.ts).
 import { apply, currentWeather, devilHere, findUnlock, milestoneTier, ownedCount, step } from '../sim/sim';
-import { awaySeconds, serializeState } from '../sim/save';
+import { awaySeconds, MAX_AWAY_SECONDS, serializeState } from '../sim/save';
 import type { OrderState, SimAction, SimConfig, SimState, UnlockRow, WeatherKind } from '../sim/types';
 
 // The localStorage key the game saves under. e2e/frames.spec.ts reads this line as text to plant its states.
@@ -40,6 +40,29 @@ export interface GameListener {
   devil?(here: boolean, state: SimState): void;
   /** The dust devil was caught: the dust it paid. */
   caught?(gain: number, state: SimState): void;
+  /** Play began: the first action of a game that waits for one (a daily run). */
+  began?(state: SimState): void;
+  /** A tick reached a stop (a daily run's mark, every `stopsEvery` sim seconds): its index, from 1. */
+  mark?(index: number, state: SimState): void;
+  /** The game reached its end (a daily run's last second): nothing more steps or acts. */
+  ended?(state: SimState): void;
+}
+
+/**
+ * How a game runs. The main game takes the defaults: it credits time away up to MAX_AWAY_SECONDS, never
+ * ends and starts stepping at its first tick. A daily run (render/daily.ts) steps at most a second a
+ * tick, so a hidden tab earns nothing; it waits for the player's first action, lands exactly on each
+ * of its marks and stops at its last second.
+ */
+export interface GameOptions {
+  /** The most one tick steps the sim, in seconds. */
+  maxStepSeconds?: number;
+  /** The sim second the game ends at: ticks stop there and actions are refused. */
+  endAtSeconds?: number;
+  /** A tick never steps across a multiple of this many sim seconds; it lands on it and says mark(). */
+  stopsEvery?: number;
+  /** The game does not step until its first action. */
+  waitForAction?: boolean;
 }
 
 function sameOrder(a: OrderState | undefined, b: OrderState | undefined): boolean {
@@ -59,13 +82,28 @@ export class Game {
   private lastStepAt: number | null = null;
   private readonly listeners: GameListener[] = [];
   private saving = true;
+  private waiting: boolean;
+  private finished: boolean;
 
   constructor(
     private readonly config: SimConfig,
     initial: SimState,
     private readonly store: SaveStore | null = null,
+    private readonly options: GameOptions = {},
   ) {
     this.current = initial;
+    this.waiting = options.waitForAction === true;
+    this.finished = options.endAtSeconds !== undefined && initial.elapsedSeconds >= options.endAtSeconds;
+  }
+
+  /** Whether the game has reached its end (only a game with endAtSeconds ever does). */
+  get over(): boolean {
+    return this.finished;
+  }
+
+  /** Whether the game is still waiting for its first action. */
+  get idle(): boolean {
+    return this.waiting;
   }
 
   get state(): SimState {
@@ -78,9 +116,14 @@ export class Game {
 
   /** One action from the canvas or the DOM controls: the sim's `apply`, then its moments. */
   act(action: SimAction): SimState {
+    if (this.finished) return this.current;
     const before = this.current;
     const after = apply(before, this.config, action);
     this.current = after;
+    if (this.waiting && after !== before) {
+      this.waiting = false;
+      for (const listener of this.listeners) listener.began?.(after);
+    }
     if (action.type === 'strike') {
       const gain = after.dust - before.dust;
       for (const listener of this.listeners) listener.strike?.(gain, after);
@@ -111,15 +154,46 @@ export class Game {
   /** Steps the sim by the wall-clock time since the last tick. `now` is Date.now(), read by the caller. */
   tick(now: number): SimState {
     const before = this.current;
+    if (this.finished || this.waiting) {
+      // Nothing steps: the time spent waiting for the first action, or after the end, is not play.
+      this.lastStepAt = null;
+      return before;
+    }
     if (this.lastStepAt !== null) {
-      const seconds = awaySeconds(this.lastStepAt, now);
-      if (seconds > 0) this.current = step(before, this.config, seconds);
+      const seconds = Math.min(awaySeconds(this.lastStepAt, now), this.options.maxStepSeconds ?? MAX_AWAY_SECONDS);
+      if (seconds > 0) this.advance(seconds);
     }
     this.lastStepAt = now;
     this.announceUnlocks(before, this.current);
     this.announceWeather(before, this.current);
     this.announceLayers(before, this.current, false);
+    if (this.finished) {
+      for (const listener of this.listeners) listener.ended?.(this.current);
+    }
     return this.current;
+  }
+
+  // Steps `seconds`, in parts that land on each stop and never past the end.
+  private advance(seconds: number): void {
+    const { endAtSeconds, stopsEvery } = this.options;
+    let left = seconds;
+    while (left > 1e-9 && !this.finished) {
+      const at = this.current.elapsedSeconds;
+      let part = left;
+      if (endAtSeconds !== undefined) part = Math.min(part, endAtSeconds - at);
+      const nextStop = stopsEvery === undefined ? Infinity : (Math.floor(at / stopsEvery + 1e-9) + 1) * stopsEvery;
+      part = Math.min(part, nextStop - at);
+      this.current = step(this.current, this.config, part);
+      left -= part;
+      // Land exactly on a stop or the end, so float error never leaves the clock a hair short of it.
+      const landed = Math.min(nextStop, endAtSeconds ?? Infinity);
+      if (Math.abs(this.current.elapsedSeconds - landed) < 1e-6) this.current = { ...this.current, elapsedSeconds: landed };
+      if (stopsEvery !== undefined && this.current.elapsedSeconds === nextStop) {
+        const index = Math.round(nextStop / stopsEvery);
+        for (const listener of this.listeners) listener.mark?.(index, this.current);
+      }
+      if (endAtSeconds !== undefined && this.current.elapsedSeconds >= endAtSeconds) this.finished = true;
+    }
   }
 
   // A new order on the board, and a dust devil arriving or leaving (a caught one is said by caught()).

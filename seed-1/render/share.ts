@@ -24,10 +24,66 @@ interface ShareData {
   files?: File[];
 }
 
-interface ShareNavigator {
+export interface ShareNavigator {
   share?: (data: ShareData) => Promise<void>;
   canShare?: (data: ShareData) => boolean;
   clipboard?: { writeText(text: string): Promise<void> };
+}
+
+/** What one press shares: the sheet's title, text and link, the clipboard's text, the picture and the two answers. */
+export interface ShareRequest {
+  title: string;
+  text: string;
+  url: string;
+  /** What the clipboard gets where there is no share sheet: the text with its link. */
+  copyText: string;
+  /** The picture, made only where the sheet takes files; null or a throw sends the text alone. */
+  image: () => File | null;
+  copied: string;
+  failed: string;
+}
+
+/**
+ * The share sheet first, the clipboard second, a plain message when neither works. Called inside the
+ * click, and synchronous up to the sheet, since Safari opens it only there. A dismissed share sheet
+ * rejects with AbortError; that is the player's choice, so it says nothing. Any other rejection (no
+ * permission, data refused) falls back to the clipboard. Share your run and Daily Dust both use it.
+ */
+export function shareOrCopy(request: ShareRequest, status: HTMLElement, nav: ShareNavigator): void {
+  const done = (message: string): void => {
+    status.textContent = message;
+  };
+  const copy = (): void => {
+    if (nav.clipboard === undefined) {
+      done(request.failed);
+      return;
+    }
+    nav.clipboard.writeText(request.copyText).then(
+      () => done(request.copied),
+      () => done(request.failed),
+    );
+  };
+  const sheet = (data: ShareData): Promise<void> =>
+    nav.share!(data).catch((error: unknown) => {
+      if ((error as { name?: unknown } | null)?.name !== 'AbortError') copy();
+    });
+  if (typeof nav.share !== 'function') {
+    copy();
+    return;
+  }
+  const data: ShareData = { title: request.title, text: request.text, url: request.url };
+  if (typeof nav.canShare !== 'function') {
+    void sheet(data);
+    return;
+  }
+  // The picture goes with the text where the share sheet takes files.
+  let file: File | null = null;
+  try {
+    file = request.image();
+  } catch {
+    file = null;
+  }
+  void sheet(file !== null && nav.canShare({ files: [file] }) ? { ...data, files: [file] } : data);
 }
 
 /** Wires the button: the share sheet first, the clipboard second, a plain message when neither works. */
@@ -48,41 +104,18 @@ export function attachShare(
     countEvent('dust_share');
     const state = current();
     const text = shareText(state, config, strings);
-    const done = (message: string): void => {
-      status.textContent = message;
-    };
-    const copy = (): void => {
-      if (nav.clipboard === undefined) {
-        done(strings.share.failed);
-        return;
-      }
-      nav.clipboard.writeText(`${text} ${GAME_URL}`).then(
-        () => done(strings.share.copied),
-        () => done(strings.share.failed),
-      );
-    };
-    // A dismissed share sheet rejects with AbortError; that is the player's choice, so it says nothing.
-    // Any other rejection (no permission, data refused) falls back to the clipboard.
-    const sheet = (data: ShareData): Promise<void> =>
-      nav.share!(data).catch((error: unknown) => {
-        if ((error as { name?: unknown } | null)?.name !== 'AbortError') copy();
-      });
-    if (typeof nav.share !== 'function') {
-      copy();
-      return;
-    }
-    const data: ShareData = { title: strings.title, text, url: GAME_URL };
-    if (typeof nav.canShare !== 'function') {
-      void sheet(data);
-      return;
-    }
-    // The picture of the run goes with the text where the share sheet takes files.
-    let file: File | null = null;
-    try {
-      file = makeImage(runFacts(state, config, strings, GAME_URL));
-    } catch {
-      file = null;
-    }
-    void sheet(file !== null && nav.canShare({ files: [file] }) ? { ...data, files: [file] } : data);
+    shareOrCopy(
+      {
+        title: strings.title,
+        text,
+        url: GAME_URL,
+        copyText: `${text} ${GAME_URL}`,
+        image: () => makeImage(runFacts(state, config, strings, GAME_URL)),
+        copied: strings.share.copied,
+        failed: strings.share.failed,
+      },
+      status,
+      nav,
+    );
   });
 }

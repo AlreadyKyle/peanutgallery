@@ -31,6 +31,8 @@ Where this file and the spec disagree, the spec wins and this file is corrected.
 | G9 | A game's link preview image drawn in code | `docs/VISION.md` §4 | Built |
 | G10 | Sound for every game, made in code | | Later: [Sound for every game](../BACKLOG.md#sound-for-every-game) |
 | G11 | An in-game bug button that saves the last minute of play | | Later: [In-game bug button and QA reproductions](../BACKLOG.md#in-game-bug-button-and-qa-reproductions) |
+| G12 | Daily Dust: every UTC day everyone plays the same four-minute run from a seed made from the date, at `?daily=YYYY-MM-DD`, kept apart from the main save with no time-away credit, ending in a result card (score, glyph row, highlights) to share as text and a code-drawn image; no streaks, no reward for returning, no penalty for missing a day | `docs/specs/daily-dust.md` | Built |
+| G13 | A board for the daily run, from server-checked replays only | `docs/specs/daily-dust.md` | Later: [A fair Daily Dust board](../BACKLOG.md#a-fair-daily-dust-board) |
 
 ## 2. Seeds
 
@@ -82,6 +84,7 @@ Where this file and the spec disagree, the spec wins and this file is corrected.
 | I5 | Display names pass the content filter and the name pipeline before anyone sees them | FS: Identity and anonymity | In this series (filter and admin rename); the full name pipeline for in-game names is Later: [The name pipeline](../BACKLOG.md#the-name-pipeline) |
 | I6 | Download and delete your profile data | | Later: [Download and delete your profile data](../BACKLOG.md#download-and-delete-your-profile-data) |
 | I7 | Link a Twitch or Discord identity to a profile | | Later: [Link a Twitch or Discord account](../BACKLOG.md#link-a-twitch-or-discord-account) |
+| I8 | Anyone with a profile can press Tell me when this ships on any card and gets one email when it goes live, to the sign-in address the studio does not copy; a payer of the same card with the same email gets the ship notice alone | `docs/specs/card-follows.md` | Built (cards); following a suggestion is later |
 
 ## 6. Progression: XP, levels, badges, avatars, frames, collection
 
@@ -164,7 +167,7 @@ Where this file and the spec disagree, the spec wins and this file is corrected.
 | Z3 | The feed reads from append-only `community.events` | FS: Scale | In this series |
 | Z4 | Every list is keyset-paginated; every growing table has the index its reads use | FS: Scale | In this series |
 | Z5 | A card supply and capacity that grow with funding, behind a failure breaker | | Later: [A card supply that keeps pace with funding](../BACKLOG.md#a-card-supply-that-keeps-pace-with-funding) |
-| Z6 | Aggregate counters for every benchmark marked "Needs" | `benchmarks.md` | In this series: the counters and `daily_metrics` (`docs/specs/operations.md`); later: the senders, [Aggregate counters for the benchmarks](../BACKLOG.md#aggregate-counters-for-the-benchmarks) |
+| Z6 | Aggregate counters for every benchmark marked "Needs" | `benchmarks.md` | Built: the counters and `daily_metrics` (`docs/specs/operations.md`) and their senders in the game and the site (`docs/specs/counter-senders.md`) |
 
 ## 13. The agent studio
 

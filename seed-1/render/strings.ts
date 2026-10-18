@@ -59,6 +59,8 @@ export interface Strings {
     gallery: string;
     galleryLabel: string;
   };
+  // Daily Dust: the Today's run link, the footer line during a run and the result at its end (render/daily-ui.ts).
+  daily: Record<(typeof DAILY_KEYS)[number], string>;
   // The layers after the units: first steps, milestones, weather, gems and perks, forks, orders and
   // dust devils (render/depth.ts).
   depth: Record<(typeof DEPTH_KEYS)[number], string>;
@@ -102,6 +104,33 @@ const LABEL_KEYS = [
 const SHARE_KEYS = ['button', 'text', 'copied', 'failed', 'imageDust', 'imageUnlocks'] as const;
 
 const SEED_KEYS = ['button', 'text', 'copied', 'failed', 'offerTitle', 'offerBody', 'offerReplace', 'start', 'keep', 'invalid', 'gallery', 'galleryLabel'] as const;
+
+const DAILY_KEYS = [
+  'entry',
+  'entryLabel',
+  'kicker',
+  'waiting',
+  'playing',
+  'over',
+  'refused',
+  'back',
+  'seeResult',
+  'textTitle',
+  'score',
+  'unlocks',
+  'devilOne',
+  'devilMany',
+  'orderOne',
+  'orderMany',
+  'rowWords',
+  'share',
+  'copy',
+  'again',
+  'close',
+  'copied',
+  'failed',
+  'said',
+] as const;
 
 const DEPTH_KEYS = [
   'hintStrike',
@@ -226,6 +255,10 @@ export function parseStrings(raw: unknown): Strings {
   if (!isRecord(seedRaw)) throw new Error('strings: "seed" must be an object');
   const seed = {} as Strings['seed'];
   for (const key of SEED_KEYS) seed[key] = requireText(seedRaw, key, 'strings.seed');
+  const dailyRaw = raw['daily'];
+  if (!isRecord(dailyRaw)) throw new Error('strings: "daily" must be an object');
+  const daily = {} as Strings['daily'];
+  for (const key of DAILY_KEYS) daily[key] = requireText(dailyRaw, key, 'strings.daily');
   const depthRaw = raw['depth'];
   if (!isRecord(depthRaw)) throw new Error('strings: "depth" must be an object');
   const depth = {} as Strings['depth'];
@@ -246,6 +279,7 @@ export function parseStrings(raw: unknown): Strings {
     },
     share,
     seed,
+    daily,
     depth,
     a11y,
   };

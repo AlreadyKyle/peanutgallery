@@ -189,7 +189,6 @@ Each line is one mechanic from the kick-off plan or a later decision, with its e
 - [Monthly security audit](BACKLOG.md#monthly-security-audit): a Janitor mode that reviews the kernel's security once a month.
 - [Visual replay set](BACKLOG.md#visual-replay-set): frozen frame pairs from real visual reviews, replayed like the draft set.
 - [Builder replay set](BACKLOG.md#builder-replay-set): frozen cards replayed through the builders, with the gate as the grader.
-- [Aggregate counters for the benchmarks](BACKLOG.md#aggregate-counters-for-the-benchmarks): returning players, session length, visits and share sources as daily totals.
 - [The review team on events](BACKLOG.md#the-review-team-on-events): specialised agents check the benchmarks on events and propose adjustments (`docs/strategy/operating-system.md`).
 - [Download and delete your profile data](BACKLOG.md#download-and-delete-your-profile-data): a profile's data as a file, and deletion.
 - [Loyalty bonus for repeat supporters](BACKLOG.md#loyalty-bonus-for-repeat-supporters): a money bonus for repeat supporters, its own kernel spec.
@@ -198,6 +197,8 @@ Each line is one mechanic from the kick-off plan or a later decision, with its e
 - [Seeds for every game](BACKLOG.md#seeds-for-every-game): seed codes and gallery filters beyond Dust.
 - [Link a Twitch or Discord account](BACKLOG.md#link-a-twitch-or-discord-account): a linked identity for the overlay and the clubhouse.
 - [The site and games in more languages](BACKLOG.md#the-site-and-games-in-more-languages): translations under the copy rules.
+- [The 48-hour Build](BACKLOG.md#the-48-hour-build): a live event that takes a new game from pitch to first playable on stream.
+- [A fair Daily Dust board](BACKLOG.md#a-fair-daily-dust-board): a board for the day's run, from server-checked replays only.
 
 ## 5. Business model
 
