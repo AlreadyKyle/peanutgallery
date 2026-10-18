@@ -311,6 +311,10 @@ describe('FundNow', () => {
     expect(grid.querySelector('.fund-next')).toBeNull();
     expect(next.textContent).toContain(legal.pickForMe);
     expect(next.textContent).toContain(legal.fundNextBody);
+    // It names the card that money reaches first, the waterfall's first, with that card's bar.
+    const first = next.querySelector('.fund-next-card')!;
+    expect(first.querySelector('p')?.textContent).toBe(legal.nextInLine.replace('{title}', 'Open 3'));
+    expect(first.querySelector('[role="progressbar"]')).not.toBeNull();
     expect(next.querySelector('a[href="/contribute"]')).not.toBeNull();
     expect(document.querySelectorAll('a[href="/contribute"]')).toHaveLength(1);
     // Next up says what the Game Designer is doing, so the panel does not repeat it.

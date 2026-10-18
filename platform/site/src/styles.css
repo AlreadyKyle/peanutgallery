@@ -1572,6 +1572,21 @@ button.link:hover:not(:disabled) {
   margin: 0;
 }
 
+/* The card the next-in-line money reaches first: its title, then its bar across the tile's width. */
+.fund-next-card {
+  align-self: stretch;
+  max-width: var(--measure-text);
+}
+
+.fund-next-card > p {
+  margin: 0;
+}
+
+.fund-next-card > p:first-child {
+  margin-bottom: var(--space-1);
+  font-weight: var(--weight-bold);
+}
+
 .fund-empty-title {
   font-size: var(--size-h2);
   font-weight: var(--weight-bold);
@@ -5240,6 +5255,35 @@ main.home > .band {
   scroll-margin-top: var(--space-5);
 }
 
+/* A quiet station (no cards to show) is set a step down: a part's heading size, its intro at body
+   size. Two quiet stations in a row share a row from 48rem (Floor.tsx StationPart). */
+.station-part[data-quiet] > h2[id] {
+  font-size: var(--size-h2);
+}
+
+main:not(.sheet) .section.station-part[data-quiet] > h2 + p {
+  font-size: var(--size-body);
+  line-height: var(--leading-body);
+}
+
+@media (min-width: 48rem) {
+  .floor-parts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-4);
+    align-items: start;
+  }
+
+  .floor-parts > * {
+    grid-column: 1 / -1;
+  }
+
+  .floor-parts > [data-quiet]:has(+ [data-quiet]),
+  .floor-parts > [data-quiet] + [data-quiet] {
+    grid-column: auto;
+  }
+}
+
 .station-cards {
   margin-top: 0;
 }
@@ -5301,10 +5345,22 @@ main.home > .band {
   gap: var(--space-3);
 }
 
-/* Two columns only where the panel itself is wide: a card's face column keeps them stacked. */
+/* Two columns only where the panel itself is wide: a card's face column keeps them stacked. With
+   sign-in closed the guest side is all there is, so its two lines sit side by side across the panel
+   instead of leaving the right half empty. */
 @container (min-width: 34rem) {
-  .perks-columns {
+  .perks[data-sign-in='open'] .perks-columns {
     grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  }
+
+  .perks[data-sign-in='closed'] .perks-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-4);
+  }
+
+  .perks[data-sign-in='closed'] .perks-list li + li {
+    margin-top: 0;
   }
 }
 

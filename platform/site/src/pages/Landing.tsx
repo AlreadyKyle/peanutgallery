@@ -3,7 +3,7 @@ import { CardsStatus } from '../components/CardsStatus';
 import { EventList } from '../components/EventList';
 import { ExplainerVideo } from '../components/ExplainerVideo';
 import { FundNow } from '../components/Flow';
-import { BuildingStation, FloorRail, FLOOR_STATIONS, IdeasStation, NextStation, ShippedStation, StationPart, stationCounts, useLitStation, useSignedInPanel, WelcomePanel } from '../components/Floor';
+import { BuildingStation, FloorRail, FLOOR_STATIONS, IdeasStation, NextStation, ShippedStation, StationPart, stationCounts, useIdeasStation, useLitStation, useSignedInPanel, WelcomePanel } from '../components/Floor';
 import { Perks } from '../components/Perks';
 import { useSignedIn } from '../lib/account';
 import { splitSentence } from '../components/Funding';
@@ -243,6 +243,7 @@ export function Landing() {
   const view = live.view;
   const since = useLastVisit();
   const player = useSignedInPanel();
+  const ideas = useIdeasStation();
   const lit = useLitStation(STATION_IDS, view !== null);
   const main = useRef<HTMLElement>(null);
   // From 64rem the plate's room shrinks onto the rail's map as the page scrolls (lib/studio-morph.ts).
@@ -269,14 +270,14 @@ export function Landing() {
         {/* Fund and the first game hold their place while the snapshot loads, so neither is drawn
             twice and a link to #fund lands where it stays. */}
         <div className="floor">
-          {view === null ? null : <FloorRail snapshot={view.snapshot} lit={lit} counts={stationCounts(view.snapshot, view.groups, null)} />}
+          {view === null ? null : <FloorRail snapshot={view.snapshot} lit={lit} counts={stationCounts(view.snapshot, view.groups, null)} ideas={ideas.shown} />}
           <div className="floor-parts">
             <FundSection studio={studio} live={live} index={1} />
             {/* The first game follows the cards to fund, above how the cards move (decision 70). */}
             <ShowcaseSection />
             {view === null ? null : (
               <>
-                <IdeasStation index={2} />
+                {ideas.shown ? <IdeasStation index={2} station={ideas} /> : null}
                 <NextStation snapshot={view.snapshot} groups={view.groups} index={3} />
                 <BuildingStation snapshot={view.snapshot} groups={view.groups} index={4} />
                 <ShippedStation snapshot={view.snapshot} groups={view.groups} index={5} />

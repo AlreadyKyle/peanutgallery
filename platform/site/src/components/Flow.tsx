@@ -5,9 +5,10 @@ import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { formatDate } from '../lib/format';
 import { legal } from '../lib/legal';
+import { nextInLine } from '../lib/payment';
 import type { Card, Snapshot } from '../lib/source';
 import { CardFace } from './Card';
-import { CoinMark, FundAgreement, liveFundLink, type SpecRow } from './Funding';
+import { CoinMark, FundAgreement, FundingBar, fundingCaption, liveFundLink, type SpecRow } from './Funding';
 import { Glyph } from './Glyph';
 import { MoreLink } from './MoreLink';
 
@@ -161,6 +162,7 @@ export function FundNow({
       <div className="fund-ways">
         <div className="fund-next">
           <p className="fund-empty-title">{legal.pickForMe}</p>
+          <NextInLine snapshot={snapshot} />
           <p>{legal.fundNextBody}</p>
           {env.stripePaymentLinkUrl === '' ? null : (
             <Link className="button btn-coin" to="/contribute">
@@ -172,6 +174,24 @@ export function FundNow({
         {machine}
       </div>
     </>
+  );
+}
+
+/**
+ * Which card the next-in-line money goes to first (the waterfall's order, lib/payment.ts): its title,
+ * its bar and its figures, or nothing while the order is unread. Its face, with its own link, is in
+ * the grid above.
+ */
+function NextInLine({ snapshot }: { snapshot: Snapshot }) {
+  const next = nextInLine(snapshot);
+  if (next === null) return null;
+  const caption = fundingCaption(next, snapshot);
+  return (
+    <div className="fund-next-card">
+      <p>{legal.nextInLine.replace('{title}', next.title)}</p>
+      <FundingBar card={next} />
+      {caption === null ? null : <p className="small">{caption}</p>}
+    </div>
   );
 }
 
