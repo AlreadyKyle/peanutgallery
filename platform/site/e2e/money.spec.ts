@@ -107,10 +107,10 @@ test.describe('/contribute split slider', () => {
 test.describe('/contribute with an empty order', () => {
   test.use({ studio: studio({}, { funding_order: [] }) });
 
-  test('says the money waits in Not on a card yet, and offers no card', async ({ page }) => {
+  test('says the money waits for the next card to open, and offers no card', async ({ page }) => {
     await page.goto('/contribute');
     const main = page.getByRole('main');
-    await expect(main.locator('a.choice-primary')).toContainText('Your contribution waits in Not on a card yet and funds the next card that opens.');
+    await expect(main.locator('a.choice-primary')).toContainText('Your contribution waits for the next card to open, then funds it.');
     await expect(main.locator('ul.choices')).toHaveCount(0);
     // The Machine card (docs/specs/final-state.md) is a second way into the same checkout, outside
     // the card choices; the choices still offer exactly one link.
@@ -123,7 +123,7 @@ test.describe('/contribute with an empty order', () => {
     const fund = page.getByRole('region', { name: 'Pick a card to fund' });
     await expect(fund.locator('li.card')).toHaveCount(0);
     await expect(fund.locator('.fund-empty')).toContainText('Fund the next card in line');
-    await expect(fund.locator('.fund-empty')).toContainText('Your contribution waits in Not on a card yet, then funds the next card that opens.');
+    await expect(fund.locator('.fund-empty')).toContainText('Your contribution waits for the next card to open, then funds it.');
     await expect(fund.locator('.fund-empty')).not.toContainText('No card is open for funding right now.');
     await expect(fund.getByRole('link', { name: 'Contribute' })).toHaveAttribute('href', '/contribute');
   });

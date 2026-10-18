@@ -32,28 +32,18 @@ describe('Perks', () => {
     expect(RARITY_XP_MULTIPLIER.rare).toBeGreaterThan(RARITY_XP_MULTIPLIER.common);
   });
 
-  it('lists the guest and profile perks, says paying needs no account, and can offer a free profile', async () => {
-    signInIs(true);
-    render(
-      <MemoryRouter>
-        <Perks signIn />
-      </MemoryRouter>,
-    );
-    // A first visit draws the profile side once the studio says sign-in is open.
-    expect((await screen.findByRole('link', { name: legal.perks.signIn })).getAttribute('href')).toBe('/me');
-    for (const line of [...legal.perks.guest, ...legal.perks.profile]) expect(screen.getByText(line)).toBeTruthy();
-    expect(screen.getByText(legal.perks.note)).toBeTruthy();
-    expect(screen.getByRole('link', { name: legal.perks.signIn }).getAttribute('href')).toBe('/me');
-    expect(screen.getByRole('region', { name: legal.perks.title })).toBeTruthy();
-  });
-
-  it('leaves out the profile link by default, as on the pages where people pay', () => {
+  it('lists the guest and profile perks and says paying needs no account, with no link, as on the pages where people pay', async () => {
     signInIs(true);
     render(
       <MemoryRouter>
         <Perks />
       </MemoryRouter>,
     );
+    // A first visit draws the profile side once the studio says sign-in is open.
+    expect(await screen.findByText(legal.perks.profile[0]!)).toBeTruthy();
+    for (const line of [...legal.perks.guest, ...legal.perks.profile]) expect(screen.getByText(line)).toBeTruthy();
+    expect(screen.getByText(legal.perks.note)).toBeTruthy();
+    expect(screen.getByRole('region', { name: legal.perks.title })).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
   });
 
@@ -61,7 +51,7 @@ describe('Perks', () => {
     signInIs(false);
     render(
       <MemoryRouter>
-        <Perks signIn />
+        <Perks />
       </MemoryRouter>,
     );
     await waitFor(() => expect(screen.getByText(legal.perks.noteClosed)).toBeTruthy());

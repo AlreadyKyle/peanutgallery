@@ -111,7 +111,7 @@ for (const viewport of WIDTHS) {
         'Platform Builder',
         'Tech Artist',
       ]);
-      await expect(starts.locator('#agent-r-platform-builder')).toContainText('Starts when the board opens the studio code lane.');
+      await expect(starts.locator('#agent-r-platform-builder')).toContainText('Starts when studio cards open for funding.');
       await expect(starts.locator('#agent-r-community')).toContainText('Starts once a named moderator is in place for the community channels.');
       await expect(planned.getByRole('heading', { level: 3 })).toHaveText(['Host', 'Studio Head']);
       // The board block sits at the foot, after every section (docs/specs/copy-pass.md).
@@ -128,9 +128,8 @@ for (const viewport of WIDTHS) {
       await expect(running.locator('#agent-r-janitor')).toHaveAttribute('data-kind', 'code');
       await expect(running.locator('#agent-r-janitor .agent-kind')).toHaveText('Code only');
       await expect(running.locator('#agent-r-janitor .card-meta')).toHaveText('Calls no model. Runs every day on its own.');
-      await expect(running.locator('#agent-r-builder-a .card-meta')).toHaveText(
-        'claude-opus-5-5 · Spent from contributions $0.00, $0.00 in the last 7 days · Worked on 0 shipped cards',
-      );
+      // Zero figures are left out, so a role with no spend and no ships shows its model alone.
+      await expect(running.locator('#agent-r-builder-a .card-meta')).toHaveText('claude-opus-5-5');
       for (const region of [starts, planned]) {
         await expect(region.getByText(/\bclaude-/)).toHaveCount(0);
         await expect(region.getByText('Spent from contributions')).toHaveCount(0);
@@ -149,8 +148,8 @@ for (const viewport of WIDTHS) {
 }
 
 // Every path to checkout states the agreement first (docs/specs/legal-copy.md): each Payment Link on
-// / and /contribute has the Terms, the Refunds page and the age condition in the one
-// agreement line directly under its card grid (the board, 27 Sep 2026: not on every card), or, on
+// / and /contribute has the Terms, the Refunds page and the age condition in the one agreement line
+// of its section (the board, 27 Sep 2026: not on every card; 18 Oct 2026: once per page), or, on
 // /contribute, in the agreement line directly under the first choice.
 for (const path of ['/', '/contribute']) {
   test(`${path}: every Payment Link carries the agreement`, async ({ page }) => {
@@ -167,12 +166,14 @@ for (const path of ['/', '/contribute']) {
       const first = document.querySelector('main a.choice-primary');
       const firstAgreement = first?.nextElementSibling ?? null;
       for (const a of document.querySelectorAll(`main a[href^="${link}"]`)) {
-        const grid = a.closest('ul.card-grid, ul.fund-grid');
-        const underGrid = grid !== null && [grid.nextElementSibling, grid.nextElementSibling?.nextElementSibling].some((el) => el?.classList.contains('fund-agreement') === true && hasAgreement(el));
-        // The Machine card (docs/specs/final-state.md) carries its own agreement line under its link.
+        // The one agreement line of the link's section: home's Fund station says it once for its cards
+        // and the Machine card (components/Flow.tsx FundNow).
+        const section = a.closest('section');
+        const inSection = section !== null && [...section.children].some((el) => el.classList.contains('fund-agreement') && hasAgreement(el));
+        // A Machine card drawn on its own (docs/specs/final-state.md) carries its own agreement line.
         const machine = a.closest('.machine-card');
         const inMachine = machine !== null && hasAgreement(machine.querySelector('.fund-agreement'));
-        const inCard = underGrid || inMachine;
+        const inCard = inSection || inMachine;
         const onContribute = location.pathname === '/contribute' && hasAgreement(firstAgreement) && firstAgreement?.tagName === 'P';
         if (!inCard && !onContribute) out.push(`${a.textContent?.trim()} -> ${a.getAttribute('href')}`);
       }

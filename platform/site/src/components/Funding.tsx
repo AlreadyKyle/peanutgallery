@@ -290,8 +290,12 @@ export function PaidExample() {
  * as the supporters list) and what studio-billed work on it cost. The page adds its other facts
  * (time to live, the commit, the gate) as `children`, in the same list. `onFace` leaves out Funded and
  * Contributors when the card's face above already shows them as its spec rows (an open or funded
- * card), so no figure is said twice.
+ * card), so no figure is said twice. Before the build starts, the cost is what drafting the card cost,
+ * and its label says so.
  */
+/** The stages a card reaches once the agents start building it (lib/cards.ts faceOf). */
+const BUILD_STARTED = new Set(['building', 'gated', 'live', 'paused', 'rejected']);
+
 export function CardFacts({ detail, onFace = false, children }: { detail: CardDetail; onFace?: boolean; children?: ReactNode }) {
   const card = detail.card;
   const funded = detail.funding === null ? card.funded_usd : Math.max(detail.funding.credited_usd, 0);
@@ -310,7 +314,7 @@ export function CardFacts({ detail, onFace = false, children }: { detail: CardDe
         </div>
       )}
       <div data-fact="cost">
-        <dt>{legal.costLabel}</dt>
+        <dt>{BUILD_STARTED.has(card.stage) ? legal.costLabel : legal.draftCostLabel}</dt>
         <dd>{formatUsd(detail.spent_usd)}</dd>
       </div>
       {children}

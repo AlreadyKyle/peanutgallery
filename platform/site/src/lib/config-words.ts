@@ -4,8 +4,8 @@ import { copy } from './copy';
 // "What changed" in plain words (docs/specs/supporter-loop.md). A check's raw path, such as
 // `rows[id=mill].baseCost`, reads as "Mill: costs 1500 dust" where the game's config says what the
 // field means (seed-1/config/spawn-table.json, seed-1/config/unlocks.json, seed-1/sim). Anything this
-// table does not know falls back to the raw file, path and value. The check carries only the value
-// after the change, so no line claims what it was before.
+// table does not know is counted, not shown: a raw file path and value means nothing to a reader. The
+// check carries only the value after the change, so no line claims what it was before.
 
 const words = copy.cardPage.plain;
 
@@ -47,10 +47,16 @@ export function plainCheck(check: ConfigCheck): string | null {
   return fill(template, { name: idName(id), value: check.value });
 }
 
-/** The line "What changed" shows for one check: plain words where known, else the raw path. */
-export function changedLine(check: ConfigCheck): { text: string; plain: boolean } {
-  const plain = plainCheck(check);
-  if (plain !== null) return { text: plain, plain: true };
-  const raw = fill(copy.cardPage.changedValue, { file: check.file, path: check.path, value: check.value ?? copy.cardPage.changed });
-  return { text: raw, plain: false };
+/**
+ * What "What changed" shows: the checks it can say in plain words, then one line counting the rest
+ * ("And 1 more value in the game's settings."), or only that count when none is plain. Null when there
+ * is nothing left over.
+ */
+export function changedLines(checks: readonly ConfigCheck[]): { lines: string[]; rest: string | null } {
+  const lines = checks.map(plainCheck).filter((line): line is string => line !== null);
+  const left = checks.length - lines.length;
+  if (left === 0) return { lines, rest: null };
+  const n = String(left);
+  if (lines.length === 0) return { lines, rest: left === 1 ? words.onlyOne : fill(words.onlyMany, { n }) };
+  return { lines, rest: left === 1 ? words.moreOne : fill(words.moreMany, { n }) };
 }

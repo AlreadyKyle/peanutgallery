@@ -15,14 +15,17 @@ const team = copy.team;
 /**
  * The facts line under a running or paused role: its model, what its work paid for with
  * contributions has cost (all time, then the last 7 days) and how many shipped cards it worked on,
- * from public_role_stats. Only rows billed to the studio count, so a role whose work the founder paid
- * for shows $0.00, which is true. A role that does not run shows no facts line.
+ * from public_role_stats. Only rows billed to the studio count. A figure that is zero is left out, so
+ * a row of zeros never reads as an idle studio. A role that does not run shows no facts line.
  */
 export function roleFacts(role: Role, snapshot: Snapshot): string {
   const stats = snapshot.roleStats?.[role.id];
   if (stats === undefined) return role.model;
-  const spent = legal.teamSpent.replace('{total}', formatUsd(stats.spent_usd)).replace('{week}', formatUsd(stats.spent_7d_usd));
-  const ships = stats.shipped_cards === 1 ? team.workedOnOne : team.workedOnMany.replace('{n}', formatInteger(stats.shipped_cards));
+  const total = formatUsd(stats.spent_usd);
+  const week = formatUsd(stats.spent_7d_usd);
+  const zero = formatUsd(0);
+  const spent = total === zero ? '' : (week === zero ? legal.teamSpent : legal.teamSpentWeek).replace('{total}', total).replace('{week}', week);
+  const ships = stats.shipped_cards === 0 ? '' : stats.shipped_cards === 1 ? team.workedOnOne : team.workedOnMany.replace('{n}', formatInteger(stats.shipped_cards));
   return [role.model, spent, ships].filter((part) => part !== '').join(' · ');
 }
 

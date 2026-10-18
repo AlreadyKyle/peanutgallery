@@ -92,7 +92,8 @@ test.describe('home flow, production lanes', () => {
     const fund = page.getByRole('region', { name: copy.flow.fundTitle });
     await expect(fund.locator('.fund-empty')).toContainText('Fund the next card in line');
     await expect(fund.locator('.fund-empty')).toContainText(legal.fundEmptyBody);
-    await expect(fund.locator('.fund-empty-agent')).toHaveText(copy.flow.draftingDone.replace('{n}', '4'));
+    // Next up says what the Game Designer is doing, so the Fund panel does not say it again.
+    await expect(fund.locator('.fund-empty-agent')).toHaveCount(0);
     await expect(fund.getByRole('link', { name: 'Contribute' })).toHaveAttribute('href', '/contribute');
     await expect(items.nth(2).locator('.flow-empty')).toContainText('Cheaper first Gatherer');
     await expect(items.nth(3).locator('li.card[data-face="live"]')).toHaveCount(3);

@@ -1523,9 +1523,8 @@ button.link:hover:not(:disabled) {
 }
 
 /* Home with no card open for funding: one wide panel on the primary fill that funds the next card in
-   line and says what the Game Designer is doing, so the first band never reads empty. */
-.fund-empty,
-.fund-next {
+   line, so the first band never reads empty. */
+.fund-empty {
   display: grid;
   justify-items: start;
   gap: var(--space-2);
@@ -1540,23 +1539,20 @@ button.link:hover:not(:disabled) {
 
 /* Beside the Machine card the tile takes the row's height: its lines stay at the top and its
    Contribute button sits at the foot of the row, so no hollow pools under it. */
-.fund-empty,
-.fund-next {
+.fund-empty {
   align-self: stretch;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
 }
 
-.fund-empty > .button,
-.fund-next > .button {
+.fund-empty > .button {
   margin-top: auto;
 }
 
 /* On a phone the tile keeps a card's inset, so its lines keep the width. */
 @media (max-width: 29.99rem) {
-  .fund-empty,
-  .fund-next {
+  .fund-empty {
     padding: var(--space-3);
   }
 }
@@ -1566,8 +1562,7 @@ button.link:hover:not(:disabled) {
   font-size: var(--size-lead);
 }
 
-.fund-empty > p,
-.fund-next > p {
+.fund-empty > p {
   max-width: var(--measure-text);
   margin: 0;
 }
@@ -1576,18 +1571,6 @@ button.link:hover:not(:disabled) {
   font-size: var(--size-h2);
   font-weight: var(--weight-bold);
   line-height: var(--leading-heading);
-}
-
-.fund-empty-agent {
-  display: flex;
-  gap: var(--space-1);
-  align-items: flex-start;
-  font-size: var(--size-small);
-}
-
-.fund-empty-agent > .glyph {
-  flex: none;
-  margin-top: 0.125rem;
 }
 
 /* The agent brief: a native disclosure, closed by default. Its summary is a 44px target that takes
@@ -2544,8 +2527,7 @@ input[type='radio'] {
   margin-top: var(--space-3);
 }
 
-.who-tile,
-.who-duties {
+.who-tile {
   padding: var(--space-2) var(--space-3);
   border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
   border-radius: var(--radius-card);
@@ -2555,11 +2537,7 @@ input[type='radio'] {
   margin-bottom: 0;
 }
 
-.who-duties {
-  margin-top: var(--space-2);
-}
-
-/* /how-it-works' fixed rules: framed like the board's duties, on the ink band. */
+/* /how-it-works' fixed rules: framed like Who runs it's tiles, on the ink band. */
 .how-rules {
   padding: var(--space-3);
   border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
@@ -2568,29 +2546,6 @@ input[type='radio'] {
 
 .how-rules > :last-child {
   margin-bottom: 0;
-}
-
-.who-duties ol {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
-  gap: var(--space-2) var(--space-4);
-  margin: var(--space-2) 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* Each duty on a hairline, no number over it (the board, 18 October 2026). */
-.who-duties li {
-  border-top: 1px solid var(--hairline);
-  padding-top: var(--space-1);
-}
-
-.who-outro {
-  margin: 0;
-  padding-top: var(--space-2);
-  border-top: 1px solid color-mix(in srgb, currentColor 30%, transparent);
-  font-size: var(--size-small);
-  opacity: 0.85;
 }
 
 /* Motion ---------------------------------------------------------------------
@@ -2911,12 +2866,7 @@ input[type='radio'] {
   margin-top: var(--space-2);
 }
 
-.money-split {
-  max-width: var(--measure-text);
-  margin-top: var(--space-2);
-}
-
-/* Where the money goes: the pool and the split, and beside them from 64rem the latest actions. */
+/* Where the money goes: the pool and the ledger line, and beside them from 64rem the latest actions. */
 .money-grid {
   display: grid;
   gap: var(--space-5);
@@ -2945,6 +2895,11 @@ input[type='radio'] {
   display: grid;
   gap: var(--space-3);
   margin-top: var(--space-5);
+}
+
+/* The link to what a contribution gets you, under the Machine card, keeps a gap from the card's edge. */
+.fund-ways + .more {
+  margin-top: var(--space-3);
 }
 
 .fund-ways > .machine-card {
@@ -3414,10 +3369,6 @@ input[type='radio'] {
 
 .stopped-facts > * + * {
   margin-top: 0.125rem;
-}
-
-.what-changed code {
-  overflow-wrap: anywhere;
 }
 
 /* Supporters: the numbers in newspaper columns, filled down then across in number order, so the names
