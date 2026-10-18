@@ -391,7 +391,7 @@ game stages), and the news section (the feed). What it leaves for later is filed
 - horizon: later
 - rank: 34
 - summary: A card's page gains its design frames and verdicts, a Play this version link and more of the agents' steps.
-- intent: /card/:id launched with the facts, what changed, supporter numbers, the agents' steps as fixed lines and a replay of at most five milestones; docs/specs/final-state.md adds suits, rarity, supporters by name or Anonymous and Suggested by credits. Left for later: the design review's frames and the Director's verdicts (kept private in card_approvals today), a permalink that plays the version the card shipped, a replay of one contribution and replay Pause and Step, the hand-off lines (Drafted by, Approved by) and ranking moves, and the value a config change replaced. It is not built yet.
+- intent: /card/:id launched with the facts, what changed, supporter numbers, the agents' steps as fixed lines and a replay of at most five milestones; docs/specs/final-state.md adds suits, rarity, supporters by name or Anonymous and Suggested by credits (Suggested by is built, docs/specs/place.md). Left for later: the design review's frames and the Director's verdicts (kept private in card_approvals today), a permalink that plays the version the card shipped, a replay of one contribution and replay Pause and Step, the hand-off lines (Drafted by, Approved by) and ranking moves, and the value a config change replaced. It is not built yet.
 - kernel: yes
 
 ### Mockup and design-system cards

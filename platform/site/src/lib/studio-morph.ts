@@ -13,12 +13,17 @@ import { motionAllowed } from './motion';
 // over a control it would block) and "done" once it lands (the big room fades out over the map, which
 // fades in, and is then hidden). The share travelled, eased, is --morph, from 0 to 1; styles.css fades
 // the big room's tags and era label with it.
+//
+// The room's lines keep their width in screen pixels at any size, but the moving room is scaled as a
+// whole, so its lines thin as it shrinks. The map's lines are drawn at the same share, --room-ink (the
+// map's width over the big room's), so the swap does not thicken them.
 
 const BIG = '.floor-plate .studio-frame';
 const SMALL = '.floor-map .studio-frame';
 
 interface Layout {
   readonly big: HTMLElement;
+  readonly map: HTMLElement;
   /** The big room's frame in page coordinates, untransformed. */
   readonly bigLeft: number;
   readonly bigTop: number;
@@ -45,7 +50,7 @@ export function eased(share: number): number {
 }
 
 /** The big room's transform at a share: from where it stands to over the map, as the map sits now. */
-export function morphTransform(layout: Omit<Layout, 'big'>, scrollY: number, share: number): string {
+export function morphTransform(layout: Omit<Layout, 'big' | 'map'>, scrollY: number, share: number): string {
   const railNow = Math.max(layout.stick, layout.railTop - scrollY);
   const dx = layout.smallLeft - layout.bigLeft;
   const dy = railNow + layout.offset - (layout.bigTop - scrollY);
@@ -73,6 +78,7 @@ export function useStudioMorph(root: RefObject<HTMLElement | null>, ready: boole
 
     const clear = () => {
       layout?.big.style.removeProperty('transform');
+      layout?.map.style.removeProperty('--room-ink');
       main.style.removeProperty('--morph');
       mark('');
       layout = null;
@@ -96,8 +102,11 @@ export function useStudioMorph(root: RefObject<HTMLElement | null>, ready: boole
         return;
       }
       const y = window.scrollY;
+      const map = small.closest<HTMLElement>('.floor-map') ?? small;
+      map.style.setProperty('--room-ink', (s.width / b.width).toFixed(4));
       layout = {
         big,
+        map,
         bigLeft: b.left,
         bigTop: b.top + y,
         bigWidth: b.width,

@@ -250,6 +250,11 @@ export const copy = {
     gatePassed: 'Passed {time}',
     gateFailed: 'Failed {time}',
     changedHeading: 'What changed',
+    // Suggested by: the players whose ideas the card came from (components/SuggestedBy.tsx).
+    ideasHeading: 'Suggested by',
+    ideasLede: "This card started as players' ideas on the ideas board, most backed first.",
+    ideasUpvoteOne: '1 upvote',
+    ideasUpvoteMany: '{n} upvotes',
     changedLede: 'The values the checks confirmed after the change went live.',
     changedValue: '{file} {path}: {value}',
     changed: 'changed',

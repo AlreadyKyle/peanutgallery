@@ -405,16 +405,16 @@ describe('Landing', () => {
 
   it('shows the loading line while the snapshot loads, and the unavailable line without a database', () => {
     renderLanding({ load: () => new Promise(() => {}) });
-    const loading = document.querySelector('p.status-line')!;
-    expect(loading.textContent).toBe(legal.loadingFigures);
-    expect(loading.getAttribute('aria-busy')).toBe('true');
-    // The fund section holds the loading line; the lanes wait for the snapshot.
+    // The status line waits for the snapshot; the fund section holds the loading line, and the lanes
+    // wait too.
+    expect(document.querySelector('p.status-line')).toBeNull();
     expect(within(fundSection()).getByText(copy.loadingCards).getAttribute('aria-busy')).toBe('true');
     expect(screen.queryByRole('region', { name: copy.flow.title })).toBeNull();
     expect(document.querySelector('ol.flow-lanes')).toBeNull();
     cleanup();
     renderLanding(null);
-    expect(document.querySelector('p.status-line')?.textContent).toBe(legal.meterUnavailable);
+    expect(document.querySelector('p.status-line')).toBeNull();
+    expect(within(fundSection()).getByText(legal.meterUnavailable)).toBeTruthy();
     expect(screen.queryByText('$0.00')).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
     expect(document.querySelector('ol.flow-lanes')).toBeNull();
@@ -640,7 +640,7 @@ describe('Landing', () => {
       load: () => (fail ? Promise.reject(new Error('network down')) : Promise.resolve(snapshot)),
     });
     // The live region is in place, empty, before any figure loads, so its text arriving is announced.
-    const status = document.querySelector('.hero p.status[role="status"]')!;
+    const status = document.querySelector('.fund-status p.status[role="status"]')!;
     expect(status.textContent).toBe('');
     await waitFor(() => expect(screen.getByText('$48.56')).toBeTruthy());
     fail = true;

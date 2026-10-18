@@ -13,7 +13,7 @@ for (const reason of [null, 'awaiting_credit', 'spend_limit', 'incident', 'board
       test(`no page says the agents are paused at ${viewport.width} px`, async ({ page }) => {
         await page.setViewportSize(viewport);
         await page.goto('/');
-        await expect(page.locator('main > .band:first-child p.status-line')).toHaveText('2 cards are open for funding.');
+        await expect(page.locator('main #fund p.status-line, main .fund-status p.status-line').first()).toHaveText('2 cards are open for funding.');
         await expect(page.locator('p.status-line svg[data-glyph="pause"]')).toHaveCount(0);
         await expect(page.locator('.team-strip svg.avatar[data-pose="awake"]')).toHaveCount(3);
         for (const path of PAGES) {
