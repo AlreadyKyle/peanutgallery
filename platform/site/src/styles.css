@@ -1515,8 +1515,9 @@ button.link:hover:not(:disabled) {
 }
 
 @media (min-width: 48rem) {
+  /* The box art's column keeps it within the layout audit's balance beside the name, line and Play. */
   .game-tile {
-    grid-template-columns: 18rem minmax(0, 1fr);
+    grid-template-columns: 15rem minmax(0, 1fr);
     align-items: center;
     column-gap: var(--space-5);
   }

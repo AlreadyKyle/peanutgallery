@@ -125,10 +125,11 @@ function ShowcaseSection() {
       </div>
     );
   }
+  // The heading stands over the game and the video; the game's own section takes its name from it.
   return (
-    <section className="section showcase" aria-labelledby="game">
+    <div className="showcase">
       <h2 id="game">{copy.game.title}</h2>
-      <div className="game-tile">
+      <section className="game-tile" aria-labelledby="game">
         <img className="game-shot" src="/games/dust-box-art.svg" width={375} height={500} alt={copy.game.alt} />
         <div className="game-text">
           <p className="game-name">{copy.game.name}</p>
@@ -140,9 +141,9 @@ function ShowcaseSection() {
             </a>
           </p>
         </div>
-      </div>
+      </section>
       <ExplainerVideo still />
-    </section>
+    </div>
   );
 }
 
