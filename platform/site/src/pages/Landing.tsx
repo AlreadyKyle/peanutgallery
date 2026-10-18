@@ -8,8 +8,7 @@ import { Perks } from '../components/Perks';
 import { useSignedIn } from '../lib/account';
 import { splitSentence } from '../components/Funding';
 import { Glyph } from '../components/Glyph';
-import { LiveStudio, TwitchLink } from '../components/LiveStudio';
-import { twitchChannel } from '../lib/twitch';
+import { LiveStudio } from '../components/LiveStudio';
 import { MachineCard } from '../components/MachineCard';
 import { Announcer } from '../components/Announcer';
 import { PoolLine } from '../components/PoolStat';
@@ -259,15 +258,9 @@ export function Landing() {
         ) : (
           <WelcomePanel profile={player} snapshot={view?.snapshot ?? null} />
         )}
-        {/* While the snapshot loads, the room's label keeps its row, so the panel's heading holds still. */}
-        {view === null ? (
-          <div className="live-studio-head live-studio-hold" aria-hidden="true">
-            <span className="live-studio-hold-title">{copy.studioRoom.title}</span>
-            <TwitchLink channel={twitchChannel()} />
-          </div>
-        ) : (
-          <LiveStudio snapshot={view.snapshot} stations={stationTags(view.snapshot)} lit={lit} pipeSize={2} />
-        )}
+        {/* While the snapshot loads, the room is drawn empty in its own box and the pipe tells the feed,
+            so nothing under them moves when the agents arrive. */}
+        <LiveStudio snapshot={view?.snapshot ?? null} stations={view === null ? [] : stationTags(view.snapshot)} lit={lit} pipeSize={2} />
       </div>
       {/* The stations in the machine's order, the rail with the room's small map beside them from
           64rem; then the first game. */}

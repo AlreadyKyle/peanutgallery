@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App, cardRoutes, KERNEL_SEGMENTS } from './App';
@@ -93,9 +93,11 @@ describe('the kernel frame and the card lane routes', () => {
     expect(h1()).toEqual(['Card extra page']);
   });
 
-  it('links the top bar to a card page only by a plain path on this site', () => {
+  it('links the top bar to a card page only by a plain path on this site', async () => {
     renderAt('/extra');
     const nav = screen.getByRole('navigation', { name: 'Site' });
+    // The desk link waits for the studio's answer on whether sign-in is open (lib/sign-in.ts).
+    await waitFor(() => expect(nav.querySelector('a[href="/me"]')).not.toBeNull());
     const hrefs = [...nav.querySelectorAll('a')].map((a) => a.getAttribute('href'));
     // The wordmark home, Contribute, then the Menu list: the card page, the kernel's Ledger and the
     // kernel's own way to the desk.

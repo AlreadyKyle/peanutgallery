@@ -202,8 +202,10 @@ describe('Site chrome', () => {
     }
   });
 
-  it('shows the wordmark linking home, the Ledger link, the pitch line and the footer line', () => {
+  it('shows the wordmark linking home, the Ledger link, the pitch line and the footer line', async () => {
     renderAt('/');
+    // The you slot waits for the studio's answer on whether sign-in is open (lib/sign-in.ts).
+    await waitFor(() => expect(within(nav()).getByRole('link', { name: copy.you.signIn })).toBeTruthy());
     const banner = screen.getByRole('banner');
     const wordmark = within(banner).getByRole('link', { name: copy.studioName });
     expect(wordmark.getAttribute('href')).toBe('/');

@@ -7,7 +7,7 @@ import { rarityOf } from '../lib/suits';
 import type { Snapshot } from '../lib/source';
 import { crowded, eraKey, findPath, idleHaunts, iso, paintOrder, pathLength, placeAgents, roomPlan, seeded, type AgentPlace, type Box, type HauntKey, type RoomPlan, type Spot } from '../lib/studio-scene';
 import { Avatar, avatarFeatures, avatarParts } from './Avatar';
-import { roomLayers, TILE, viewBoxOf } from './RoomDrawing';
+import { RoomDrawing, roomLayers, TILE, viewBoxOf } from './RoomDrawing';
 
 // The live studio (docs/specs/final-state.md, The live studio; DESIGN.md, The live studio): the
 // room an era gives, and the agents in it where the live data puts them. They walk round the furniture
@@ -357,6 +357,28 @@ export type StudioRoomProps = {
    */
   interactive?: boolean;
 };
+
+/**
+ * The room with nobody in it, in the live room's own box (home, while the snapshot loads): the drawing
+ * holds the space the agents will fill, so the pipe and the stations under it never move when they
+ * arrive. Hidden from screen readers; the live room names itself once it is drawn.
+ */
+export function EmptyRoom({ studio }: { studio: StudioDoc | null }) {
+  const key = eraKey(studio?.era ?? null);
+  const plan = useMemo(() => roomPlan(key, studio?.era.decor.length ? studio.era.decor : undefined), [key, studio]);
+  const vb = viewBoxOf(plan);
+  return (
+    <div className="studio">
+      <div className="studio-stage" data-era={plan.era}>
+        <div className="studio-frame">
+          <svg className="room" data-variant="live" viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">
+            <RoomDrawing plan={plan} />
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label, stations = [], lit = null, interactive = true }: StudioRoomProps) {
   const key = eraKey(studio?.era ?? null);

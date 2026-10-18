@@ -2723,7 +2723,6 @@ input[type='radio'] {
 }
 
 .home .live-studio-head > h2,
-.home .live-studio-hold-title,
 .home .pipe-title {
   margin: 0;
   font-size: var(--size-small);
@@ -2740,19 +2739,9 @@ input[type='radio'] {
   margin: 0 0 var(--space-3);
 }
 
-/* The label's stand-in while the snapshot loads: the same line, unseen, and nothing in it takes focus. */
-.home .live-studio-hold {
-  visibility: hidden;
-}
-
-.home .live-studio-hold-title {
-  line-height: var(--leading-heading);
-}
-
 /* The room's label and its era are not drawn on the plate either (the board, 18 October 2026): the
    room says what it is. Screen readers still hear both. */
 .home .live-studio-head > h2,
-.home .live-studio-hold-title,
 .home .floor-plate .studio-era,
 .home .live-studio-head > p:not(.twitch),
 .home .pipe-intro {
@@ -2839,8 +2828,7 @@ input[type='radio'] {
     display: contents;
   }
 
-  .home .live-studio-head,
-  .home > .band.floor-plate > .live-studio-hold {
+  .home .live-studio-head {
     grid-column: 1;
     grid-row: 1;
     margin-bottom: var(--space-2);
@@ -2865,10 +2853,13 @@ input[type='radio'] {
     justify-content: center;
   }
 
+  /* The pipe keeps the room its two rows take while the feed loads, so the plate never grows under
+     the pitch when they arrive. */
   .home .live-studio-grid > .pipe {
     grid-column: 2;
     grid-row: 3;
     align-self: end;
+    min-height: 14rem;
     margin-top: var(--space-4);
     border-inline-start: 0;
     padding: 0;

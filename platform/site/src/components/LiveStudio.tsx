@@ -6,7 +6,7 @@ import type { Snapshot } from '../lib/source';
 import { twitchChannel, twitchUrl } from '../lib/twitch';
 import { Glyph } from './Glyph';
 import { Pipe } from './Pipe';
-import { StudioRoom, type Pulse, type StationTag } from './StudioRoom';
+import { EmptyRoom, StudioRoom, type Pulse, type StationTag } from './StudioRoom';
 
 // Home's opening section (docs/specs/final-state.md, The live studio): the room and the pipe beside
 // it. The room's era comes from /api/community/studio, the garage when that does not answer. The
@@ -58,7 +58,8 @@ export function LiveStudio({
   pipeSize = 1,
   pipe = true,
 }: {
-  snapshot: Snapshot;
+  /** Null while home's snapshot loads: the room is drawn empty in its own box and the pipe tells the feed. */
+  snapshot: Snapshot | null;
   /** Home's floor: the station tags standing on the room, each a link to its part of the page. */
   stations?: readonly StationTag[];
   lit?: string | null;
@@ -76,7 +77,7 @@ export function LiveStudio({
   useEffect(() => {
     const before = previous.current;
     previous.current = snapshot;
-    if (before === null || before === snapshot) return;
+    if (before === null || snapshot === null || before === snapshot) return;
     const fresh = snapshotPulses(before, snapshot);
     if (fresh.length > 0) setPulses((was) => [...was.slice(-12), ...fresh]);
   }, [snapshot]);
@@ -95,7 +96,7 @@ export function LiveStudio({
   // A feed that answers with nothing yet tells the snapshot's events too, so the pipe is empty only
   // when the studio has no card at all.
   const live = feed.state === 'ready' && feed.events.length > 0;
-  const events = live ? feed.events : feedFromSnapshot(snapshot);
+  const events = live ? feed.events : snapshot === null ? [] : feedFromSnapshot(snapshot);
   return (
     <section className="section live-studio" aria-labelledby="studio" id="studio-live">
       <div className="live-studio-head">
@@ -105,12 +106,12 @@ export function LiveStudio({
       </div>
       {/* The room is wide and the pipe a column: the pipe shows as many rows as sit beside the room. */}
       <div className="live-studio-grid">
-        <StudioRoom snapshot={snapshot} studio={studio} pulses={pulses} stations={stations} lit={lit} />
+        {snapshot === null ? <EmptyRoom studio={studio} /> : <StudioRoom snapshot={snapshot} studio={studio} pulses={pulses} stations={stations} lit={lit} />}
         {pipe ? (
         <Pipe
           events={events}
           live={live}
-          loading={feed.state === 'loading'}
+          loading={feed.state === 'loading' || (snapshot === null && !live)}
           hasOlder={feed.hasOlder}
           loadingOlder={feed.loadingOlder}
           onOlder={feed.loadOlder}
