@@ -2,7 +2,7 @@ import { CardsStatus } from '../components/CardsStatus';
 import { EventList } from '../components/EventList';
 import { ExplainerVideo } from '../components/ExplainerVideo';
 import { FundNow } from '../components/Flow';
-import { BuildingStation, FloorRail, FLOOR_STATIONS, IdeasStation, ShippedStation, StationPart, stationCounts, stationTags, useLitStation, useSignedInPanel, WelcomePanel } from '../components/Floor';
+import { BuildingStation, FloorRail, FLOOR_STATIONS, IdeasStation, NextStation, ShippedStation, StationPart, stationCounts, stationTags, useLitStation, useSignedInPanel, WelcomePanel } from '../components/Floor';
 import { Perks } from '../components/Perks';
 import { useSignedIn } from '../lib/account';
 import { splitSentence } from '../components/Funding';
@@ -24,9 +24,10 @@ import { useLiveHome, type HomeView } from '../lib/live';
 import { teamStrip } from '../lib/roster';
 import { unavailableLine, useStudio, type StudioState } from '../lib/studio';
 
-// Home, in the board's order (DESIGN.md, Home; docs/specs/home-flow.md), on bands: what the studio
-// is and its state (the signal plate); how the cards move, the four lanes from Next up to Shipped,
-// the only band with cards (paper); the team (ink); where the money goes. A band with nothing to show
+// Home, in the board's order (DESIGN.md, Home; docs/specs/home-flow.md, docs/specs/place.md), on
+// bands: the ink plate with the room and the pitch; the floor (paper), the only band with cards: the
+// cards to fund, the first game, the players' ideas, then Next up, Building and Shipped; the team
+// (ink); where the money goes. A band with nothing to show
 // is not drawn, and the bands after it take their colour from their new place.
 
 /** Home shows the five latest agent actions. */
@@ -263,7 +264,7 @@ export function Landing() {
             <TwitchLink channel={twitchChannel()} />
           </div>
         ) : (
-          <LiveStudio snapshot={view.snapshot} stations={stationTags()} lit={lit} pipeSize={2} />
+          <LiveStudio snapshot={view.snapshot} stations={stationTags(view.snapshot)} lit={lit} pipeSize={2} />
         )}
       </div>
       {/* The stations in the machine's order, the rail with the room's small map beside them from
@@ -271,19 +272,24 @@ export function Landing() {
       <div className="band floor-band">
         {view === null ? null : <SinceLastVisit cards={view.snapshot.cards} since={since} />}
         {view === null ? (
-          <FundSection studio={studio} live={live} index={1} />
+          <>
+            <FundSection studio={studio} live={live} index={1} />
+            <ShowcaseSection />
+          </>
         ) : (
           <div className="floor">
             <FloorRail snapshot={view.snapshot} lit={lit} counts={stationCounts(view.snapshot, view.groups, null)} />
             <div className="floor-parts">
               <FundSection studio={studio} live={live} index={1} />
-              <IdeasStation snapshot={view.snapshot} groups={view.groups} index={2} />
-              <BuildingStation snapshot={view.snapshot} groups={view.groups} index={3} />
-              <ShippedStation snapshot={view.snapshot} groups={view.groups} index={4} />
+              {/* The first game follows the cards to fund, above how the cards move (decision 70). */}
+              <ShowcaseSection />
+              <IdeasStation index={2} />
+              <NextStation snapshot={view.snapshot} groups={view.groups} index={3} />
+              <BuildingStation snapshot={view.snapshot} groups={view.groups} index={4} />
+              <ShippedStation snapshot={view.snapshot} groups={view.groups} index={5} />
             </div>
           </div>
         )}
-        <ShowcaseSection />
       </div>
       {view === null ? null : <TeamSection view={view} />}
       <div className="band">

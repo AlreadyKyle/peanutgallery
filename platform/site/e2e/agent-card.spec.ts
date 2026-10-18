@@ -57,7 +57,7 @@ for (const viewport of WIDTHS) {
       await expect(face.locator('.card-summary')).toHaveText(String(DEALT.summary));
       await expect(face).not.toHaveAttribute('data-compact', 'true');
       await expect(face.locator('.card-byline')).toHaveText(BYLINE);
-      const waiting = page.locator(`[data-station-part="ideas"] li.card[data-card="${WAITING.id}"]`);
+      const waiting = page.locator(`[data-station-part="next"] li.card[data-card="${WAITING.id}"]`);
       await expect(waiting.locator('.card-byline')).toHaveText(BYLINE);
       await expect(waiting.locator('.card-meta').last()).toHaveText('Approved, opens soon');
       await expect(page.locator('.card-byline')).toHaveCount(2);

@@ -55,7 +55,7 @@ export function totalFrom(answer: unknown): number | null {
 
 type Pressed = { readonly item: SuggestionSummary; readonly upvoted: boolean; readonly total: number };
 
-export function Suggestion({ item, signedIn }: { item: SuggestionSummary; signedIn: boolean }) {
+export function Suggestion({ item, signedIn, area = true }: { item: SuggestionSummary; signedIn: boolean; area?: boolean }) {
   // The list is a public, cached document, so it cannot say whether this player upvoted, and its count
   // may already include them. After a press the count is the total the RPC answered with and the
   // button shows the press just made. Both belong to the item they were read for: a reload brings a
@@ -92,7 +92,7 @@ export function Suggestion({ item, signedIn }: { item: SuggestionSummary; signed
       <div className="suggestion-text">
         <p className="suggestion-index">
           <StateChip suggestion={item} />
-          <span className="muted small">{copy.suggest.areas[item.area as (typeof SUGGESTION_AREAS)[number]] ?? item.area}</span>
+          {area ? <span className="muted small">{copy.suggest.areas[item.area as (typeof SUGGESTION_AREAS)[number]] ?? item.area}</span> : null}
         </p>
         <h3>{item.title}</h3>
         {item.summary === null ? null : (

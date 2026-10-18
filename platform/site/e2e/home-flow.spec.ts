@@ -5,25 +5,25 @@ import { DEFAULT_STUDIO, expect, overflowsHorizontally, test, type StudioFixture
 import { DRAFTING_STUDIO, EMPTY_STUDIO, PROD_STUDIO } from './prod-studio';
 
 // Home's card band (docs/specs/home-flow.md), now the studio's floor (docs/specs/place.md): the cards
-// to fund as full faces or the panel that funds the next card in line, then Ideas, where the Game
-// Designer drafts cards, then Building and Shipped, and no station is ever
+// to fund as full faces or the panel that funds the next card in line, the first game, the players'
+// ideas, then Next up (where the Game Designer's drafts wait), Building and Shipped, and no station is ever
 // blank, whatever the studio holds. PROD_STUDIO is production as it was when the home page first
 // looked empty: everything shipped, nothing open and the drafts used up.
 
-const LANES = ['Ideas', 'Building', 'Shipped'];
+const LANES = ['Ideas', 'Next up', 'Building', 'Shipped'];
 const VIEWPORTS = [320, 390, 768, 1280].map((width) => ({ width, height: 900 }));
 const SHOTS = process.env.FLOW_SHOTS === '1';
 
 async function lanes(page: import('@playwright/test').Page) {
   const items = page.locator('.floor-parts > [data-station-part]:not([data-station-part="fund"])');
-  await expect(items).toHaveCount(3);
+  await expect(items).toHaveCount(4);
   await expect(items.locator(':scope > h2')).toHaveText(LANES);
   return items;
 }
 
-/** Every station holds at least one card, its tile saying what happens next, or (Ideas) the Game Designer's line. */
+/** Every station holds at least one card or idea, its tile saying what happens next, or (Next up) the Game Designer's line. */
 async function neverBlank(items: import('@playwright/test').Locator) {
-  for (let i = 0; i < 3; i += 1) {
+  for (let i = 0; i < 4; i += 1) {
     const lane = items.nth(i);
     const filled = (await lane.locator('li.card').count()) + (await lane.locator('.flow-empty').count()) + (await lane.locator('.flow-agent').count());
     expect(filled, `lane ${LANES[i]} is blank`).toBeGreaterThan(0);
@@ -42,15 +42,16 @@ for (const { label, studio } of CASES) {
   test.describe(`home flow, ${label}`, () => {
     test.use({ studio });
     for (const viewport of VIEWPORTS) {
-      test(`the cards to fund, Ideas, Building and Shipped, none blank, at ${viewport.width}px`, async ({ page }) => {
+      test(`the cards to fund, Ideas, Next up, Building and Shipped, none blank, at ${viewport.width}px`, async ({ page }) => {
         await page.setViewportSize(viewport);
         await page.goto('/');
         const h2 = page.getByRole('main').getByRole('heading', { level: 2 });
-        // The live studio is on the plate (docs/specs/final-state.md); the cards to fund open the floor
-        // and Ideas come next, above the first game's tile (decision 70).
+        // The live studio is on the plate (docs/specs/final-state.md); the cards to fund open the floor,
+        // the first game's tile follows them (decision 70), then the players' ideas.
         await expect(h2.nth(0)).toHaveText('The studio, live');
         await expect(h2.nth(1)).toHaveText(copy.flow.fundTitle);
-        await expect(h2.nth(2)).toHaveText(copy.ideas.title);
+        await expect(h2.nth(2)).toHaveText(copy.game.title);
+        await expect(h2.nth(3)).toHaveText(copy.ideas.title);
         const items = await lanes(page);
         const fund = page.getByRole('region', { name: copy.flow.fundTitle });
         expect((await fund.locator('ul.fund-grid > li.card').count()) + (await fund.locator('.fund-empty').count())).toBeGreaterThan(0);
@@ -74,8 +75,8 @@ test.describe('home flow lanes', () => {
     const links = await fund.getByRole('link', { name: 'Fund this card' }).evaluateAll((as) => as.map((a) => (a as HTMLAnchorElement).href));
     expect(links).toHaveLength(2);
     for (const href of links) expect(href).toMatch(new RegExp(`^${PAYMENT_LINK}\\?client_reference_id=[0-9a-f-]{36}$`));
-    await expect(items.nth(1).locator('li.card h4')).toContainText(['A cheaper Cart']);
-    await expect(items.nth(1).locator('li.card[data-face="funded"]')).toHaveCount(1);
+    await expect(items.nth(2).locator('li.card h4')).toContainText(['A cheaper Cart']);
+    await expect(items.nth(2).locator('li.card[data-face="funded"]')).toHaveCount(1);
   });
 
 });
@@ -86,16 +87,16 @@ test.describe('home flow, production lanes', () => {
     await page.goto('/');
     const items = await lanes(page);
     // Production's planned cards are all backlog entries, which never show (docs/specs/always-open.md).
-    await expect(items.nth(0).locator('li.card')).toHaveCount(0);
-    await expect(items.nth(0).locator('.flow-agent')).toHaveText(copy.flow.draftingDone.replace('{n}', '4'));
+    await expect(items.nth(1).locator('li.card')).toHaveCount(0);
+    await expect(items.nth(1).locator('.flow-agent')).toHaveText(copy.flow.draftingDone.replace('{n}', '4'));
     const fund = page.getByRole('region', { name: copy.flow.fundTitle });
     await expect(fund.locator('.fund-empty')).toContainText('Fund the next card in line');
     await expect(fund.locator('.fund-empty')).toContainText(legal.fundEmptyBody);
     await expect(fund.locator('.fund-empty-agent')).toHaveText(copy.flow.draftingDone.replace('{n}', '4'));
     await expect(fund.getByRole('link', { name: 'Contribute' })).toHaveAttribute('href', '/contribute');
-    await expect(items.nth(1).locator('.flow-empty')).toContainText('Cheaper first Gatherer');
-    await expect(items.nth(2).locator('li.card[data-face="live"]')).toHaveCount(3);
-    await expect(items.nth(2).locator('li.card h4').first()).toHaveText('Cheaper first Gatherer');
+    await expect(items.nth(2).locator('.flow-empty')).toContainText('Cheaper first Gatherer');
+    await expect(items.nth(3).locator('li.card[data-face="live"]')).toHaveCount(3);
+    await expect(items.nth(3).locator('li.card h4').first()).toHaveText('Cheaper first Gatherer');
     await expect(page.locator('p.status-line')).toHaveText(copy.status.openNone);
   });
 });
@@ -105,7 +106,7 @@ test.describe('home flow while drafting', () => {
   test('the Ideas station and the status line say the agents are drafting', async ({ page }) => {
     await page.goto('/');
     const items = await lanes(page);
-    await expect(items.nth(0).locator('.flow-agent[data-drafting]')).toHaveText(copy.flow.drafting);
+    await expect(items.nth(1).locator('.flow-agent[data-drafting]')).toHaveText(copy.flow.drafting);
     await expect(page.locator('p.status-line')).toHaveText(copy.status.drafting);
   });
 });

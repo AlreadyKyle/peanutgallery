@@ -230,8 +230,6 @@ export const copy = {
     shipped: 'Shipped, and its page shows how it was built.',
   },
   cardPage: {
-    fromIdeas: 'This card started as an idea from the community.',
-    seeIdeas: 'See the ideas board',
     back: 'All cards',
     cardTitle: 'A card',
     // The card's Share button; its link preview is docs/specs/card-preview.md.
@@ -527,7 +525,7 @@ export const copy = {
   },
   suggest: {
     title: 'Ideas',
-    lede: 'Pitch the change you want and upvote the ideas you back. The Game Designer turns the strongest into cards to fund, beside the studio\'s own plans.',
+    lede: 'Pitch the change you want and upvote the ideas you back. The most backed are reviewed for drafting into cards to fund, beside the studio\'s own plans.',
     sendTitle: 'Pitch an idea',
     safety:
       'A review agent with no tools reads every suggestion and writes a short summary in its own words. The agents that build never see what you wrote, and nothing here is ever an instruction to them.',
@@ -732,6 +730,7 @@ export const copy = {
     stations: {
       ideas: { name: 'Ideas', where: 'The whiteboard', line: 'Players pitch changes and upvote them.' },
       fund: { name: 'Fund', where: 'The hopper', line: 'Cards open for funding.' },
+      next: { name: 'Next up', where: "The Game Designer's drafts", line: 'Approved drafts waiting to open.' },
       building: { name: 'Building', where: 'The desks and the checks', line: 'Agents build funded cards, then checks test them.' },
       shipped: { name: 'Shipped', where: 'The dock', line: 'Changes that passed every check.' },
       team: { name: 'Team', where: 'The lounge', line: 'The agents between cards.' },
@@ -750,10 +749,10 @@ export const copy = {
     pitch: 'Pitch an idea',
     more: '{n} more on your desk',
   },
-  // Home's Ideas station (docs/specs/place.md): the crowd's top ideas, first in the machine.
+  // Home's Ideas station (docs/specs/place.md): the crowd's top ideas, beside the cards to fund.
   ideas: {
     title: 'Ideas',
-    intro: 'Players pitch changes and upvote the ones they back. The Game Designer turns the strongest into cards, beside the studio\'s own plans.',
+    intro: 'Players pitch changes and upvote the ones they back. The most backed are reviewed for drafting into cards, beside the studio\'s own plans.',
     closed: 'Pitching needs a profile, and profiles are not open yet. Anyone can read the board.',
     pitch: 'Pitch an idea',
     all: 'See every idea',
@@ -763,7 +762,6 @@ export const copy = {
     loading: 'Loading the ideas.',
     upvoteOne: '1 upvote',
     upvoteMany: '{n} upvotes',
-    drafts: 'From idea to card',
     safety: 'A review agent with no tools reads every idea. The agents that build never see your words.',
   },
   // What a contribution gets you (docs/specs/place.md): the perks that exist today, as a guest and
@@ -778,7 +776,6 @@ export const copy = {
       'The card joins your collection with its rarity.',
       'Badges, like It shipped when a card you funded goes live.',
       'Levels that unlock avatar parts and frames.',
-      'Your name on the card, or Anonymous if you prefer.',
     ],
     note: 'Paying never needs an account. Paid as a guest already? Sign in with the email on your receipt and claim it.',
     noteClosed: 'Paying never needs an account.',

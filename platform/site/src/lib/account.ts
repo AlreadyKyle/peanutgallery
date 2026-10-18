@@ -149,19 +149,27 @@ export async function sendMagicLink(email: string, redirectTo: string): Promise<
   await post('/auth/otp', { email, redirectTo });
 }
 
+/** The refresh in flight, so readers that ask at once spend the refresh token once, not in a race. */
+let refreshing: Promise<string | null> | null = null;
+
 async function freshToken(): Promise<string | null> {
   const session = readSession();
   if (session === null) return null;
   if (session.expiresAt - Date.now() > 60_000) return session.accessToken;
-  try {
-    const next = await post<{ access_token: string; refresh_token: string; expires_in: number }>('/auth/refresh', { refresh_token: session.refreshToken });
-    const renewed = { accessToken: next.access_token, refreshToken: next.refresh_token, expiresAt: Date.now() + next.expires_in * 1000 };
-    writeSession(renewed);
-    return renewed.accessToken;
-  } catch {
-    writeSession(null);
-    return null;
-  }
+  refreshing ??= post<{ access_token: string; refresh_token: string; expires_in: number }>('/auth/refresh', { refresh_token: session.refreshToken })
+    .then((next) => {
+      const renewed = { accessToken: next.access_token, refreshToken: next.refresh_token, expiresAt: Date.now() + next.expires_in * 1000 };
+      writeSession(renewed);
+      return renewed.accessToken;
+    })
+    .catch(() => {
+      writeSession(null);
+      return null;
+    })
+    .finally(() => {
+      refreshing = null;
+    });
+  return refreshing;
 }
 
 /** One of the player's RPCs (community-types.ts), under their session. */
@@ -195,9 +203,33 @@ export type MyProfile = { state: 'signed-out' } | { state: 'loading' } | { state
  */
 let held: { token: string; profile: Profile } | null = null;
 
+/** Said on the window when a new profile is held, so every reader (the you slot too) draws it. */
+const PROFILE_EVENT = 'mm:profile';
+
+/** The my_profile read in flight, shared by readers that mount together; a reload asks afresh. */
+let asking: Promise<Profile> | null = null;
+
 function heldProfile(): Profile | null {
   const session = readSession();
   return session !== null && held !== null && held.token === session.refreshToken ? held.profile : null;
+}
+
+function askProfile(fresh: boolean): Promise<Profile> {
+  if (asking !== null && !fresh) return asking;
+  const promise = rpc<Profile>('my_profile').then((profile) => {
+    const session = readSession();
+    if (session !== null) {
+      held = { token: session.refreshToken, profile };
+      window.dispatchEvent(new Event(PROFILE_EVENT));
+    }
+    return profile;
+  });
+  asking = promise;
+  const clear = () => {
+    if (asking === promise) asking = null;
+  };
+  promise.then(clear, clear);
+  return promise;
 }
 
 export function useMyProfile(): MyProfile & { reload: () => void } {
@@ -218,10 +250,14 @@ export function useMyProfile(): MyProfile & { reload: () => void } {
     let live = true;
     const ready = heldProfile();
     setState((was) => (was.state === 'ready' ? was : ready === null ? { state: 'loading' } : { state: 'ready', profile: ready }));
-    rpc<Profile>('my_profile')
+    // Another reader's fresh read (a save or a claim on /me) redraws this one too.
+    const update = () => {
+      const profile = heldProfile();
+      if (live && profile !== null) setState({ state: 'ready', profile });
+    };
+    window.addEventListener(PROFILE_EVENT, update);
+    askProfile(nonce > 0)
       .then((profile) => {
-        const session = readSession();
-        if (session !== null) held = { token: session.refreshToken, profile };
         if (live) setState({ state: 'ready', profile });
       })
       .catch((error: unknown) => {
@@ -230,6 +266,7 @@ export function useMyProfile(): MyProfile & { reload: () => void } {
       });
     return () => {
       live = false;
+      window.removeEventListener(PROFILE_EVENT, update);
     };
   }, [signedIn, nonce]);
   return { ...state, reload };

@@ -5304,11 +5304,3 @@ main.home > .band {
   color: var(--muted);
 }
 
-/* A card the crowd asked for, on its page under the face. */
-.card-from-ideas {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem var(--space-1);
-  margin-top: var(--space-3);
-}

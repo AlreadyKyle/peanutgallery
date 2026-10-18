@@ -138,7 +138,7 @@ test.describe("home's Ideas station, where drafted cards wait", () => {
 
   test('shows an approved card waiting to be dealt as "Approved, opens soon" and leaves a vetoed one out', async ({ page }) => {
     await page.goto('/');
-    const next = page.locator('[data-station-part="ideas"]');
+    const next = page.locator('[data-station-part="next"]');
     const opening = next.locator(`li[data-card="${OPENS_SOON_ID}"]`);
     await expect(opening).toContainText('Approved, opens soon');
     await expect(next.locator(`li[data-card="${VETOED_ID}"]`)).toHaveCount(0);

@@ -471,9 +471,11 @@ export function Me() {
         setClaimed(n);
         setClaim('done');
         if (n > 0) reload();
+        // A refresh of /me?keep=1 should not claim again.
+        if (keep) navigate('/me', { replace: true });
       })
       .catch(() => setClaim('none'));
-  }, [claim, me.state, reload]);
+  }, [claim, me.state, reload, keep, navigate]);
   useEffect(() => {
     // A link that expired or was used already says so, and the error leaves the address.
     const failed = adoptLinkErrorFromLocation();
@@ -482,10 +484,20 @@ export function Me() {
     // signed in to follow a card goes back to the card (docs/specs/card-follows.md); one who signed in
     // from another page (Pitch an idea) goes back to it.
     if (!adoptSessionFromLocation()) return;
-    takeClaim();
-    setClaim('wanted');
+    // Keep this card stays on the desk to show the card arrive; an older return path is dropped.
+    if (takeClaim()) {
+      takeReturn();
+      setClaim('wanted');
+      return;
+    }
     const back = pendingSeedPath() ?? pendingFollowPath() ?? takeReturn();
-    if (back !== null) navigate(back, { replace: true });
+    if (back === null) {
+      setClaim('wanted');
+      return;
+    }
+    // Leaving the desk at once: claim the guest payments now rather than waiting for it to draw.
+    rpc<{ claimed: number }>('claim_contributions').catch(() => undefined);
+    navigate(back, { replace: true });
   }, [navigate]);
   return (
     <main className="wide">

@@ -16,13 +16,14 @@ test('signed out, the top bar offers Sign in and the floor names every station',
   await page.goto('/');
   await expect(page.locator('.you-chip')).toHaveText('Sign in');
   await expect(page.locator('.you-chip')).toHaveAttribute('href', '/me');
-  // The room's tags and the rail's list both go to the five stations, Fund first.
+  // The room's tags go to its five stations, Fund first; the rail lists Next up too.
   const tags = page.locator('.station-tags a');
   await expect(tags).toHaveCount(5);
-  await expect(page.locator('.floor-stations a')).toHaveCount(5);
+  await expect(page.locator('.floor-stations a')).toHaveCount(6);
   expect(await page.locator('[data-station-part]').evaluateAll((parts) => parts.map((part) => part.getAttribute('data-station-part')))).toEqual([
     'fund',
     'ideas',
+    'next',
     'building',
     'shipped',
     'team',
@@ -94,8 +95,8 @@ test('Keep this card on /thanks signs the payer in and claims the card as soon a
   ]);
 });
 
-test('Pitch an idea sends a signed-out visitor to sign in and back to the form', async ({ page }) => {
-  await answerCommunity(page);
+test('Pitch an idea sends a signed-out visitor to sign in and back to the form, claiming on the way', async ({ page }) => {
+  const posts = await answerCommunity(page);
   await page.goto('/suggest');
   await page.locator('[aria-labelledby="suggest-send"]').getByRole('link', { name: 'Sign in', exact: true }).click();
   await expect(page).toHaveURL(/\/me$/);
@@ -103,9 +104,11 @@ test('Pitch an idea sends a signed-out visitor to sign in and back to the form',
   await page.goto('about:blank');
   await page.goto('/me#access_token=e2e-link-access&refresh_token=e2e-link-refresh&expires_in=3600');
   await expect(page).toHaveURL(/\/suggest#suggest-send$/);
+  // Every new sign-in claims the player's guest payments, even one that leaves the desk at once.
+  await expect.poll(() => posts.filter((post) => post.path.endsWith('/claim_contributions')).length).toBe(1);
 });
 
-test('a card the community asked for links the ideas board, and its page says what you get', async ({ page }) => {
+test('a fundable card says what you get on its page, a shipped one does not', async ({ page }) => {
   await answerCommunity(page);
   await page.goto(`/card/${OPEN_CARD_ID}`);
   await expect(page.locator('.card-face-column .perks')).toBeVisible();

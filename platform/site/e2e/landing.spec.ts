@@ -3,7 +3,7 @@ import { EMPTY_STUDIO } from './prod-studio';
 import { expect, overflowsHorizontally, test, WIDTHS } from './fixtures';
 
 // Home in the board's order, the top bar and Menu, /contribute and /ledger (docs/specs/home-and-design.md,
-// docs/specs/place.md: home is the studio's floor, its stations Fund, Ideas, Building and Shipped).
+// docs/specs/place.md: home is the studio's floor, the cards to fund, the first game, Ideas, then Next up, Building and Shipped).
 for (const viewport of WIDTHS) {
   test.describe(`at ${viewport.width} px`, () => {
     test.use({ viewport });
@@ -26,10 +26,11 @@ for (const viewport of WIDTHS) {
       await expect(main.getByRole('heading', { level: 2 })).toHaveText([
         'The studio, live',
         'Pick a card to fund',
+        'Play the first game',
         'Ideas',
+        'Next up',
         'Building',
         'Shipped',
-        'Play the first game',
         'The team',
         'Where the money goes',
       ]);

@@ -248,7 +248,7 @@ type Lane = 'next' | 'building' | 'shipped';
 
 /** Waits for the snapshot to draw the floor's stations (docs/specs/place.md). */
 async function lanesDrawn(): Promise<void> {
-  await waitFor(() => expect(document.querySelectorAll('.floor-parts > [data-station-part]')).toHaveLength(4));
+  await waitFor(() => expect(document.querySelectorAll('.floor-parts > [data-station-part]')).toHaveLength(5));
 }
 
 /** The status line's text, once the snapshot has loaded. */
@@ -257,9 +257,9 @@ async function statusLine(): Promise<HTMLElement> {
   return document.querySelector('p.status-line') as HTMLElement;
 }
 
-/** A lane's station on the floor: the drafted cards are in Ideas, where the Game Designer turns ideas into cards. */
+/** A lane's station on the floor. */
 function lane(name: Lane): HTMLElement {
-  return document.querySelector(`[data-station-part="${name === 'next' ? 'ideas' : name}"]`) as HTMLElement;
+  return document.querySelector(`[data-station-part="${name}"]`) as HTMLElement;
 }
 
 /** The card titles a lane shows, in order (h4 on home's compact faces). */
@@ -291,7 +291,7 @@ afterEach(() => {
 });
 
 describe('Landing', () => {
-  it("is drawn in the board's order, on four bands, with every card on the floor: the cards to fund, Ideas, Building, then Shipped", async () => {
+  it("is drawn in the board's order, on four bands, with every card on the floor: the cards to fund, the first game, Ideas, Next up, Building, then Shipped", async () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', 'https://buy.stripe.com/test-link');
     vi.stubEnv('VITE_PLAY_URL', 'https://play.example');
     const { container } = renderLanding(fakeSource());
@@ -305,24 +305,26 @@ describe('Landing', () => {
     await screen.findByRole('region', { name: copy.team.title });
     await lanesDrawn();
     // The live studio sits on the plate beside the pitch, in view when the page opens (docs/specs/brand.md,
-    // Home); the floor's stations follow: Fund, Ideas, Building, Shipped (docs/specs/place.md).
+    // Home); the floor follows in the board's order (decisions 67 and 70): the cards to fund, the first
+    // game, then the players' ideas and Next up, Building and Shipped (docs/specs/place.md).
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
       copy.studioRoom.title,
       copy.flow.fundTitle,
+      copy.game.title,
       copy.ideas.title,
+      copy.flow.lanes.next.title,
       copy.flow.lanes.building.title,
       copy.flow.lanes.shipped.title,
-      copy.game.title,
       copy.team.title,
       legal.moneyHeading,
     ]);
-    // Four bands: the pitch and the live studio (the ink plate), the floor (paper: the stations, then
-    // the first game), the team (ink) and the money (paper).
+    // Four bands: the pitch and the live studio (the ink plate), the floor (paper: the stations, with
+    // the first game after the cards to fund), the team (ink) and the money (paper).
     const bands = [...container.querySelectorAll<HTMLElement>('main > *')];
     expect(bands.map((band) => band.className)).toEqual(['band floor-plate', 'band floor-band', 'band', 'band']);
     expect(bands[0]!.querySelector('h1')).not.toBeNull();
     expect([...bands[0]!.querySelectorAll('h2')].map((h) => h.id)).toEqual(['studio']);
-    expect([...bands[1]!.querySelectorAll('h2')].map((h) => h.id)).toEqual(['fund', 'ideas', 'building', 'shipped', 'game']);
+    expect([...bands[1]!.querySelectorAll('h2')].map((h) => h.id)).toEqual(['fund', 'game', 'ideas', 'next', 'building', 'shipped']);
     // The first game's tile: its name, its box art with alt text, and Play to the game (decision 68).
     expect(screen.getByRole('link', { name: copy.game.play }).getAttribute('href')).toBe('https://play.example');
     expect(screen.getByRole('img', { name: copy.game.alt }).getAttribute('src')).toBe('/games/dust-box-art.svg');
@@ -341,10 +343,11 @@ describe('Landing', () => {
     expect([...container.querySelectorAll('.floor-parts > [data-station-part]')].map((part) => part.getAttribute('data-station-part'))).toEqual([
       'fund',
       'ideas',
+      'next',
       'building',
       'shipped',
     ]);
-    expect([...container.querySelectorAll('.floor-stations a')].map((a) => a.getAttribute('href'))).toEqual(['#fund', '#ideas', '#building', '#shipped', '#team']);
+    expect([...container.querySelectorAll('.floor-stations a')].map((a) => a.getAttribute('href'))).toEqual(['#fund', '#ideas', '#next', '#building', '#shipped', '#team']);
     expect([...bands[0]!.querySelectorAll('.station-tags a')].map((a) => a.getAttribute('href'))).toEqual(['#fund', '#ideas', '#building', '#shipped', '#team']);
     // No filter chips, no old sections, no Right now panel, no How it works steps, no fixed rules.
     expect(screen.queryByRole('group', { name: copy.filterLabel })).toBeNull();
@@ -574,10 +577,13 @@ describe('Landing', () => {
       copy.studioRoom.title,
       copy.flow.fundTitle,
       copy.ideas.title,
+      copy.flow.lanes.next.title,
       copy.flow.lanes.building.title,
       copy.flow.lanes.shipped.title,
       legal.moneyHeading,
     ]);
+    // With no team, the map leaves the lounge's station out.
+    expect([...container.querySelectorAll('.floor-stations a')].map((a) => a.getAttribute('href'))).not.toContain('#team');
   });
 
   it('lists the latest three shipped cards, newest first, saying what each cost and who funded it', async () => {

@@ -153,13 +153,6 @@ function Detail({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }
         {detail.stopped === null && isPlanned(detail.card) ? <Planned detail={detail} /> : <Replay detail={detail} snapshot={snapshot} />}
         {liveFundLink(detail.card, snapshot) ? <FundAgreement /> : null}
         <FollowCard cardId={detail.card.id} stage={detail.card.stage} />
-        {/* A card the crowd asked for says so and links the ideas board (docs/specs/place.md). */}
-        {detail.card.source === 'community' ? (
-          <p className="small card-from-ideas">
-            <Glyph name="plane" />
-            <span>{words.fromIdeas}</span> <Link to="/suggest">{words.seeIdeas}</Link>
-          </p>
-        ) : null}
         {liveFundLink(detail.card, snapshot) ? <Perks /> : null}
       </section>
       <Facts detail={detail} />

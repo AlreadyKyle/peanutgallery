@@ -22,25 +22,34 @@ import { StudioRoom, type StationPiece, type StationTag } from './StudioRoom';
 // Home's floor (docs/specs/place.md): the studio is the place, and its stations are the page's map.
 // Each station stands on a piece of the room (the whiteboard, the hopper, the desks, the dock, the
 // lounge's sofa) and is a link to its part of the page; the part in view lights its station, in the
-// room on the plate and in the rail's small map beside the stations. Fund comes first, one scroll from
-// the top, because funding is what moves a card; Ideas follows as the other way in (the crowd's pitches
-// beside the studio's own plans), then building and shipping.
+// room on the plate and in the rail's small map beside the stations. The order keeps the board's
+// (decisions 67 and 70): the cards to fund first, one scroll from the top, then the first game, then
+// the players' ideas, then how the cards move (Next up, Building, Shipped). Next up has no piece of its
+// own in the room, so it has no tag; the rail lists it.
 
-export type StationId = 'ideas' | 'fund' | 'building' | 'shipped' | 'team';
+export type StationId = 'ideas' | 'fund' | 'next' | 'building' | 'shipped' | 'team';
 
-export const FLOOR_STATIONS: readonly { id: StationId; piece: StationPiece; glyph: GlyphName }[] = [
+export const FLOOR_STATIONS: readonly { id: StationId; piece: StationPiece | null; glyph: GlyphName }[] = [
   { id: 'fund', piece: 'hopper', glyph: 'coin-outline' },
   { id: 'ideas', piece: 'whiteboard', glyph: 'plane' },
+  { id: 'next', piece: null, glyph: 'pencil' },
   { id: 'building', piece: 'desks', glyph: 'gear' },
   { id: 'shipped', piece: 'dock', glyph: 'box' },
   { id: 'team', piece: 'sofa', glyph: 'team' },
 ];
 
+/** The stations this snapshot draws: the team's only while it has roles, as home's team band does. */
+export function floorStations(snapshot: Snapshot) {
+  const team = teamStrip(snapshot).length > 0;
+  return FLOOR_STATIONS.filter((station) => station.id !== 'team' || team);
+}
+
 /** The station tags for the room: each a link to its heading on this page. */
-export function stationTags(): StationTag[] {
-  return FLOOR_STATIONS.map(({ id, piece }) => {
+export function stationTags(snapshot: Snapshot): StationTag[] {
+  return floorStations(snapshot).flatMap(({ id, piece }) => {
+    if (piece === null) return [];
     const words = copy.floor.stations[id];
-    return { id, piece, name: words.name, label: copy.floor.goTo.replace('{name}', words.name).replace('{where}', words.where), href: `#${id}` };
+    return [{ id, piece, name: words.name, label: copy.floor.goTo.replace('{name}', words.name).replace('{where}', words.where), href: `#${id}` }];
   });
 }
 
@@ -83,6 +92,7 @@ export function stationCounts(snapshot: Snapshot, groups: CardGroups, ideas: num
   return {
     ideas,
     fund: groups.fund.length,
+    next: lanes.next.length,
     building: lanes.building.length,
     shipped: lanes.shipped.length,
     team: teamStrip(snapshot, Number.POSITIVE_INFINITY).length,
@@ -100,10 +110,10 @@ export function FloorRail({ snapshot, lit, counts }: { snapshot: Snapshot; lit: 
   return (
     <nav className="floor-rail" aria-label={copy.floor.railLabel} data-balance="ignore">
       <div className="floor-map">
-        <StudioRoom snapshot={snapshot} studio={studio} facts={false} interactive={false} stations={stationTags()} lit={lit} />
+        <StudioRoom snapshot={snapshot} studio={studio} facts={false} interactive={false} stations={stationTags(snapshot)} lit={lit} />
       </div>
       <ol className="floor-stations">
-        {FLOOR_STATIONS.map(({ id, glyph }, index) => {
+        {floorStations(snapshot).map(({ id, glyph }, index) => {
           const words = copy.floor.stations[id];
           const n = counts[id];
           return (
@@ -167,17 +177,16 @@ export function useTopIdeas() {
 
 /**
  * The Ideas station: the crowd's top ideas with their state and upvotes (a signed-in player can
- * upvote here), the drafted cards the Game Designer made waiting to open, and the way to pitch one.
- * The review agent that reads ideas has no tools; the agents that build never see a player's words.
+ * upvote here), and the way to pitch one. The review agent that reads ideas has no tools; the agents
+ * that build never see a player's words. The ideas' area is left out here: home names a game only in
+ * its game tile (decision 68).
  */
-export function IdeasStation({ snapshot, groups, index }: { snapshot: Snapshot; groups: CardGroups; index: number }) {
+export function IdeasStation({ index }: { index: number }) {
   const signedIn = useSignedIn();
   const signInOpen = useSignInOpen();
   // While sign-in is closed nobody can pitch, so the station reads the board and says why.
   const pitching = signedIn || signInOpen;
   const ideas = useTopIdeas();
-  const drafts = flowLanes(groups).next;
-  const designer = draftingLine(snapshot);
   return (
     <StationPart id="ideas" index={index} title={copy.ideas.title} intro={copy.ideas.intro}>
       {ideas.state === 'loading' ? (
@@ -195,7 +204,7 @@ export function IdeasStation({ snapshot, groups, index }: { snapshot: Snapshot; 
       ) : (
         <ol className="suggestions floor-ideas">
           {ideas.items.map((item) => (
-            <Suggestion key={item.id} item={item} signedIn={signedIn} />
+            <Suggestion key={item.id} item={item} signedIn={signedIn} area={false} />
           ))}
         </ol>
       )}
@@ -213,8 +222,20 @@ export function IdeasStation({ snapshot, groups, index }: { snapshot: Snapshot; 
         <Glyph name="checklist" />
         <span>{copy.ideas.safety}</span>
       </p>
-      {/* The Game Designer turns the top ideas into cards: what it is doing now, then its drafts. */}
-      <h3 className="rows-heading">{copy.ideas.drafts}</h3>
+    </StationPart>
+  );
+}
+
+/**
+ * Next up (decisions 67 and 69): what the Game Designer is doing, from the supply's text-free status,
+ * then the agents' approved cards waiting to open, never a backlog entry. Never blank: the line is
+ * always there.
+ */
+export function NextStation({ snapshot, groups, index }: { snapshot: Snapshot; groups: CardGroups; index: number }) {
+  const drafts = flowLanes(groups).next;
+  const designer = draftingLine(snapshot);
+  return (
+    <StationPart id="next" index={index} title={copy.flow.lanes.next.title}>
       <p className="flow-who flow-agent" data-drafting={designer.drafting ? 'true' : undefined}>
         <Glyph name="pencil" />
         <span>{designer.text}</span>

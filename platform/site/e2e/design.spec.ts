@@ -298,7 +298,7 @@ test.describe('bands with empty data', () => {
     await expect(money.getByRole('heading', { level: 2, name: 'Where the money goes' })).toBeVisible();
     // The live studio sits on the plate (docs/specs/brand.md), even with no team to draw in it.
     await expect(page.locator('main > .band:nth-child(1)').getByRole('heading', { level: 2 })).toHaveText(['The studio, live']);
-    await expect(page.locator('main > .band:nth-child(2)').getByRole('heading', { level: 2 })).toHaveText(['Pick a card to fund', 'Ideas', 'Building', 'Shipped', 'Play the first game']);
+    await expect(page.locator('main > .band:nth-child(2)').getByRole('heading', { level: 2 })).toHaveText(['Pick a card to fund', 'Play the first game', 'Ideas', 'Next up', 'Building', 'Shipped']);
     expect(await page.locator('main > .band:not(:nth-child(2)) li.card').count()).toBe(0);
   });
 });
