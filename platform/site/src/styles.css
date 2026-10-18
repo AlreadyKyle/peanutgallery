@@ -366,10 +366,21 @@ main > .band:first-child,
 /* Top bar ---------------------------------------------------------------
    The mark (the name beside it from 32rem), Play, Contribute and Menu in a 60px row on the
    first band's ink. Menu opens the page links as an inline list under the row; from 64rem the links
-   sit in the row and Menu goes. Below 22.5rem Play moves into the list. Not sticky. */
+   sit in the row and Menu goes. Below 22.5rem Play moves into the list. Sticky (the board,
+   18 October 2026: the bar went away once the page scrolled): it stays at the window's top on every
+   page, over everything, on its own ground. App.tsx measures it into --bar, and every other sticky
+   block and every link to a section stops under it. */
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   border-bottom: 1px solid var(--hairline);
+  background: var(--paper);
+}
+
+html {
+  scroll-padding-top: var(--bar);
 }
 
 .topbar-row {
@@ -636,7 +647,7 @@ h2[id] {
     grid-column: 1;
     grid-row: 1 / span 60;
     position: sticky;
-    top: var(--space-3);
+    top: calc(var(--bar) + var(--space-3));
     margin: 0;
   }
 
@@ -684,7 +695,7 @@ main.sheet > .band:not(:first-child) > .section > h2:first-child + .faq-item {
     grid-column: 1;
     grid-row: 1 / span 12;
     position: sticky;
-    top: var(--space-3);
+    top: calc(var(--bar) + var(--space-3));
   }
 
   main.card-page > .band:last-child > .card-face-column + * {
@@ -2614,15 +2625,20 @@ input[type='radio'] {
   margin-top: var(--space-2);
 }
 
-/* The live studio on the plate: a paper screen in the dark band, its ground and roles paper's, so the
-   room, its era label and the role cards draw exactly as they do on paper. */
+/* The live studio on the plate: the room stands in the dark band itself, with no screen around it
+   (the board, 18 October 2026: the white box set it apart from the scene). Its own walls and floor
+   are paper's, so the room and the role cards draw exactly as they do on paper; only the era label,
+   which sits on the band, takes the band's colours. */
 .home > .band:first-child > .live-studio {
   margin-top: var(--space-4);
 }
 
-/* Selected through the hero, not the band's position, so the plate's own rules keep their one amber. */
-.hero-home ~ .live-studio .studio-stage {
-  border-color: var(--paper);
+/* Selected through the plate, not the band's position, so the plate's own rules keep their one amber. */
+.floor-plate .live-studio .studio-stage {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
   color: var(--ink);
   --text-muted: var(--muted);
   --hairline: var(--line);
@@ -2639,6 +2655,16 @@ input[type='radio'] {
   --suit-tile-game: var(--suit-game);
   --suit-tile-studio: var(--suit-studio);
   --live-mark: var(--live);
+}
+
+.floor-plate .live-studio .studio-era {
+  top: 0;
+  left: 0;
+  color: var(--paper);
+}
+
+.floor-plate .live-studio .studio-era-word {
+  color: var(--muted-on-ink);
 }
 
 /* The plate says only what the page needs at first sight (the board, 18 October 2026: the plate read
@@ -2865,7 +2891,7 @@ input[type='radio'] {
 
   .money-summary {
     position: sticky;
-    top: var(--space-3);
+    top: calc(var(--bar) + var(--space-3));
   }
 }
 
@@ -3170,7 +3196,7 @@ input[type='radio'] {
 
   .how-text {
     position: sticky;
-    top: var(--space-4);
+    top: calc(var(--bar) + var(--space-4));
   }
 
   /* The money band's pair: the money on the left, the framed rules beside it, one width each. */
@@ -4914,6 +4940,13 @@ main.broadcast > .band > * {
     transition: transform var(--dur-move) var(--ease-out);
   }
 
+  /* Home's studio: as the moving room lands on the rail's map, the one fades into the other. The
+     room keeps its place over the map while it fades. */
+  .home[data-morph] .floor-map,
+  .home[data-morph] .floor-plate .studio-frame {
+    transition: opacity var(--dur-quick) var(--ease-out);
+  }
+
   .upvote-button,
   .era-pick {
     transition: transform var(--dur-quick) var(--ease-out);
@@ -4985,6 +5018,14 @@ main.home > .band {
 .station-tag[data-lit='true'] .station-pill {
   background: var(--ink);
   color: var(--paper);
+}
+
+/* A tag can float past the room's edge onto the dark plate, so the focused tag carries its own paper
+   ground and the ring keeps 3:1 against it wherever it sits. */
+.station-tag > a:focus-visible {
+  border-radius: 999px;
+  background: var(--paper);
+  outline-offset: 0;
 }
 
 .station-ring {
@@ -5077,7 +5118,7 @@ main.home > .band {
 
   .floor-rail {
     position: sticky;
-    top: var(--space-3);
+    top: calc(var(--bar) + var(--space-3));
     margin: 0;
   }
 
@@ -5091,8 +5132,48 @@ main.home > .band {
     margin-bottom: var(--space-3);
   }
 
+  /* The small map is the same room with no screen around it, as on the plate, so the plate's room
+     shrinks onto the same picture. */
   .floor-map .studio-stage {
-    padding: var(--space-1);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+  }
+
+  /* The plate's room shrinks onto the map as the page scrolls (lib/studio-morph.ts). The plate is
+     lifted over the floor while it moves, the room's tags and era label fade in its first half, and
+     the map takes over as the room lands on it. Only transform and opacity change. */
+  .home[data-morph] > .band.floor-plate {
+    position: relative;
+    z-index: 1;
+  }
+
+  .home[data-morph] .floor-plate .studio-frame {
+    transform-origin: 0 0;
+  }
+
+  .home[data-morph] .floor-plate .station-tags,
+  .home[data-morph] .floor-plate .studio-era {
+    opacity: calc(1 - 2 * var(--morph, 0));
+  }
+
+  /* The map waits under the moving room and takes over once the room lands on it, at the same place
+     and size, so the swap shows no seam (its fade is in Motion, below). */
+  .home[data-morph='start'] .floor-map,
+  .home[data-morph='on'] .floor-map {
+    opacity: 0;
+  }
+
+  .home[data-morph='on'] .floor-plate .studio-frame,
+  .home[data-morph='on'] .floor-plate .station-tag {
+    pointer-events: none;
+  }
+
+  /* Landed, the room is see-through and inert (studio-morph.ts), so its tags take no focus. */
+  .home[data-morph='done'] .floor-plate .studio-frame {
+    opacity: 0;
+    pointer-events: none;
   }
 
   .floor-map .studio-era {
