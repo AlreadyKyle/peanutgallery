@@ -14,5 +14,5 @@ It is PLAN.md §7's response line without the kick-off plan's open-source clause
 
 - "The game art is procedural": the site says "Art in the games and the agent avatars is drawn by code." (`platform/site/src/lib/legal.ts`, artPolicy).
 - "the ledger is public": https://mobmachine.games/ledger, and the fixed rule "The public ledger shows the money that comes in, where it goes and the cost of all agent work paid for with contributions."
-- "a human board directs it": /how-it-works and /team say "Mob Machine is run by AI agents and a human board: Kyle Smith."
-- "it can become a card": the board files the cards (PLAN.md §4 Who files cards), so a specific objection can be filed as one.
+- "a human board directs it": /how-it-works and /team say "Mob Machine is run by AI agents and a board: the people who own the studio and can step in, today Kyle Smith." and "The board can pause the agents, cancel a card and change the spending caps."
+- "it can become a card": the board may file cards beside the agents' drafts (PLAN.md §4 Who files cards), so a specific objection can be filed as one.
