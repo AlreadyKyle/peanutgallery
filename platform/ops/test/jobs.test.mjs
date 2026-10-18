@@ -490,6 +490,36 @@ describe('the Controller run', () => {
     assert.ok(calls.some((call) => call.url === 'https://hc-ping.com/fixture-controller/fail'));
   });
 
+  test('alerts the same mismatch once, again when it changes, again after seven days, and a dispute to answer every run', async () => {
+    const lost = clone(ACCOUNT);
+    lost.undelivered_events = [{ id: 'evt_fixture_lost', object: 'event', type: 'charge.refunded', created: 1790067600 }];
+    const run = async (account, previous, now) => {
+      const { fetchFn, calls } = fakeFetch(account, { 'GET https://fixture.supabase.local/rest/v1/controller_runs': () => new Response(JSON.stringify(previous), { status: 200 }) });
+      const row = await runController({ env: CONTROLLER_ENV, fetchFn, now, out: sink() });
+      return { row, ntfy: calls.filter((call) => call.url === 'https://ntfy.sh/fixture-topic'), fail: calls.some((call) => call.url === 'https://hc-ping.com/fixture-controller/fail') };
+    };
+    const first = await run(lost, [], NOW);
+    assert.equal(first.ntfy.length, 1);
+    assert.equal(first.row.figures.alerted, true);
+    const sent = { started_at: NOW.toISOString(), figures: first.row.figures };
+    const nextDay = new Date(NOW.getTime() + 24 * 60 * 60 * 1000);
+    const repeat = await run(lost, [{ started_at: nextDay.toISOString(), figures: {} }, sent], nextDay);
+    assert.equal(repeat.ntfy.length, 0);
+    assert.equal(repeat.row.figures.alerted, undefined);
+    assert.ok(repeat.fail, 'the healthcheck still hears every failing run');
+    const other = clone(lost);
+    other.undelivered_events = [{ id: 'evt_fixture_lost', object: 'event', type: 'charge.refunded', created: 1790067600 }, { id: 'evt_fixture_also', object: 'event', type: 'charge.refunded', created: 1790067600 }];
+    assert.equal((await run(other, [sent], nextDay)).ntfy.length, 1);
+    assert.equal((await run(lost, [sent], new Date(NOW.getTime() + 7 * 24 * 60 * 60 * 1000))).ntfy.length, 1);
+    const disputed = clone(lost);
+    disputed.disputes = [{ id: 'dp_fixture_open', object: 'dispute', amount: 1000, currency: 'usd', charge: 'ch_fixture_a', payment_intent: 'pi_fixture_a', status: 'needs_response', evidence_details: { due_by: 1790500000 }, balance_transactions: [] }];
+    const answer = await run(disputed, [], nextDay);
+    assert.equal(answer.ntfy.length, 1);
+    const again = await run(disputed, [{ started_at: nextDay.toISOString(), figures: answer.row.figures }], nextDay);
+    assert.equal(again.ntfy.length, 1);
+    assert.match(again.ntfy[0].body, /Dispute dp_fixture_open \(needs_response, \$10\.00\) needs an answer in Stripe/);
+  });
+
   // A dispute on payment a: its row takes the whole $10 as net (9.4088 - 10 = -0.5912), and Stripe
   // also kept its 20.55 CAD (15 USD) dispute fee on balance transaction txn_fixture_dispute.
   function disputedAccount() {
