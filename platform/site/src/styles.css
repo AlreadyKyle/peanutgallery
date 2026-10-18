@@ -1830,6 +1830,11 @@ button.link:hover:not(:disabled) {
   object-fit: cover;
 }
 
+/* The loop shows once it plays; until then the still under it does. */
+.explainer-poster .explainer-loop:not([data-playing]) {
+  opacity: 0;
+}
+
 .explainer-poster {
   cursor: pointer;
 }
@@ -2620,15 +2625,11 @@ input[type='radio'] {
   margin-top: var(--space-4);
 }
 
-/* The status line belongs to the actions: close under them. */
-.hero-home .hero-status .status-line {
-  margin-top: var(--space-2);
-}
 
 /* The live studio on the plate: the room stands in the dark band itself, with no screen around it
    (the board, 18 October 2026: the white box set it apart from the scene). Its own walls and floor
    are paper's, so the room and the role cards draw exactly as they do on paper; only the era label,
-   which sits on the band, takes the band's colours. */
+   is told to screen readers only (below). */
 .home > .band:first-child > .live-studio {
   margin-top: var(--space-4);
 }
@@ -2657,21 +2658,11 @@ input[type='radio'] {
   --live-mark: var(--live);
 }
 
-.floor-plate .live-studio .studio-era {
-  top: 0;
-  left: 0;
-  color: var(--paper);
-}
-
-.floor-plate .live-studio .studio-era-word {
-  color: var(--muted-on-ink);
-}
 
 /* The plate says only what the page needs at first sight (the board, 18 October 2026: the plate read
-   as wordy): the pitch, its ask, the two actions and one status line on the left; the room on the
-   right under a small label; and the newest row of the pipe at the pitch's foot. How to read the room
-   and what the pipe is are told to screen readers, not drawn. The labels are set like the room's era
-   label, small and strong, so neither reads as a second headline. */
+   as wordy): the pitch, its ask and the two actions on the left; the room on the right; and the
+   newest row of the pipe at the pitch's foot. The status line opens the Fund station instead. The
+   room's label, how to read it and what the pipe is are told to screen readers, not drawn. */
 .live-studio-head {
   display: flex;
   flex-wrap: wrap;
@@ -2692,6 +2683,11 @@ input[type='radio'] {
   margin: 0;
 }
 
+/* The status line opens the Fund station, over the cards it counts. */
+.fund-status .status-line {
+  margin: 0 0 var(--space-3);
+}
+
 /* The label's stand-in while the snapshot loads: the same line, unseen, and nothing in it takes focus. */
 .home .live-studio-hold {
   visibility: hidden;
@@ -2701,6 +2697,11 @@ input[type='radio'] {
   line-height: var(--leading-heading);
 }
 
+/* The room's label and its era are not drawn on the plate either (the board, 18 October 2026): the
+   room says what it is. Screen readers still hear both. */
+.home .live-studio-head > h2,
+.home .live-studio-hold-title,
+.home .floor-plate .studio-era,
 .home .live-studio-head > p:not(.twitch),
 .home .pipe-intro {
   position: absolute;
@@ -3622,7 +3623,7 @@ ol.timeline {
 .room-leaf,
 .room-edge {
   stroke: var(--ink);
-  stroke-width: 1.5;
+  stroke-width: calc(1.5px * var(--room-ink, 1));
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
@@ -3651,7 +3652,7 @@ ol.timeline {
 .room-edge,
 .room-strong,
 .room-cap {
-  stroke-width: 2;
+  stroke-width: calc(2px * var(--room-ink, 1));
 }
 
 .room-edge {
@@ -3661,7 +3662,7 @@ ol.timeline {
 .room-grid {
   fill: none;
   stroke: var(--line);
-  stroke-width: 1;
+  stroke-width: calc(1px * var(--room-ink, 1));
   vector-effect: non-scaling-stroke;
 }
 
@@ -3669,20 +3670,20 @@ ol.timeline {
 .room-thin {
   fill: none;
   stroke: var(--ink);
-  stroke-width: 2;
+  stroke-width: calc(2px * var(--room-ink, 1));
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
 
 .room-thin {
-  stroke-width: 1.25;
+  stroke-width: calc(1.25px * var(--room-ink, 1));
 }
 
 .room-hatch {
   fill: var(--paper-hover);
   stroke: var(--ink);
-  stroke-width: 1;
+  stroke-width: calc(1px * var(--room-ink, 1));
   stroke-dasharray: 4 3;
   vector-effect: non-scaling-stroke;
 }
@@ -3691,14 +3692,14 @@ ol.timeline {
 .room-rug {
   fill: var(--paper-hover);
   stroke: var(--ink);
-  stroke-width: 1.25;
+  stroke-width: calc(1.25px * var(--room-ink, 1));
   vector-effect: non-scaling-stroke;
 }
 
 .room-rug-border {
   fill: none;
   stroke: var(--line);
-  stroke-width: 1.25;
+  stroke-width: calc(1.25px * var(--room-ink, 1));
   vector-effect: non-scaling-stroke;
 }
 
@@ -3733,11 +3734,11 @@ ol.timeline {
 .studio-agent .avatar-line,
 .studio-agent .avatar-eye {
   vector-effect: non-scaling-stroke;
-  stroke-width: 1.75;
+  stroke-width: calc(1.75px * var(--room-ink, 1));
 }
 
 .studio-agent .avatar-thin {
-  stroke-width: 1.25;
+  stroke-width: calc(1.25px * var(--room-ink, 1));
 }
 
 .studio-agent .avatar-ground {
@@ -3747,7 +3748,7 @@ ol.timeline {
 .agent-ring {
   fill: none;
   stroke: var(--focus-colour);
-  stroke-width: 3;
+  stroke-width: calc(3px * var(--room-ink, 1));
   vector-effect: non-scaling-stroke;
   opacity: 0;
 }
@@ -3760,7 +3761,7 @@ ol.timeline {
 .mark-bubble {
   fill: var(--paper);
   stroke: var(--ink);
-  stroke-width: 1.5;
+  stroke-width: calc(1.5px * var(--room-ink, 1));
   vector-effect: non-scaling-stroke;
 }
 
@@ -3772,7 +3773,7 @@ ol.timeline {
 .sprite-line {
   fill: none;
   stroke: var(--ink);
-  stroke-width: 1.5;
+  stroke-width: calc(1.5px * var(--room-ink, 1));
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
@@ -3781,7 +3782,7 @@ ol.timeline {
 .sprite-paper {
   fill: var(--paper);
   stroke: var(--ink);
-  stroke-width: 1.5;
+  stroke-width: calc(1.5px * var(--room-ink, 1));
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
@@ -5304,6 +5305,13 @@ main.home > .band {
   padding-block: var(--space-3);
   border-block: 1px solid var(--hairline);
   container-type: inline-size;
+}
+
+/* On home the first game's rule follows straight after, so a closing hairline there drew a second
+   edge with an empty band between the two. */
+.floor-parts .perks {
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .perks-title {
