@@ -1,6 +1,6 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { EmptyState } from '../components/EmptyState';
+import { EmptyState, playNext } from '../components/EmptyState';
 import { Glyph, type GlyphName } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
 import { PersonLink } from '../components/Person';
@@ -255,8 +255,8 @@ export function Suggest() {
         </section>
         <section className="section" aria-labelledby="suggest-list">
           <h2 id="suggest-list">{copy.suggest.listTitle}</h2>
-          {/* The sort and the area filter show only while there is a list to sort. */}
-          {list.state === 'unavailable' ? null : (
+          {/* The sort and the area filter show only once there is a list to sort. */}
+          {list.state === 'unavailable' || !list.listed ? null : (
             <div className="list-controls">
               <div role="group" aria-label={copy.suggest.sortLabel} className="filters">
                 {(['top', 'new'] as const).map((key) => (
@@ -286,7 +286,8 @@ export function Suggest() {
           ) : list.state === 'unavailable' ? (
             <EmptyState line={legal.partUnavailable} next={{ to: '/', label: copy.roadmapLink }} unavailable onRetry={list.reload} />
           ) : list.items.length === 0 ? (
-            <EmptyState line={copy.suggest.empty} next={{ to: '#suggest-send', label: copy.emptyState.sendFirst }} />
+            // While sign-in is closed no one can pitch, so the empty board offers the game instead.
+            <EmptyState line={copy.suggest.empty} next={signedIn || signInOpen ? { to: '#suggest-send', label: copy.emptyState.sendFirst } : playNext()} />
           ) : (
             <>
               <ol className="suggestions">

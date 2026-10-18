@@ -47,6 +47,12 @@ const PLAIN_PATH = /^\/[a-z0-9-]*$/;
 // A footer link may go one level deeper (/studio/history), still a plain path on this site.
 const PLAIN_PATH_DEEP = /^\/[a-z0-9-]+(\/[a-z0-9-]+)?$/;
 
+// While sign-in is closed (lib/sign-in.ts) the frame drops the links to what needs a profile: the top
+// bar's Ideas (pitching needs one; the footer keeps the board, which anyone can read) and the footer's
+// Your desk (the Menu's own desk link already waits on the same answer).
+const TOP_BAR_NEEDS_PROFILE: readonly string[] = ['/suggest'];
+const FOOTER_NEEDS_PROFILE: readonly string[] = ['/me'];
+
 /**
  * Page transitions (docs/specs/final-state.md, the motion pass): a press on a link to another page of
  * this site cross-fades through the View Transitions API where the browser has it and motion is
@@ -248,7 +254,7 @@ function TopBar() {
         </button>
         <ul id="site-menu" className="nav-links" data-open={open ? 'true' : undefined}>
           {pageNav
-            .filter((item) => PLAIN_PATH.test(item.to))
+            .filter((item) => PLAIN_PATH.test(item.to) && (signInOpen || !TOP_BAR_NEEDS_PROFILE.includes(item.to)))
             .map((item) => (
               <li key={item.to}>
                 <NavLink to={item.to}>{item.label}</NavLink>
@@ -275,6 +281,7 @@ function TopBar() {
 
 function SiteFooter() {
   const env = siteEnv();
+  const signInOpen = useSignInOpen();
   // A spec sheet (docs/specs/brand.md, Footer): the mark and what the studio is, then the links in three
   // labelled columns, then the credit under a rule.
   return (
@@ -319,7 +326,7 @@ function SiteFooter() {
           <p className="footer-label">{copy.footerGroups.community}</p>
           <ul className="footer-links">
             {communityNav
-              .filter((item) => PLAIN_PATH_DEEP.test(item.to))
+              .filter((item) => PLAIN_PATH_DEEP.test(item.to) && (signInOpen || !FOOTER_NEEDS_PROFILE.includes(item.to)))
               .map((item) => (
                 <li key={item.to}>
                   <Link to={item.to}>{item.label}</Link>

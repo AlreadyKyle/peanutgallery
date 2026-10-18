@@ -9,6 +9,7 @@ import { Glyph } from './components/Glyph';
 import { copy } from './lib/copy';
 import { legal } from './lib/legal';
 import type { Snapshot, StudioSource } from './lib/source';
+import { resetSignInOpen } from './lib/sign-in';
 import { NEWEST_TERMS } from './lib/terms-versions';
 import { SourceProvider } from './lib/studio';
 
@@ -177,10 +178,12 @@ describe('the you slot', () => {
 
 describe('Site chrome', () => {
   // docs/specs/final-state.md adds the studio's history and the player's own page to the footer.
-  it('links Weekly reports, the feed, the community pages, Terms, Privacy, Refunds and Contact in the footer of every page', () => {
+  it('links Weekly reports, the feed, the community pages, Terms, Privacy, Refunds and Contact in the footer of every page', async () => {
     for (const path of ['/', '/ledger', '/contribute', '/how-it-works', '/team', '/roadmap', '/reports', '/terms', '/contact', '/board', '/no-such-page']) {
       renderAt(path);
       const footer = screen.getByRole('contentinfo');
+      // Your desk waits for the studio's answer on whether sign-in is open (lib/sign-in.ts).
+      await waitFor(() => expect(within(footer).getByRole('link', { name: copy.nav.me })).toBeTruthy());
       const links = within(footer)
         .getAllByRole('link')
         .map((link) => [link.textContent, link.getAttribute('href')]);
@@ -240,6 +243,35 @@ describe('Site chrome', () => {
     expect(screen.getByText(copy.pitchBody)).toBeTruthy();
     expect(within(screen.getByRole('contentinfo')).getByText(`${copy.footer} ${legal.allAges}`)).toBeTruthy();
     expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: copy.createdByName }).getAttribute('href')).toBe(copy.createdByUrl);
+  });
+
+  it('drops the top bar\'s Ideas and the footer\'s Your desk while sign-in is closed, and keeps Ideas in the footer', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) =>
+        String(input) === '/api/community/auth/settings'
+          ? new Response(JSON.stringify({ signIn: false }), { status: 200, headers: { 'content-type': 'application/json' } })
+          : new Response('{}', { status: 404, headers: { 'content-type': 'application/json' } }),
+      ),
+    );
+    // Forget an answer an earlier test's render asked for, so this page asks the stub.
+    resetSignInOpen();
+    try {
+      renderAt('/faq');
+      await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledWith('/api/community/auth/settings', expect.anything()));
+      await waitFor(() => expect(window.localStorage.getItem('mm:sign-in-open')).toBe('0'));
+      const hrefs = (root: HTMLElement) => within(root).getAllByRole('link').map((link) => link.getAttribute('href'));
+      expect(hrefs(nav())).not.toContain('/suggest');
+      expect(hrefs(nav())).not.toContain('/me');
+      expect(hrefs(nav())).toContain('/team');
+      const footer = screen.getByRole('contentinfo');
+      expect(hrefs(footer)).toContain('/suggest');
+      expect(hrefs(footer)).not.toContain('/me');
+    } finally {
+      resetSignInOpen();
+      window.localStorage.clear();
+      vi.unstubAllGlobals();
+    }
   });
 
   it('shows the pitch line on the landing only', () => {

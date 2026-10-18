@@ -5,6 +5,7 @@ import { TwitchLink } from '../components/LiveStudio';
 import type { SeedSummary } from '../lib/community-types';
 import { copy } from '../lib/copy';
 import { clearPendingSeed, pendingSeed } from '../lib/seed-link';
+import { resetSignInOpen } from '../lib/sign-in';
 import { Me } from './Me';
 import { scoreFrom, Seeds } from './Seeds';
 
@@ -17,6 +18,8 @@ let saveStatus = 200;
 let otpStatus = 200;
 let tally = { up: 0, down: 0 };
 let gallery: Record<string, { items: SeedSummary[]; next: string | null }> = {};
+// The studio's answer on sign-in (lib/sign-in.ts); null answers 404, which counts as open.
+let signInOpen: boolean | null = null;
 
 function seedItem(id: string, up: number, down: number): SeedSummary {
   return { id, code: `dust:v3:${id}`, game: 'dust', title: `Run ${id}`, author: null, up, down, score: up - down, createdAt: '2026-10-01T00:00:00Z', featured: false };
@@ -60,6 +63,7 @@ beforeEach(() => {
   otpStatus = 200;
   tally = { up: 0, down: 0 };
   gallery = {};
+  signInOpen = null;
   window.localStorage.clear();
   vi.stubGlobal(
     'fetch',
@@ -72,6 +76,7 @@ beforeEach(() => {
       if (url === '/api/community/rpc/my_profile') return json(500, { error: 'not in this test' });
       if (url === '/api/community/rpc/vote_seed') return json(200, tally);
       if (url.startsWith('/api/community/seeds')) return json(200, gallery[url] ?? { items: [], next: null });
+      if (url === '/api/community/auth/settings' && signInOpen !== null) return json(200, { signIn: signInOpen });
       return json(404, { error: 'unknown' });
     }),
   );
@@ -80,6 +85,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   clearPendingSeed();
+  resetSignInOpen();
   vi.unstubAllGlobals();
 });
 
@@ -220,6 +226,44 @@ describe('the gallery', () => {
     fireEvent.click(screen.getByRole('button', { name: copy.emptyState.tryAgain }));
     await settle();
     expect(screen.getByText('Run s1')).toBeTruthy();
+  });
+});
+
+describe('the gallery sorts and saving your own seed', () => {
+  it('draw no sorts over an empty gallery, and ask to sign in only while sign-in is open', async () => {
+    resetSignInOpen();
+    signInOpen = true;
+    renderAt('/seeds');
+    await settle();
+    expect(screen.getByText(copy.seeds.empty)).toBeTruthy();
+    expect(screen.queryByRole('group', { name: copy.seeds.sortLabel })).toBeNull();
+    expect(screen.getByText(copy.seeds.how)).toBeTruthy();
+    expect(screen.getByRole('link', { name: copy.seeds.signIn }).getAttribute('href')).toBe('/me');
+    cleanup();
+
+    resetSignInOpen();
+    window.localStorage.clear();
+    signInOpen = false;
+    renderAt('/seeds');
+    await settle();
+    expect(screen.queryByRole('group', { name: copy.seeds.sortLabel })).toBeNull();
+    expect(screen.getByText(copy.seeds.howClosed)).toBeTruthy();
+    expect(screen.queryByText(copy.seeds.how)).toBeNull();
+    expect(screen.queryByText(/joins your profile/)).toBeNull();
+    expect(screen.queryByRole('link', { name: copy.seeds.signIn })).toBeNull();
+  });
+
+  it('draw the sorts once the gallery lists a seed', async () => {
+    gallery['/api/community/seeds?sort=trending'] = { items: [seedItem('s1', 1, 0)], next: null };
+    renderAt('/seeds');
+    await settle();
+    const sorts = screen.getByRole('group', { name: copy.seeds.sortLabel });
+    expect(within(sorts).getAllByRole('button').map((button) => button.textContent)).toEqual(Object.values(copy.seeds.sorts));
+    // Top this week answers an empty page here: the sorts stay, so the reader can go back.
+    fireEvent.click(within(sorts).getByRole('button', { name: copy.seeds.sorts.top_week }));
+    await settle();
+    expect(screen.getByText(copy.seeds.empty)).toBeTruthy();
+    expect(screen.getByRole('group', { name: copy.seeds.sortLabel })).toBeTruthy();
   });
 });
 
