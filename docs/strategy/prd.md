@@ -31,6 +31,8 @@ Where this file and the spec disagree, the spec wins and this file is corrected.
 | G9 | A game's link preview image drawn in code | `docs/VISION.md` §4 | Built |
 | G10 | Sound for every game, made in code | | Later: [Sound for every game](../BACKLOG.md#sound-for-every-game) |
 | G11 | An in-game bug button that saves the last minute of play | | Later: [In-game bug button and QA reproductions](../BACKLOG.md#in-game-bug-button-and-qa-reproductions) |
+| G12 | Daily Dust: every UTC day everyone plays the same four-minute run from a seed made from the date, at `?daily=YYYY-MM-DD`, kept apart from the main save with no time-away credit, ending in a result card (score, glyph row, highlights) to share as text and a code-drawn image; no streaks, no reward for returning, no penalty for missing a day | `docs/specs/daily-dust.md` | Built |
+| G13 | A board for the daily run, from server-checked replays only | `docs/specs/daily-dust.md` | Later: [A fair Daily Dust board](../BACKLOG.md#a-fair-daily-dust-board) |
 
 ## 2. Seeds
 

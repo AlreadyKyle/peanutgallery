@@ -19,6 +19,16 @@ describe('countEvent', () => {
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
+  it('sends the Daily Dust counters the same way (docs/specs/daily-dust.md)', () => {
+    const sendBeacon = vi.fn().mockReturnValue(true);
+    for (const event of ['dust_daily_start', 'dust_daily_finish', 'dust_daily_share'] as const) countEvent(event, { sendBeacon }, vi.fn());
+    expect(sendBeacon.mock.calls.map((call) => call[1])).toEqual([
+      '{"event":"dust_daily_start"}',
+      '{"event":"dust_daily_finish"}',
+      '{"event":"dust_daily_share"}',
+    ]);
+  });
+
   it('falls back to a keepalive fetch with no credentials where there is no beacon or it is refused', () => {
     const fetchFn = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     countEvent('dust_load', {}, fetchFn);
@@ -145,9 +155,10 @@ describe('the counters in render/main.ts', () => {
     expect(main).toContain('session.advance(Date.now(), !document.hidden)');
   });
 
-  it('reads no storage key for counting: the save is still the only key it reads', () => {
-    expect(main.match(/getItem\(/g)).toHaveLength(1);
+  it('reads no storage key for counting: the save and the record of the daily run are the only keys it reads', () => {
+    expect(main.match(/getItem\(/g)).toHaveLength(2);
     expect(main).toContain('storage()?.getItem(SAVE_KEY)');
+    expect(main).toContain('storage()?.getItem(DAILY_KEY)');
   });
 
   it('sends only names the site counter takes (platform/site/netlify/functions/card.mts PLAY_EVENTS)', () => {
@@ -156,6 +167,7 @@ describe('the counters in render/main.ts', () => {
     expect([...union.matchAll(/'([a-z0-9_]+)'/g)].map((m) => m[1])).toEqual([
       'dust_load', 'dust_share', 'dust_next_card',
       'dust_return_1d', 'dust_return_7d', 'dust_session_2m', 'dust_session_4m', 'dust_seed_save', 'dust_seed_open',
+      'dust_daily_start', 'dust_daily_finish', 'dust_daily_share',
     ]);
   });
 });

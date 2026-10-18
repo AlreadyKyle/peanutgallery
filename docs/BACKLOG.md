@@ -546,3 +546,12 @@ game stages), and the news section (the feed). What it leaves for later is filed
 - summary: A live event where the studio takes one new game from pitch to first playable on stream, with the crowd picking the pitch and unlocking decor.
 - intent: A launch event for when the studio has real users, so strangers have one time to show up and a story with an ending. The studio streams from /broadcast while one New game runs Pitch, Prototype and First playable as their own cards; the crowd picks the pitch from two or three by funding them; /goals shows the event live; a second track of community achievements (seeds shared, suggestions made) unlocks earned decor, never money; the build's clock never appears near a funding control. The board raises it once distinct supporters and daily players show an audience to bring. It is not built yet.
 - kernel: no
+
+### A fair Daily Dust board
+- bucket: game
+- folder: seed-1
+- horizon: later
+- rank: 52
+- summary: A board for each day's Daily Dust run, listing a score only once the studio has replayed the run and checked it.
+- intent: Daily Dust is built (docs/specs/daily-dust.md): every UTC day everyone plays the same four-minute run from a seed made from the date and shares a result card, with no board. The score is worked out in the browser, so a board today would rank whoever edits their numbers. A fair board sends the run's inputs (each strike, purchase and choice with its sim second) and the config's version with the first finished run of the day, replays them on the server with the same sim before listing the score, and shows no name or a content-filtered one. It is not built yet.
+- kernel: yes

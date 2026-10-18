@@ -304,6 +304,8 @@ Deno.test("migrations on PGlite", {
         "20261018000000_feed_backfill.sql",
         // card-follows (docs/specs/card-follows.md): "Tell me when this ships" for any profile.
         "20261018010000_card_follows.sql",
+        // Daily Dust (docs/specs/daily-dust.md): three more aggregate counters.
+        "20261018020000_daily_dust_counters.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);

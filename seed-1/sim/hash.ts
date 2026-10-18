@@ -22,7 +22,11 @@ function fnv1a(text: string, offset: number): string {
   return hash.toString(16).padStart(8, '0');
 }
 
-export function hashState(state: SimState): string {
-  const text = canonical(state);
+/** The same two FNV-1a passes over any text: sixteen hex characters. */
+export function hashText(text: string): string {
   return fnv1a(text, 0x811c9dc5) + fnv1a(text, 0x050c5d1f);
+}
+
+export function hashState(state: SimState): string {
+  return hashText(canonical(state));
 }
