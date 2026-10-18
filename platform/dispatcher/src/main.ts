@@ -39,6 +39,7 @@ import { AGENTS_DIR, TypedOutput } from './typed-output.js';
 import { gitAuthEnv } from './worktree.js';
 import { resolveRoleModel } from './role-model.js';
 import { checkRepositoryGit, failStaleJobRuns, startupChecks } from './startup.js';
+import { stopReason, stopReasonMessage } from './stop-reason.js';
 import { currentMoneyState, drainState, leaseTtlSeconds, newStudioProbeState, tick } from './tick.js';
 import { sleep } from './time.js';
 
@@ -260,5 +261,8 @@ async function main(): Promise<void> {
 main().catch((error: unknown) => {
   const exitCode = exitCodeFor(error);
   log.error('main', 'dispatcher exited with an error', { error: errorMessage(error), exitCode, restart: exitCode !== EXIT_FATAL });
+  // A fixed phrase the Actions host may print in public, so the board can tell a spent balance from
+  // a refused token without the encrypted log (stop-reason.ts).
+  log.error('main', stopReasonMessage(stopReason(error)), { exitCode });
   process.exit(exitCode);
 });

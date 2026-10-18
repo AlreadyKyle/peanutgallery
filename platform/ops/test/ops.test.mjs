@@ -1792,6 +1792,8 @@ describe('the GitHub Actions host', () => {
       '{"ts":"t","level":"info","scope":"probe","msg":"startup probe passed","billed_to":"overhead"}',
       '{"ts":"t","level":"info","scope":"tick","msg":"started","cardId":"card-1"}',
       '{"ts":"t","level":"error","scope":"main","msg":"dispatcher exited with an error","error":"fixture-service-role-key"}',
+      '{"ts":"t","level":"error","scope":"main","msg":"stop reason: github read token refused","exitCode":78}',
+      '{"ts":"t","level":"error","scope":"main","msg":"stop reason: fixture-service-role-key","exitCode":78}',
       '{"ts":"t","level":"info","scope":"main","msg":"dispatcher drained","drainAt":"x"}',
       'a line that is not JSON naming containment verified',
     ].join('\n');
@@ -1799,7 +1801,7 @@ describe('the GitHub Actions host', () => {
     assert.equal(run.status, 0, run.stderr);
     assert.equal(
       run.stdout,
-      ['dispatcher: code root is read-only', 'dispatcher: containment verified', 'dispatcher: startup probe passed', 'dispatcher: dispatcher exited with an error', 'dispatcher: dispatcher drained', ''].join('\n'),
+      ['dispatcher: code root is read-only', 'dispatcher: containment verified', 'dispatcher: startup probe passed', 'dispatcher: dispatcher exited with an error', 'dispatcher: stop reason: github read token refused', 'dispatcher: dispatcher drained', ''].join('\n'),
     );
   });
 

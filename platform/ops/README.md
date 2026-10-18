@@ -415,7 +415,7 @@ gh run download <run id> --repo AlreadyKyle/peanutgallery --name dispatcher-log-
 age -d -i <path to the backup key> dispatcher-log/dispatcher-log.age | grep -v '"level":"info"' | tail -n 50
 ```
 
-The full log needs the board's offline age key, the same one that opens a backup. Delete the decrypted copy afterwards.
+A failed run's public lines end with `dispatcher: stop reason: <phrase>`, which names the kind of failure (`platform/dispatcher/src/stop-reason.ts`) with nothing from the error itself. The full log needs the board's offline age key, the same one that opens a backup. Delete the decrypted copy afterwards.
 
 ### Stop the host
 
