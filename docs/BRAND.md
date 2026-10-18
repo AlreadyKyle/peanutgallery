@@ -15,6 +15,18 @@ The studio has two halves, and the brand is both at once:
 
 The quality bar is the best consumer-product pages: one idea to a screen, the product itself shown large and early (here the live studio), no empty columns, no filler, nothing that looks unfinished.
 
+### The production bar
+
+Checks a reviewer can make on any page or frame (the production pass, 18 October 2026):
+
+1. **Scale.** On a laptop a section heading is at least three times the body text, and a page heading about five times. If a page reads like a form, the headings are too small.
+2. **Three steps of type.** A section steps down heading, lede, body, with nothing in between competing; the small muted line is for meta only.
+3. **One idea to a screen.** A section is one label, one heading, at most one intro and one block of content. A second idea is a second section.
+4. **Room.** Bands sit far apart (144px on a wide screen); a section's parts group by space, not by lines.
+5. **The product large.** The room, the cards and the games are shown at a size you could read across a table, never as thumbnails beside text.
+6. **Motion leads the eye**, in reading order, and settles fast. If you notice the animation before the content, it is too much.
+7. **Finished edges.** Every corner, edge and gap is a token; nothing is off by a pixel at any of the five audited widths.
+
 ## Personality
 
 | We are | We are not |
@@ -63,10 +75,11 @@ One family: **Atkinson Hyperlegible Next**, weights 400 to 700 (SIL OFL), chosen
 
 | Role | Size | Set |
 |---|---|---|
-| Home's pitch | 38 to 60px | 700, tracking −0.03em, leading 1.04 |
-| Page heading (h1) | 38 to 72px | 700, tracking −0.03em, leading 1.04 |
-| Section heading (h2) | 26 to 40px | 700, tracking −0.015em, leading 1.15 |
-| Lead, card titles, figures | 20px | 700 for titles, 400 for the lede |
+| Home's pitch | 38 to 52px | 700, tracking −0.03em, leading 1.04 |
+| Page heading (h1) | 40 to 96px | 700, tracking −0.03em, leading 1.04 |
+| Section heading (h2) | 28 to 56px | 700, tracking −0.015em, leading 1.15 |
+| Lede (a plate's and a section's intro) | 20 to 24px | 400, leading 1.35 |
+| Card titles, figures | 20px | 700 for titles |
 | Body | 17px | 400, leading 1.6, about 72 characters a line |
 | Small, labels | 14px | 400; labels 600 in the mono face, tracking +0.04em |
 
@@ -98,7 +111,7 @@ The brand has a small cast of objects. Everything else is type on the table.
 
 ## Motion
 
-Motion sets the scene, records a real change, or answers a press. The studio's agents walk and type; a coin drops when money arrives; a card flips when it is funded. Nothing a reader might press moves under the pointer. Under reduced motion everything is drawn still.
+Motion sets the scene, records a real change, or answers a press. The studio's agents walk and type; a coin drops when money arrives; a card flips when it is funded. As a section scrolls into view its heading rises into place and its intro follows a beat later, and the cards of a grid are dealt one after another, so the eye is led in reading order. Motion is calm and quick to settle: one long, soft ease-out for the scene, short ones for a press, never a bounce. Nothing a reader might press moves under the pointer. Under reduced motion everything is drawn still.
 
 ## Imagery
 

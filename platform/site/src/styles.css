@@ -78,7 +78,7 @@ h1 {
 }
 
 h2 {
-  font-size: var(--size-h2);
+  font-size: var(--size-section);
   letter-spacing: var(--tracking-heading);
   margin-bottom: var(--space-3);
 }
@@ -611,6 +611,14 @@ main > .band:not(:first-child) .contribute > h2 {
   margin-bottom: var(--space-4);
 }
 
+/* The intro reads as a lede (the production pass): one line under the heading at the lede's size, so
+   the heading, the intro and the body step down in three clear sizes. A sheet's text column keeps
+   its first paragraph at the body size, since there it is the text, not an intro. */
+main:not(.sheet) .section > h2 + p:not(:has(+ p:not(.sr-only), + h3, + h4)) {
+  font-size: var(--size-lede);
+  line-height: var(--leading-title);
+}
+
 /* A link to a section (/#fund) lands with its rule and number in view, not cut by the window's top. */
 h2[id] {
   scroll-margin-top: var(--space-5);
@@ -765,7 +773,7 @@ main.card-page > .band:nth-child(2) {
 }
 
 .lede {
-  font-size: var(--size-lead);
+  font-size: var(--size-lede);
 }
 
 .rules {
@@ -1441,6 +1449,14 @@ button.link:hover:not(:disabled) {
 
 .game-text > h2 {
   margin-top: 0;
+}
+
+/* Headings that title a part, not a section, keep the part size (the production pass): the first
+   game's heading sits in a column between the box art and the video, and the Machine card's title is
+   a card's, so at the section size either would stack a word to a line. */
+.game-text > h2,
+.machine-card h2 {
+  font-size: var(--size-h2);
 }
 
 .game-text > p {

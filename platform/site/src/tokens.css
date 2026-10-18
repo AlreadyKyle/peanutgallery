@@ -99,10 +99,15 @@
      1440px screen; text holds still. Every font-size is one of these. */
   --size-small: 0.875rem; /* 14px: meta lines, the card's index row and spec rows, a row's date and meta, footer */
   --size-body: 1.0625rem; /* 17px: paragraphs, nav, buttons, row titles */
-  --size-lead: 1.25rem; /* 20px: the lede, figures, h3 and card titles */
-  --size-h2: clamp(1.625rem, 1.2rem + 1.6vw, 2.5rem); /* 26px to 40px: section headings */
-  --size-h1: clamp(2.375rem, 1.4rem + 3.6vw, 4.5rem); /* 38px to 72px: the page heading */
-  --size-hero: clamp(2.375rem, 1rem + 2.6vw, 3.25rem); /* 38px to 52px: home's pitch, three lines beside the room */
+  --size-lead: 1.25rem; /* 20px: figures, h3 and card titles */
+  /* The production pass (the board's ask of 18 October 2026): the headings were half the size of the best
+     product pages' against the same body text, so every section read as a form. A section heading is
+     now about 3.3 times the body at 1440px (was 2.4), a page heading about 5. */
+  --size-lede: clamp(1.25rem, 1.1rem + 0.5vw, 1.5rem); /* 20px to 24px: a page plate's lede and a section's intro (home's pitch keeps --size-lead under it) */
+  --size-h2: clamp(1.625rem, 1.2rem + 1.6vw, 2.5rem); /* 26px to 40px: a heading inside a part (a lane, a step, a card page's title) */
+  --size-section: clamp(1.75rem, 1rem + 3vw, 3.5rem); /* 28px to 56px: a section's heading */
+  --size-h1: clamp(2.5rem, 1.2rem + 4.8vw, 6rem); /* 40px to 96px: the page heading */
+  --size-hero: clamp(2.375rem, 1rem + 2.6vw, 3.25rem); /* 38px to 52px: home's pitch, three lines beside the room (the board, 18 October 2026: tops out at 52px) */
 
   /* Tracking: the only letter-spacing values. Display type sets tight, mono labels open. */
   --tracking-display: -0.03em; /* h1 and the pitch */
@@ -116,10 +121,11 @@
   --space-4: 2.5rem;
   --space-5: 4rem;
   --space-6: 6rem; /* between a section's blocks that read as separate groups */
-  /* A band's block padding and the space between sections in one band: 64px on a phone, about 70px
-     at 768px, 101px at 1280px, 110px at 1440px and 120px at most (the board, 18 October 2026: the
-     site read as dense; every section gets room to breathe, as a printed sheet does). */
-  --band-pad: clamp(4rem, 1.5rem + 6vw, 7.5rem);
+  /* A band's block padding and the space between sections in one band: 64px on a phone, about 81px
+     at 768px, 105px at 1024px, 130px at 1280px and 144px from 1440px (the board, 18 October 2026:
+     the site read as dense; every section gets room to breathe, as a printed sheet does. The
+     production pass raised the top from 120px to the 144px the best product pages keep). */
+  --band-pad: clamp(4rem, 0.5rem + 9.5vw, 9rem);
   /* A page's plate (band 1) is its title, not a section, so it takes less: 48px on a phone, about
      82px at 1440px, 80px at most. */
   --plate-pad: clamp(3rem, 1.5rem + 4vw, 5rem);
@@ -150,4 +156,9 @@
   /* The scene (docs/specs/final-state.md, the motion pass): a section's reveal and the legendary sheen. */
   --dur-reveal: 480ms;
   --ease-scene: cubic-bezier(0.22, 1, 0.36, 1);
+  /* The reveal leads the eye (the production pass): a section's heading rises --reveal-rise over
+     --dur-rise, its intro --stagger-reveal after it, and the cards of a grid follow one another. */
+  --dur-rise: 720ms;
+  --reveal-rise: 1.5rem;
+  --stagger-reveal: 90ms;
 }
