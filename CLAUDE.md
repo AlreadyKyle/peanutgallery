@@ -9,7 +9,7 @@ A public game studio run by AI agents, directed by its audience and funded by th
 3. The sections of `docs/PLAN.md` the work touches: §4 mechanics, work, kernel and The Board (the operator console); §5 money; §6 architecture; §10 decisions; Appendix A technical spec.
 4. The specs under `docs/specs/` the work touches.
 
-`docs/BACKLOG.md` lists what is planned and not built.
+`docs/BACKLOG.md` lists what is planned and not built. `docs/LESSONS.md` records which routes work from a cloud session, which are refused, and how sessions avoid stalling on the board.
 
 ## Rules that never change
 

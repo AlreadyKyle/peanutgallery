@@ -91,6 +91,17 @@ test('the focus ring keeps 3:1 against the ground on paper and on the dark bands
       // The ground the ring is drawn on: the nearest ancestor (or, on the edge, the element) with a fill.
       let node: HTMLElement | null = parseFloat(style.outlineOffset) <= 0 ? el : el.parentElement;
       let ground = 'rgba(0, 0, 0, 0)';
+      // An agent in the live studio stands on the room's own paper floor, which the drawing fills, not
+      // a box: its ground is the stage's paper.
+      const stage = el.closest('svg.room')?.closest<HTMLElement>('.studio-stage');
+      if (stage) {
+        const probe = document.createElement('span');
+        probe.style.background = 'var(--paper)';
+        stage.append(probe);
+        ground = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return { where: el.outerHTML.slice(0, 80), ring: style.outlineColor, ground };
+      }
       while (node !== null) {
         const bg = getComputedStyle(node).backgroundColor;
         if (bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {

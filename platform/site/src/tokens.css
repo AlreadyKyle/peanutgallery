@@ -121,11 +121,13 @@
   --space-4: 2.5rem;
   --space-5: 4rem;
   --space-6: 6rem; /* between a section's blocks that read as separate groups */
+  /* The sticky top bar's height: its 60px row and its rule. App.tsx sets the measured height here, so
+     a bar that wraps (200% text, the open Menu) still keeps every sticky block and section link clear. */
+  --bar: 3.8125rem;
   /* A band's block padding and the space between any two sections, wherever they sit (a band, a
      pair's cell, how it works' steps, /contribute's parts): 80px on a phone, about 89px at 768px,
      111px at 1024px, 133px at 1280px and 144px from 1440px (the board, 18 October 2026: the site
-     read as dense; every section gets room to breathe, as a printed sheet does. The production pass
-     raised the top from 120px to the 144px the best product pages keep, and the phone's from 64px). */
+     read as dense; every section gets room to breathe, as a printed sheet does). */
   --band-pad: clamp(5rem, 1.5rem + 8.5vw, 9rem);
   /* A page's plate (band 1) is its title, not a section, so it takes less: 48px on a phone, about
      82px at 1440px, 80px at most. */

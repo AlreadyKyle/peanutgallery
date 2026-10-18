@@ -220,7 +220,7 @@ for (const size of [
     await expect(page.locator('main h1')).toHaveCount(1);
     expect(await page.locator('.hero-home .lede').evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeLessThanOrEqual(20);
     // The pitch starts level with the room's top, beside it; the pipe sits on the pitch's text edge.
-    // The paper screen keeps the room's own height rather than stretching to the right column, so
+    // The room's box keeps the room's own height rather than stretching to the right column, so
     // the room fills it (the product pass's design review: an empty screen under the room).
     const h1 = await box('.hero-home h1');
     expect(Math.abs(h1.y - stage.y)).toBeLessThanOrEqual(1);

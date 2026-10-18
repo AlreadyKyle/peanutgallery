@@ -178,6 +178,20 @@ function TopBar() {
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
+  // The bar is sticky (DESIGN.md, Top bar): its measured height is --bar, which every other sticky
+  // block and every link to a section stops under.
+  const bar = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const header = bar.current;
+    if (header === null || typeof ResizeObserver === 'undefined') return;
+    const root = document.documentElement;
+    const observer = new ResizeObserver(() => root.style.setProperty('--bar', `${header.offsetHeight}px`));
+    observer.observe(header);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty('--bar');
+    };
+  }, []);
   const play = env.playUrl === '' ? null : env.playUrl;
   // The you slot is the card lane's code (routes.tsx), so the kernel's own pages (Contribute, /thanks,
   // the ledger and the legal pages) draw the bar without it: nothing a card changes stands on the way
@@ -193,7 +207,7 @@ function TopBar() {
   }
   const kernelPage = KERNEL_SEGMENTS.includes(first);
   return (
-    <header className="topbar">
+    <header className="topbar" ref={bar}>
       <nav
         className="wrap topbar-row"
         aria-label="Site"
