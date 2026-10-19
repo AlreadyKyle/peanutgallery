@@ -7,13 +7,13 @@ import { Avatar } from './Avatar';
  * to its box on /team, three equal columns from 48rem, each avatar bobbing as an idle agent does in the
  * live studio. Never `li.agent` (a box there) (DESIGN.md, The team).
  */
-export function TeamStrip({ roles, asleep }: { roles: readonly Role[]; asleep: boolean }) {
+export function TeamStrip({ roles }: { roles: readonly Role[] }) {
   return (
     <ul className="team-strip">
       {roles.map((role) => (
         <li key={role.id}>
           <Link className="member" to={`/team#agent-${role.id}`}>
-            <Avatar note={role.species_note} asleep={asleep} size={72} idle />
+            <Avatar note={role.species_note} size={72} idle />
             <span>
               <span className="member-name">{role.name}</span>
               <span className="member-job">{role.description ?? role.title}</span>

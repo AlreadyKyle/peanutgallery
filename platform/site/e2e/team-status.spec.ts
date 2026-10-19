@@ -16,7 +16,8 @@ test.describe('while the studio is paused', () => {
     await expect(rows).not.toHaveCount(0);
     await expect(running.locator('li.agent[data-status="paused"]')).toHaveCount(0);
     await expect(running.locator('li.agent .tag[data-state="paused"]')).toHaveCount(0);
-    await expect(running.locator('svg.avatar[data-pose="awake"]')).toHaveCount(await rows.count());
+    await expect(running.locator('svg.avatar')).toHaveCount(await rows.count());
+    await expect(running.locator('svg.avatar .avatar-lid')).toHaveCount(0);
     // The code-only Janitor says it calls no model.
     const code = running.locator('li.agent[data-kind="code"]');
     await expect(code).toHaveCount(1);
@@ -33,7 +34,8 @@ test.describe('while the studio is paused', () => {
     expect(models.ok, models.message).toBe(true);
     // Home's team strip draws the same roles, awake.
     await page.goto('/');
-    await expect(page.locator('.team-strip svg.avatar[data-pose="awake"]')).toHaveCount(3);
+    await expect(page.locator('.team-strip svg.avatar')).toHaveCount(3);
+    await expect(page.locator('.team-strip svg.avatar .avatar-lid')).toHaveCount(0);
   });
 });
 
@@ -141,17 +143,18 @@ test.describe('with one role paused by the board', () => {
     studio: { ...DEFAULT_STUDIO, roles: DEFAULT_STUDIO.roles.map((role) => (role.id === QA ? { ...role, paused: true, paused_reason: reason } : role)) },
   });
 
-  test('shows that role paused with its own reason, and the rest running and awake', async ({ page }) => {
+  test('shows that role paused with its own reason, and the rest running, every one awake', async ({ page }) => {
     await page.goto('/team');
     const running = page.getByRole('region', { name: 'Running', exact: true });
     const qa = running.locator(`#agent-${QA}`);
     await expect(qa).toHaveAttribute('data-status', 'paused');
     await expect(qa).toContainText('Paused');
     await expect(qa).toContainText(reason);
-    await expect(qa.locator('svg.avatar')).toHaveAttribute('data-pose', 'asleep');
+    await expect(qa.locator('svg.avatar .avatar-eye').first()).toBeAttached();
+    await expect(qa.locator('svg.avatar')).toHaveAttribute('data-idle', 'true');
     await expect(qa.locator('.card-meta')).toContainText(RUNNING_MODEL);
     await expect(running.locator('li.agent[data-status="running"]')).toHaveCount((await running.locator('li.agent').count()) - 1);
-    await expect(running.locator(`#agent-${BUILDER_A} svg.avatar`)).not.toHaveAttribute('data-pose', 'asleep');
+    await expect(running.locator('svg.avatar .avatar-lid')).toHaveCount(0);
     await expect(running.getByText(reason)).toHaveCount(1);
   });
 });

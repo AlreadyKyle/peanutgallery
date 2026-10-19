@@ -115,7 +115,9 @@ export function roomPlan(era: EraKey, decor?: readonly string[]): RoomPlan {
   };
 }
 
-export type AgentActivity = 'drafting' | 'building' | 'checks' | 'review' | 'shipping' | 'chatting' | 'reading' | 'resting' | 'paused' | 'offline';
+// Every activity is awake (the board, 19 October 2026): an agent with no work, the agents offline or a role
+// the board paused, putters about the room like any idle agent; only work changes what it does.
+export type AgentActivity = 'drafting' | 'building' | 'checks' | 'review' | 'shipping' | 'chatting' | 'reading' | 'resting';
 
 export type AgentPlace = {
   role: Role;
@@ -125,7 +127,6 @@ export type AgentPlace = {
   card: Pick<Card, 'id' | 'title'> | null;
   /** What it is doing, in one plain sentence from fixed words. */
   doing: string;
-  asleep: boolean;
   /** Chatting partner, for the speech marks between two idle agents. */
   partner: string | null;
   /** Where an agent with no card is in the room (idleHaunts); null at a station. */
@@ -155,17 +156,19 @@ export function placeAgents(snapshot: Snapshot, plan: RoomPlan, now: number = Da
   const out: AgentPlace[] = [];
   const idle: Role[] = [];
   const say = (text: string, card: Pick<Card, 'title'> | null) => (card === null ? text : text.replace('{title}', card.title));
-  // While the agents are offline nobody works or wanders: each one sleeps at an idle spot (below), and
-  // says so (docs/specs/honest-status.md).
+  // While the agents are offline nobody works: every agent putters about the room as an idle one does,
+  // and says the agents are offline (docs/specs/honest-status.md). A role the board paused putters too.
   const offline = agentsOffline(snapshot);
+  const says = new Map<string, string>();
   for (const role of roomRoles(snapshot)) {
     if (offline) {
+      says.set(role.id, copy.agentsOffline);
       idle.push(role);
       continue;
     }
-    const status = teamStatus(role, snapshot);
-    if (status.kind === 'paused') {
-      out.push({ role, station: 'lounge', spot: take('lounge'), activity: 'paused', card: null, doing: copy.studioRoom.doing.paused, asleep: true, partner: null, haunt: 'lounge' });
+    if (teamStatus(role, snapshot).kind === 'paused') {
+      says.set(role.id, copy.studioRoom.doing.paused);
+      idle.push(role);
       continue;
     }
     const own = working.find((card) => card.executor_role_id === role.id);
@@ -178,7 +181,6 @@ export function placeAgents(snapshot: Snapshot, plan: RoomPlan, now: number = Da
         activity: building ? 'building' : 'checks',
         card: own,
         doing: say(building ? copy.studioRoom.doing.building : copy.studioRoom.doing.checks, own),
-        asleep: false,
         partner: null,
         haunt: null,
       });
@@ -186,23 +188,23 @@ export function placeAgents(snapshot: Snapshot, plan: RoomPlan, now: number = Da
     }
     if (role.title === 'QA' && gated.length > 0) {
       const card = gated[0]!;
-      out.push({ role, station: 'bench', spot: take('bench'), activity: 'checks', card, doing: say(copy.studioRoom.doing.checks, card), asleep: false, partner: null, haunt: null });
+      out.push({ role, station: 'bench', spot: take('bench'), activity: 'checks', card, doing: say(copy.studioRoom.doing.checks, card), partner: null, haunt: null });
       continue;
     }
     if (/director/i.test(role.title) && working.length > 0) {
       const card = gated[0] ?? working[0]!;
-      out.push({ role, station: 'gate', spot: take('gate'), activity: 'review', card, doing: say(copy.studioRoom.doing.review, card), asleep: false, partner: null, haunt: null });
+      out.push({ role, station: 'gate', spot: take('gate'), activity: 'review', card, doing: say(copy.studioRoom.doing.review, card), partner: null, haunt: null });
       continue;
     }
     if (/designer/i.test(role.title) && snapshot.supply?.drafting === true) {
-      out.push({ role, station: 'whiteboard', spot: take('whiteboard'), activity: 'drafting', card: null, doing: copy.studioRoom.doing.drafting, asleep: false, partner: null, haunt: null });
+      out.push({ role, station: 'whiteboard', spot: take('whiteboard'), activity: 'drafting', card: null, doing: copy.studioRoom.doing.drafting, partner: null, haunt: null });
       continue;
     }
     const shipped = snapshot.cards.find(
       (card) => card.stage === 'live' && card.executor_role_id === role.id && card.live_at !== null && now - Date.parse(card.live_at) < SHIP_SHOWN_MS,
     );
     if (shipped !== undefined) {
-      out.push({ role, station: 'dock', spot: take('dock'), activity: 'shipping', card: shipped, doing: say(copy.studioRoom.doing.shipping, shipped), asleep: false, partner: null, haunt: null });
+      out.push({ role, station: 'dock', spot: take('dock'), activity: 'shipping', card: shipped, doing: say(copy.studioRoom.doing.shipping, shipped), partner: null, haunt: null });
       continue;
     }
     idle.push(role);
@@ -224,11 +226,6 @@ export function placeAgents(snapshot: Snapshot, plan: RoomPlan, now: number = Da
     return free ?? null;
   };
   idle.forEach((role, i) => {
-    if (offline) {
-      const at = alone();
-      out.push({ role, station: 'lounge', spot: at?.spot ?? take('lounge'), activity: 'offline', card: null, doing: copy.agentsOffline, asleep: true, partner: null, haunt: at?.haunt ?? 'lounge' });
-      return;
-    }
     const pair = i % 2 === 0 ? idle[i + 1] : idle[i - 1];
     const chatting = pair !== undefined;
     let at: { haunt: HauntKey; spot: Spot } | null;
@@ -254,8 +251,7 @@ export function placeAgents(snapshot: Snapshot, plan: RoomPlan, now: number = Da
       spot: spot ?? take('lounge'),
       activity: chatting ? 'chatting' : i === 0 ? 'resting' : 'reading',
       card: null,
-      doing: chatting ? copy.studioRoom.doing.chatting.replace('{name}', pair!.name) : i === 0 ? copy.studioRoom.doing.resting : copy.studioRoom.doing.reading,
-      asleep: false,
+      doing: says.get(role.id) ?? (chatting ? copy.studioRoom.doing.chatting.replace('{name}', pair!.name) : i === 0 ? copy.studioRoom.doing.resting : copy.studioRoom.doing.reading),
       partner: chatting ? pair!.id : null,
       haunt: spot === null ? 'lounge' : haunt,
     });

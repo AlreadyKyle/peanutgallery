@@ -54,19 +54,21 @@ test.describe('under reduced motion', () => {
   });
 });
 
-// docs/specs/honest-status.md: while the agents are offline nobody works or wanders. Every agent sleeps
-// at an idle spot, and its role card says the agents are offline.
+// docs/specs/honest-status.md: while the agents are offline nobody works, but nobody sleeps either (the
+// board, 19 October 2026): every agent putters about the room like an idle one, eyes open, with no
+// sleep mark, and its role card says the agents are offline.
 test.describe('while the agents are offline', () => {
   test.use({ studio: OFFLINE_STUDIO });
 
-  test('every agent sleeps where it stands, and its role card says so', async ({ page }) => {
+  test('every agent putters about awake, and its role card says the agents are offline', async ({ page }) => {
     await page.goto('/');
     const agents = page.locator('.floor-plate .studio-agent');
     await expect(agents.first()).toBeVisible();
-    expect(new Set(await agents.evaluateAll((els) => els.map((el) => el.getAttribute('data-activity'))))).toEqual(new Set(['offline']));
+    for (const activity of await agents.evaluateAll((els) => els.map((el) => el.getAttribute('data-activity')))) expect(['chatting', 'reading', 'resting']).toContain(activity);
+    await expect(page.locator('.floor-plate .avatar-lid')).toHaveCount(0);
+    await expect(page.locator('.floor-plate .avatar-eye').first()).toBeAttached();
     const before = await transforms(page);
-    await page.waitForTimeout(3000);
-    expect(await transforms(page)).toEqual(before);
+    await expect.poll(async () => (await transforms(page)).filter((t, i) => t !== before[i]).length, { timeout: 15_000 }).toBeGreaterThan(0);
     await agents.first().hover({ force: true });
     await expect(page.locator('.role-card .role-card-doing')).toHaveText(copy.agentsOffline);
     await expect(agents.first()).toHaveAttribute('aria-label', new RegExp(`\\. ${copy.agentsOffline.replace('.', '\\.')}$`));

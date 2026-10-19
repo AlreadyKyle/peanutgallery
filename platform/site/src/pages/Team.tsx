@@ -43,11 +43,9 @@ function RoleRow({ role, status, snapshot }: { role: Role; status: TeamStatus; s
   const coming = !onTheTeam(status);
   return (
     <li className="agent" id={`agent-${role.id}`} data-status={status.kind} data-kind={role.code_only === true ? 'code' : undefined}>
-      {/* Awake while the studio is paused (the board, 23 Sep 2026: running agents have their eyes
-          open); asleep when the board has paused this one agent, and every role still to come
-          (the board's #75 call), with its smaller avatar. A member on the team bobs as an idle
-          agent in the live studio does; a role still to come holds still. */}
-      <Avatar note={role.species_note} asleep={coming || (status.kind === 'paused' && status.by === 'role')} size={coming ? 56 : 96} idle={!coming} />
+      {/* Eyes always open (the board, 19 October 2026): every agent bobs as an idle agent in the
+          live studio does, paused or not. */}
+      <Avatar note={role.species_note} size={coming ? 56 : 96} idle />
       <h3 id={`role-${role.id}`}>{role.name}</h3>
       <p className="agent-kind">{kind}</p>
       {role.description === null || role.description.trim() === '' ? null : <p>{role.description}</p>}
@@ -81,13 +79,13 @@ function RoleRow({ role, status, snapshot }: { role: Role; status: TeamStatus; s
 /**
  * A role that does not run yet (Starts later, Planned) as one entry of a compact list under the
  * running team's boxes (the full pass, S25: ten boxes of roles still to come took about half the page
- * on a phone): its sleeping avatar beside its name, what it will do, and when it starts. No box, no
+ * on a phone): its avatar, bobbing as an idle agent does, beside its name, what it will do, and when it starts. No box, no
  * model and no cost, since it has none yet.
  */
 function LaterRow({ role, status }: { role: Role; status: TeamStatus }) {
   return (
     <li className="later-role" id={`agent-${role.id}`} data-status={status.kind}>
-      <Avatar note={role.species_note} asleep size={40} />
+      <Avatar note={role.species_note} size={40} idle />
       <h3 id={`role-${role.id}`}>{role.title === role.name ? role.name : `${role.name} · ${role.title}`}</h3>
       {role.description === null || role.description.trim() === '' ? null : <p>{role.description}</p>}
       {status.sentence === null ? null : <p className="later-when">{status.sentence}</p>}

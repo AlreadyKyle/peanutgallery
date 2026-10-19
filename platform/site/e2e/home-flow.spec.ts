@@ -129,10 +129,11 @@ test.describe('home flow while the agents are offline', () => {
     // No banner and no new box: the line is the only change, and nothing says paused (decision 62).
     await expect(page.locator('main p.notice')).toHaveCount(0);
     await expect(main).not.toContainText(/The agents are paused|The board has paused the agents/);
-    // In the room every agent sleeps.
+    // In the room nobody works, and nobody sleeps (the board, 19 October 2026): every agent putters about.
     const agents = page.locator('.floor-plate .studio-agent');
     await expect(agents.first()).toBeVisible();
-    expect(new Set(await agents.evaluateAll((els) => els.map((el) => el.getAttribute('data-activity'))))).toEqual(new Set(['offline']));
+    for (const activity of await agents.evaluateAll((els) => els.map((el) => el.getAttribute('data-activity')))) expect(['chatting', 'reading', 'resting']).toContain(activity);
+    await expect(page.locator('.floor-plate .avatar-lid')).toHaveCount(0);
   });
 });
 

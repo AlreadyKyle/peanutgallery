@@ -15,7 +15,8 @@ for (const reason of [null, 'awaiting_credit', 'spend_limit', 'incident', 'board
         await page.goto('/');
         await expect(page.locator('main #fund p.status-line, main .fund-status p.status-line').first()).toHaveText('2 cards are open for funding.');
         await expect(page.locator('p.status-line svg[data-glyph="pause"]')).toHaveCount(0);
-        await expect(page.locator('.team-strip svg.avatar[data-pose="awake"]')).toHaveCount(3);
+        await expect(page.locator('.team-strip svg.avatar')).toHaveCount(3);
+        await expect(page.locator('svg.avatar .avatar-lid')).toHaveCount(0);
         for (const path of PAGES) {
           await page.goto(path);
           await expect(page.locator('main h1')).toBeVisible();
