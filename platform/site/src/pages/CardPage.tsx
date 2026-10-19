@@ -20,7 +20,7 @@ import { SOURCE_PARAM } from '../lib/count';
 import { siteEnv } from '../lib/env';
 import { formatClock, formatDateTime, formatInteger, shortSha } from '../lib/format';
 import { legal } from '../lib/legal';
-import type { Snapshot } from '../lib/source';
+import { agentsOffline, type Snapshot } from '../lib/source';
 import { useStudio } from '../lib/studio';
 
 // A card's own page, /card/:id (docs/specs/supporter-pages.md), in the card lane: its money shows only
@@ -101,13 +101,22 @@ export function playFromCard(playUrl: string): string | null {
  * The card's state line over its facts: a shipped card's stamp (CardStamp, kernel, adds the cost), or
  * a building or checks card's build clock with, on a Dust card, a plain link to play Dust meanwhile.
  * A building card has no Fund button, so the clock never sits beside one. A stopped card has neither.
+ * While the agents are offline a building or checks card says so in the clock's place, with no link
+ * to play while they work (docs/specs/honest-status.md).
  */
-function StateLine({ detail }: { detail: CardDetail }) {
+function StateLine({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }) {
   const card = detail.card;
   if (detail.stopped !== null) return null;
   if (card.stage === 'live') {
     const when = liveWhen(detail.milestones);
     return when === null ? null : <CardStamp detail={detail} when={when} />;
+  }
+  if ((card.stage === 'building' || card.stage === 'gated') && agentsOffline(snapshot)) {
+    return (
+      <p className="card-state" data-fact="offline">
+        {copy.agentsOffline}
+      </p>
+    );
   }
   const clock = buildClock(card.stage, detail.milestones.started_at, Date.now());
   if (clock === null) return null;
@@ -138,13 +147,13 @@ function faceShowsSpecRows(detail: CardDetail): boolean {
   return face === 'open' || face === 'picked' || face === 'funded';
 }
 
-function Facts({ detail }: { detail: CardDetail }) {
+function Facts({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }) {
   const m = detail.milestones;
   const sha = detail.card.commit_sha;
   return (
     <section className="section" aria-labelledby="card-facts">
       <h2 id="card-facts">{words.factsHeading}</h2>
-      <StateLine detail={detail} />
+      <StateLine detail={detail} snapshot={snapshot} />
       <CardFacts detail={detail} onFace={faceShowsSpecRows(detail)}>
         {m.gate_at === null || m.gate === null ? null : (
           <div data-fact="gate">
@@ -224,7 +233,7 @@ function Detail({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }
           </p>
         ) : null}
       </section>
-      <Facts detail={detail} />
+      <Facts detail={detail} snapshot={snapshot} />
       <Changed detail={detail} />
       <SuggestedBy cardId={detail.card.id} />
       {detail.stopped === null ? null : (

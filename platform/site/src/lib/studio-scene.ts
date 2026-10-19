@@ -1,7 +1,7 @@
 import type { StudioEra } from './community-types';
 import { copy } from './copy';
 import { onTheTeam, teamStatus } from './roster';
-import type { Card, Role, Snapshot } from './source';
+import { agentsOffline, type Card, type Role, type Snapshot } from './source';
 
 // The live studio's plan (docs/specs/final-state.md, The live studio): the room an era gives, its
 // stations, and where each agent stands from the live data. Drafting is at the whiteboard, building
@@ -114,7 +114,7 @@ export function roomPlan(era: EraKey, decor?: readonly string[]): RoomPlan {
   };
 }
 
-export type AgentActivity = 'drafting' | 'building' | 'checks' | 'review' | 'shipping' | 'chatting' | 'reading' | 'resting' | 'paused';
+export type AgentActivity = 'drafting' | 'building' | 'checks' | 'review' | 'shipping' | 'chatting' | 'reading' | 'resting' | 'paused' | 'offline';
 
 export type AgentPlace = {
   role: Role;
@@ -154,7 +154,14 @@ export function placeAgents(snapshot: Snapshot, plan: RoomPlan, now: number = Da
   const out: AgentPlace[] = [];
   const idle: Role[] = [];
   const say = (text: string, card: Pick<Card, 'title'> | null) => (card === null ? text : text.replace('{title}', card.title));
+  // While the agents are offline nobody works or wanders: each one sleeps at an idle spot (below), and
+  // says so (docs/specs/honest-status.md).
+  const offline = agentsOffline(snapshot);
   for (const role of roomRoles(snapshot)) {
+    if (offline) {
+      idle.push(role);
+      continue;
+    }
     const status = teamStatus(role, snapshot);
     if (status.kind === 'paused') {
       out.push({ role, station: 'lounge', spot: take('lounge'), activity: 'paused', card: null, doing: copy.studioRoom.doing.paused, asleep: true, partner: null, haunt: 'lounge' });
@@ -216,6 +223,11 @@ export function placeAgents(snapshot: Snapshot, plan: RoomPlan, now: number = Da
     return free ?? null;
   };
   idle.forEach((role, i) => {
+    if (offline) {
+      const at = alone();
+      out.push({ role, station: 'lounge', spot: at?.spot ?? take('lounge'), activity: 'offline', card: null, doing: copy.agentsOffline, asleep: true, partner: null, haunt: at?.haunt ?? 'lounge' });
+      return;
+    }
     const pair = i % 2 === 0 ? idle[i + 1] : idle[i - 1];
     const chatting = pair !== undefined;
     let at: { haunt: HauntKey; spot: Spot } | null;

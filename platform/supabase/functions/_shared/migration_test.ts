@@ -314,6 +314,8 @@ Deno.test("migrations on PGlite", {
         "20261018120000_card_suggested_by.sql",
         // The copy audit's plain role descriptions on /team (PLAN.md §10 decision 76).
         "20261018130000_plain_role_descriptions.sql",
+        // honest-status (docs/specs/honest-status.md): drafting only while a draft runs, and offline.
+        "20261019000000_honest_status.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);

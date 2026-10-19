@@ -125,9 +125,11 @@ const HOME_FUND_CARDS = 3;
 const SIGNAL = 'rgb(17, 17, 17)'; // --signal: ink since the board's call of 23 Sep 2026
 const PAPER = 'rgb(255, 255, 255)';
 const INK = 'rgb(17, 17, 17)';
-// The status line: the open and building counts, and never a paused sentence (decision 62).
+// The status line: the open and building counts, or "The agents are offline." in the building
+// count's place while the dispatcher has not checked in for 24 hours (decision 77), and never a
+// paused sentence (decision 62).
 const STATUS_LINE =
-  /^(No card is open for funding right now\.|The agents are drafting the next card\.|1 card is open for funding\.|\d[\d,]* cards are open for funding\.)( (1 card is|\d[\d,]* cards are) being built\.)?$/;
+  /^(No card is open for funding right now\.|The agents are drafting the next card\.|1 card is open for funding\.|\d[\d,]* cards are open for funding\.)( (1 card is|\d[\d,]* cards are) being built\.| The agents are offline\.)?$/;
 // Fund the next card in line's second line with the funding order loaded: the next card, or the waits line.
 const NEXT_IN_LINE = /^Next in line: (.+)$/;
 const WAITS_LINE = 'No card is open for funding right now. Your contribution waits for the next card to open, then funds it.';

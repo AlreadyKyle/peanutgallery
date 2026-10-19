@@ -18,6 +18,7 @@ import { siteEnv } from '../lib/env';
 import { useLastVisit } from '../lib/last-visit';
 import { legal } from '../lib/legal';
 import { useLiveHome, type HomeView } from '../lib/live';
+import { agentsOffline } from '../lib/source';
 import { useStudioMorph } from '../lib/studio-morph';
 import { teamStrip } from '../lib/roster';
 import { unavailableLine, useStudio, type StudioState } from '../lib/studio';
@@ -42,22 +43,26 @@ function Count({ n, words }: { n: number; words: { one: string; many: string; re
 
 /**
  * The status line: one true sentence from the snapshot home is drawn from. It says how many cards
- * are open and how many are building. It never says the studio is paused (docs/PLAN.md §10
- * decision 62): the public site shows no paused notice.
+ * are open and how many are building, or, while the agents are offline, that they are instead of
+ * what they build (docs/specs/honest-status.md, PLAN.md §10 decision 77). It never says the studio
+ * is paused (decision 62): the public site shows no paused notice.
  */
 function StatusLine({ view }: { view: HomeView }) {
   const { fund, now } = view.groups;
+  const offline = agentsOffline(view.snapshot);
   return (
     <p className="status-line">
       <span>
         {fund.length > 0 ? (
           <Count n={fund.length} words={copy.status.open} />
-        ) : view.snapshot.supply?.drafting === true ? (
+        ) : !offline && view.snapshot.supply?.drafting === true ? (
           copy.status.drafting
         ) : (
           copy.status.openNone
         )}
-        {now.length === 0 ? null : (
+        {offline ? (
+          ` ${copy.agentsOffline}`
+        ) : now.length === 0 ? null : (
           <>
             {' '}
             <Count n={now.length} words={copy.status.building} />

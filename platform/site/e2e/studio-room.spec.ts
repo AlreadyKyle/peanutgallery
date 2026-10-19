@@ -1,4 +1,6 @@
+import { copy } from '../src/lib/copy';
 import { expect, test } from './fixtures';
+import { OFFLINE_STUDIO } from './prod-studio';
 
 // The live studio's room (DESIGN.md, The live studio): agents with no card wander the room instead
 // of standing still, an agent under the pointer holds still with its role card open, the room draws
@@ -49,5 +51,24 @@ test.describe('under reduced motion', () => {
     await page.waitForTimeout(3000);
     expect(await transforms(page)).toEqual(before);
     expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
+  });
+});
+
+// docs/specs/honest-status.md: while the agents are offline nobody works or wanders. Every agent sleeps
+// at an idle spot, and its role card says the agents are offline.
+test.describe('while the agents are offline', () => {
+  test.use({ studio: OFFLINE_STUDIO });
+
+  test('every agent sleeps where it stands, and its role card says so', async ({ page }) => {
+    await page.goto('/');
+    const agents = page.locator('.floor-plate .studio-agent');
+    await expect(agents.first()).toBeVisible();
+    expect(new Set(await agents.evaluateAll((els) => els.map((el) => el.getAttribute('data-activity'))))).toEqual(new Set(['offline']));
+    const before = await transforms(page);
+    await page.waitForTimeout(3000);
+    expect(await transforms(page)).toEqual(before);
+    await agents.first().hover({ force: true });
+    await expect(page.locator('.role-card .role-card-doing')).toHaveText(copy.agentsOffline);
+    await expect(agents.first()).toHaveAttribute('aria-label', new RegExp(`\\. ${copy.agentsOffline.replace('.', '\\.')}$`));
   });
 });

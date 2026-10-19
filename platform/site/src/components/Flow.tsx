@@ -5,7 +5,7 @@ import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { formatDate } from '../lib/format';
 import { legal } from '../lib/legal';
-import type { Card, Snapshot } from '../lib/source';
+import { agentsOffline, type Card, type Snapshot } from '../lib/source';
 import { CardFace } from './Card';
 import { CoinMark, FundAgreement, liveFundLink, type SpecRow } from './Funding';
 import { Glyph } from './Glyph';
@@ -22,9 +22,10 @@ function countLine(n: number): string {
   return n === 1 ? copy.flow.countOne : copy.flow.count.replace('{n}', String(n));
 }
 
-/** The Game Designer's state, from the studio's supply: drafting now, done for today, or waiting. */
+/** The Game Designer's state, from the studio's supply: offline, drafting now, done for today, or waiting. */
 export function draftingLine(snapshot: Snapshot): { text: string; drafting: boolean } {
   const supply = snapshot.supply ?? null;
+  if (supply?.offline === true) return { text: copy.agentsOffline, drafting: false };
   if (supply?.drafting === true) return { text: copy.flow.drafting, drafting: true };
   if (supply?.reason === 'daily_limit' && supply.run_limit > 0) {
     return { text: copy.flow.draftingDone.replace('{n}', String(supply.run_limit)), drafting: false };
@@ -33,9 +34,9 @@ export function draftingLine(snapshot: Snapshot): { text: string; drafting: bool
   return { text: copy.flow.draftingIdle, drafting: false };
 }
 
-/** Building's empty line: when a funded card starts, unless the studio is not taking work now. */
+/** Building's empty line: when a funded card starts, unless the agents are offline. */
 export function buildingEmptyLine(snapshot: Snapshot): string {
-  return snapshot.supply?.stalled === true ? copy.flow.lanes.building.emptyStalled : copy.flow.lanes.building.empty;
+  return agentsOffline(snapshot) ? copy.flow.lanes.building.emptyOffline : copy.flow.lanes.building.empty;
 }
 
 /** A lane's heading: its step on the rail, its name and how many cards it holds. */
@@ -52,7 +53,7 @@ function LaneHead({ lane, step, count }: { lane: FlowLane; step: number; count: 
   );
 }
 
-/** Who acts in a lane. In Next up it is the Game Designer's state: drafting now, done for today, or waiting. */
+/** Who acts in a lane. In Next up it is the Game Designer's state: offline, drafting now, done for today, or waiting. */
 function LaneWho({ lane, snapshot }: { lane: FlowLane; snapshot: Snapshot }) {
   if (lane !== 'next') return <p className="flow-who">{copy.flow.lanes[lane].who}</p>;
   const designer = draftingLine(snapshot);

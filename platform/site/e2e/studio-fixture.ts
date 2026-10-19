@@ -35,7 +35,7 @@ export type StudioFixture = {
   thanks?: Record<string, Record<string, unknown>>;
   /** site_reports()' reports, newest first (docs/specs/studio-reports.md); none when left out. */
   reports?: Record<string, unknown>[];
-  /** public_supply (docs/specs/home-flow.md), the studio row's supply; left out as before it existed. */
+  /** public_supply (docs/specs/home-flow.md, docs/specs/honest-status.md), the studio row's supply; left out as before it existed. */
   supply?: Record<string, unknown>;
 };
 

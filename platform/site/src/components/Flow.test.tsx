@@ -61,7 +61,7 @@ function snapshot(cards: Card[], over: Partial<Snapshot> = {}): Snapshot {
 }
 
 function supply(over: Partial<Supply> = {}): Supply {
-  return { drafting: false, stalled: false, short: false, reason: null, runs_today: 0, run_limit: 3, next_check_at: null, ...over };
+  return { drafting: false, offline: false, short: false, reason: null, runs_today: 0, run_limit: 3, next_check_at: null, ...over };
 }
 
 function renderFlow(snap: Snapshot) {
@@ -218,6 +218,7 @@ describe('MachineFlow', () => {
       ['not short', supply({ reason: 'not_short' }), copy.flow.draftingIdle, null],
       ['idle', supply(), copy.flow.draftingIdle, null],
       ['without a supply row', null, copy.flow.draftingIdle, null],
+      ['offline', supply({ offline: true, reason: 'already_queued' }), copy.agentsOffline, null],
     ] as const)("says the Game Designer's state when %s", (_, value, text, drafting) => {
       renderFlow(snapshot(planned(1), { supply: value }));
       const who = lane('next').querySelector('p.flow-who')!;
@@ -389,19 +390,31 @@ describe('draftingLine', () => {
   });
 });
 
-describe('a draft that waited since an earlier day', () => {
-  it('is read as stalled: nothing is drafting, and Building promises no start time', () => {
-    // Production on 18 October 2026: a draft queued on 15 October that nothing has started.
-    const stalled = supplyFrom({ drafting: true, short: true, reason: 'already_queued', runs_today: 0, run_limit: 12, next_check_at: null });
-    expect(stalled).toMatchObject({ drafting: false, stalled: true });
-    expect(draftingLine(snapshot([], { supply: stalled }))).toEqual({ text: copy.flow.draftingIdle, drafting: false });
-    expect(buildingEmptyLine(snapshot([], { supply: stalled }))).toBe(copy.flow.lanes.building.emptyStalled);
-    expect(copy.flow.lanes.building.emptyStalled).not.toMatch(/hour|minute|soon/);
-    // A draft made today is drafting, and the promise stands.
-    const today = supplyFrom({ drafting: true, short: true, reason: 'already_queued', runs_today: 1, run_limit: 12, next_check_at: null });
-    expect(today).toMatchObject({ drafting: true, stalled: false });
-    expect(buildingEmptyLine(snapshot([], { supply: today }))).toBe(copy.flow.lanes.building.empty);
-    expect(supplyFrom({ drafting: false, runs_today: 0 })).toMatchObject({ drafting: false, stalled: false });
+describe('the agents offline (docs/specs/honest-status.md)', () => {
+  it('says so in Next up, drafts nothing, and Building promises no start time', () => {
+    // Production on 19 October 2026: the dispatcher last checked in on 15 October, a draft queued since.
+    const offline = supplyFrom({ drafting: false, offline: true, short: true, reason: 'already_queued', runs_today: 0, run_limit: 12, next_check_at: null });
+    expect(offline).toMatchObject({ drafting: false, offline: true });
+    expect(draftingLine(snapshot([], { supply: offline }))).toEqual({ text: copy.agentsOffline, drafting: false });
+    expect(buildingEmptyLine(snapshot([], { supply: offline }))).toBe(copy.flow.lanes.building.emptyOffline);
+    expect(copy.flow.lanes.building.emptyOffline).not.toMatch(/hour|minute|soon/);
+    // An offline flag wins over a drafting one, whatever the database said.
+    expect(supplyFrom({ drafting: true, offline: true })).toMatchObject({ drafting: false, offline: true });
+    // Online, a running draft is drafting and the promise stands.
+    const online = supplyFrom({ drafting: true, offline: false, short: true, reason: 'already_queued', runs_today: 1, run_limit: 12, next_check_at: null });
+    expect(online).toMatchObject({ drafting: true, offline: false });
+    expect(buildingEmptyLine(snapshot([], { supply: online }))).toBe(copy.flow.lanes.building.empty);
+    // A document from before the flag reads as online, with the database's drafting as it is.
+    expect(supplyFrom({ drafting: true, runs_today: 0 })).toMatchObject({ drafting: true, offline: false });
+  });
+
+  it("says so on a funded card in Building, in the waiting line's place", () => {
+    const funded = card({ id: 'f', stage: 'funded', funding_target_usd: 3, funded_usd: 3 });
+    renderFlow(snapshot([funded], { supply: supply({ offline: true }) }));
+    expect(lane('building').querySelector('p.card-waiting')?.textContent).toBe(copy.agentsOffline);
+    cleanup();
+    renderFlow(snapshot([funded], { supply: supply() }));
+    expect(lane('building').querySelector('p.card-waiting')?.textContent).toBe(copy.waitingForAgents);
   });
 });
 

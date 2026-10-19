@@ -88,6 +88,11 @@ export const copy = {
   statusRejected: 'Not built',
   statusPlanned: 'Planned',
   waitingForAgents: 'Waiting for the agents',
+  // Said where a line would say what the agents are doing, while the dispatcher has not checked in for
+  // 24 hours (Supply.offline; docs/specs/honest-status.md, PLAN.md §10 decision 77): home's status
+  // line and Next up, a funded card's waiting line, a building card's clock, the room and /thanks. The
+  // one studio state the site names; a pause still shows nothing (decision 62).
+  agentsOffline: 'The agents are offline.',
   // Home's card band (docs/specs/home-flow.md): the cards open for funding first, then three lanes in
   // the order a card moves through them. Each lane says who acts in it, shows at most three cards and
   // never stands empty: a lane with no card says what happens next instead.
@@ -107,8 +112,8 @@ export const copy = {
         title: 'Building',
         who: 'A builder agent makes the change, then automated checks test it.',
         empty: 'Nothing is being built right now. A funded card starts within about half an hour.',
-        // While the studio is not taking work (Supply.stalled): no start time is promised.
-        emptyStalled: 'Nothing is being built right now.',
+        // While the agents are offline (Supply.offline): no start time is promised.
+        emptyOffline: 'Nothing is being built right now.',
         lastBuilt: 'Last built: {title}, shipped {date}.',
       },
       shipped: {

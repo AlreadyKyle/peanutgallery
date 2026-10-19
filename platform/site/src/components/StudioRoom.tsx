@@ -151,6 +151,7 @@ function ActivityMark({ place }: { place: AgentPlace }) {
         </g>
       );
     case 'paused':
+    case 'offline':
       return (
         <g className="agent-mark" transform={`translate(6 ${y + 4})`}>
           <path className="mark-ink" d="M-4 -6h7l-7 7h7M4 -12h5l-5 5h5" />
