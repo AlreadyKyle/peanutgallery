@@ -2129,10 +2129,11 @@ Deno.test("migrations on PGlite", {
             `select table_name, privilege_type from information_schema.role_table_grants where grantee = $1 and table_schema = 'public' order by 1, 2`,
             [grantee],
           );
-          // agent-upkeep's findings (docs/specs/agent-upkeep.md): authenticated selects it, and its
-          // policy lets only a board member read a row.
+          // agent-upkeep's findings (docs/specs/agent-upkeep.md) and moderator-pause-only's pause log
+          // (docs/specs/moderator-pause-only.md): authenticated selects them, and each policy lets only a
+          // board member read a row.
           const want = grantee === "authenticated"
-            ? [...expected, { table_name: "findings", privilege_type: "SELECT" }].sort((a, b) => a.table_name.localeCompare(b.table_name))
+            ? [...expected, ...["findings", "studio_pause_log"].map((table_name) => ({ table_name, privilege_type: "SELECT" }))].sort((a, b) => a.table_name.localeCompare(b.table_name))
             : expected;
           assertEquals(grants, want, grantee);
           // cards is granted column by column. actual_usd counts founder-billed

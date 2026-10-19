@@ -26,7 +26,7 @@ Out: role pauses (`set_role_pause` already lets only the board resume a role); `
 - `pause_reason`: the reason set, or for a resume the reason of the pause it lifted;
 - `created_at`.
 
-An after trigger on `studio_state` (`studio_pause_logged`, security definer) writes the row, so no caller needs a grant on the log. The log is append-only: the `refuse_money_change` triggers refuse every update, delete and truncate, the database owner's included, and no role holds more than select on it. The board and the moderator read it at either factor (row level security through `is_board_member()`); anon is refused, a signed-in outsider reads no row, and the backup role reads it like every table.
+An after trigger on `studio_state` (`studio_pause_logged`, security definer) writes the row, so no caller needs a grant on the log. The log starts when the migration runs: a pause already in force then has no row of its own, and its resume names its reason. The log is append-only: the `refuse_money_change` triggers refuse every update, delete and truncate, the database owner's included, and no role holds more than select on it. The board and the moderator read it at either factor (row level security through `is_board_member()`); anon is refused, a signed-in outsider reads no row, and the backup role reads it like every table.
 
 **The board's panel.**
 - The moderator sees Pause the agents with the reason and Pause agents, no Resume, and the line "Only the board can resume them, at the second factor."; its section is named Pause.
