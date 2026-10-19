@@ -356,7 +356,7 @@ describe('the Terms and the Refunds page in force (docs/specs/legal-copy.md)', (
   });
 
   it('states the agreement before checkout with both pages and the age condition', () => {
-    for (const line of [legal.contributeAgreement, legal.fundAgreement]) {
+    for (const line of [legal.fundAgreement]) {
       expect(line).toContain('{terms}');
       expect(line).toContain('{refunds}');
       expect(line).toMatch(/adult/);

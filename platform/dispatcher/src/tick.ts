@@ -393,7 +393,7 @@ async function alertMoney(deps: TickDeps, studio: StudioState, money: MoneyState
     const month = newYorkMonth(now);
     const message =
       studio.monthly_cap_usd === null
-        ? 'studio_state has no monthly cap, so no card starts. Set the monthly cap on /board.'
+        ? 'studio_state has no monthly cap, so no card starts. Set studio_state.monthly_cap_usd by SQL; the board shows the caps read-only.'
         : `The monthly cap of $${studio.monthly_cap_usd.toFixed(2)} stopped the agents for ${month}.`;
     await deps.alert.notifyOnce(`monthly_cap:${month}`, message);
   } else if (first.reason === 'tier_cap' && studio.anthropic_tier_cap_usd !== null) {

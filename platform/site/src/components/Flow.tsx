@@ -33,6 +33,11 @@ export function draftingLine(snapshot: Snapshot): { text: string; drafting: bool
   return { text: copy.flow.draftingIdle, drafting: false };
 }
 
+/** Building's empty line: when a funded card starts, unless the studio is not taking work now. */
+export function buildingEmptyLine(snapshot: Snapshot): string {
+  return snapshot.supply?.stalled === true ? copy.flow.lanes.building.emptyStalled : copy.flow.lanes.building.empty;
+}
+
 /** A lane's heading: its step on the rail, its name and how many cards it holds. */
 function LaneHead({ lane, step, count }: { lane: FlowLane; step: number; count: number }) {
   return (
@@ -81,7 +86,7 @@ function LaneBody({ lane, cards, snapshot, lastShipped }: { lane: FlowLane; card
   if (lane === 'building') {
     return (
       <EmptyTile>
-        <p>{copy.flow.lanes.building.empty}</p>
+        <p>{buildingEmptyLine(snapshot)}</p>
         {lastShipped === undefined ? null : (
           <p className="card-meta">
             {copy.flow.lanes.building.lastBuilt.replace('{title}', lastShipped.title).replace('{date}', formatDate(shippedAt(lastShipped)))}
@@ -102,8 +107,10 @@ export const HOME_FUND_CARDS = 3;
 
 /**
  * The cards open for funding, first on home and as big as a card gets: full faces in the waterfall's
- * order, the agreement under them, and a link to the rest on /contribute. With none open, a panel
- * that funds the next card in line, which is also what pays the agents to draft and build the next one.
+ * order, the agreement under them, a link to the rest on /contribute, then the Machine card. With none
+ * open, a panel that funds the next card in line beside the Machine card, and the agreement under
+ * both. The agreement is said once in the Fund station and covers every link to checkout in it, so
+ * the Machine card passed here draws none of its own.
  */
 export function FundNow({
   cards,
@@ -114,29 +121,30 @@ export function FundNow({
   cards: Card[];
   snapshot: Snapshot;
   changed?: Readonly<Record<string, readonly SpecRow[]>>;
-  /** The Machine card, set beside the next card in line (docs/specs/brand.md, Home). */
+  /** The Machine card, set under the cards (docs/specs/brand.md, Home), drawn with agreement={false}. */
   machine?: ReactNode;
 }) {
   const env = siteEnv();
+  const machineLinks = machine !== null && env.stripePaymentLinkUrl !== '';
   if (cards.length === 0) {
+    // The Game Designer's drafting line is Next up's, so the panel does not say it twice.
     return (
-      <div className="fund-ways">
-        <div className="fund-empty">
-          <p className="fund-empty-title">{legal.pickForMe}</p>
-          <p>{legal.fundEmptyBody}</p>
-          <p className="fund-empty-agent">
-            <Glyph name="pencil" />
-            <span>{draftingLine(snapshot).text}</span>
-          </p>
-          {env.stripePaymentLinkUrl === '' ? null : (
-            <Link className="button btn-coin" to="/contribute">
-              <CoinMark />
-              {copy.contribute}
-            </Link>
-          )}
+      <>
+        <div className="fund-ways">
+          <div className="fund-empty">
+            <p className="fund-empty-title">{legal.pickForMe}</p>
+            <p>{legal.fundEmptyBody}</p>
+            {env.stripePaymentLinkUrl === '' ? null : (
+              <Link className="button btn-coin" to="/contribute">
+                <CoinMark />
+                {copy.contribute}
+              </Link>
+            )}
+          </div>
+          {machine}
         </div>
-        {machine}
-      </div>
+        {machineLinks ? <FundAgreement /> : null}
+      </>
     );
   }
   const shown = cards.slice(0, HOME_FUND_CARDS);
@@ -147,25 +155,12 @@ export function FundNow({
           <CardFace key={card.id} card={card} snapshot={snapshot} changed={changed[card.id]} />
         ))}
       </ul>
-      {shown.some((card) => liveFundLink(card, snapshot)) ? <FundAgreement /> : null}
+      {shown.some((card) => liveFundLink(card, snapshot)) || machineLinks ? <FundAgreement /> : null}
       {cards.length > HOME_FUND_CARDS ? <MoreLinkLine to="/contribute" words={copy.flow.fundMore.replace('{n}', String(cards.length))} /> : null}
-      {/* There is always more than one way to fund (decision 73): under the open cards, the next card
-          in line, which needs no draft, so it is there however few cards are open; the Machine card
-          sits beside it, so the two other ways share one row. The Game Designer's line is Next up's,
-          so it is not said twice on home. */}
-      <div className="fund-ways">
-        <div className="fund-next">
-          <p className="fund-empty-title">{legal.pickForMe}</p>
-          <p>{legal.fundNextBody}</p>
-          {env.stripePaymentLinkUrl === '' ? null : (
-            <Link className="button btn-coin" to="/contribute">
-              <CoinMark />
-              {copy.contribute}
-            </Link>
-          )}
-        </div>
-        {machine}
-      </div>
+      {/* There is always more than one way to fund (decision 73): under the open cards, the Machine
+          card, which takes money for the studio as a whole. Fund the next card in line is on
+          /contribute only, since it and the Machine card both mean "any card". */}
+      {machineLinks ? <div className="fund-ways">{machine}</div> : null}
     </>
   );
 }

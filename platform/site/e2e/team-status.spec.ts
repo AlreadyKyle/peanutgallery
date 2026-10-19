@@ -27,7 +27,8 @@ test.describe('while the studio is paused', () => {
     await expect(page.locator(`#agent-${BUILDER_A} .card-meta`)).toHaveText(
       'claude-opus-5-5 · Spent from contributions $1.24, $0.31 in the last 7 days · Worked on 7 shipped cards',
     );
-    await expect(page.locator(`#agent-${QA} .card-meta`)).toHaveText('claude-opus-5-5 · Spent from contributions $0.00, $0.00 in the last 7 days · Worked on 1 shipped card');
+    // A zero figure is left out, so a row of zeros never reads as an idle studio.
+    await expect(page.locator(`#agent-${QA} .card-meta`)).toHaveText('claude-opus-5-5 · Worked on 1 shipped card');
     const models = runningModelsCheck(await running.locator('li.agent:not([data-kind="code"]) .card-meta').allTextContents());
     expect(models.ok, models.message).toBe(true);
     // Home's team strip draws the same roles, awake.

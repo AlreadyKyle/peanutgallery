@@ -107,13 +107,15 @@ describe('How it works', () => {
     expect(screen.getByRole('link', { name: legal.refundsPageLink }).getAttribute('href')).toBe('/refunds');
   });
 
-  it('says where money on no card waits, and the one case where it goes to a card that is not the next to open', () => {
+  it('says where money on no card waits, and leaves the one case where it goes to a card that is not the next to open to the ledger', () => {
     renderPage(null);
     const section = screen.getByRole('region', { name: 'Where the money goes' });
-    const paragraph = within(section).getByText(/waits in Not on a card yet for the next card to open\./).textContent;
-    expect(paragraph).toContain(legal.notOnCardTopUp);
-    // The waterfall's order (docs/specs/money-logic.md): the next cards in line come before Not on a card yet.
-    expect(paragraph).toMatch(/goes to the next cards in line, each up to its target\. What no card can take waits in Not on a card yet/);
+    const paragraph = within(section).getByText(/What no card can take waits for the next card to open\./).textContent;
+    // The top-up rule is said once, under the ledger's Not on a card yet (the copy audit of 18 October 2026).
+    expect(paragraph).not.toContain(legal.notOnCardTopUp);
+    expect(document.body.textContent).not.toMatch(/1\.5 times/);
+    // The waterfall's order (docs/specs/money-logic.md): the next cards in line come before the wait.
+    expect(paragraph).toMatch(/goes to the next cards in line, each up to its target\. What no card can take waits/);
     // The resume rule's numbers (docs/specs/agent-system-core.md): once, first ceiling pause, 1.5 times the cost so far.
     expect(legal.notOnCardTopUp).toMatch(/spending limit for the first time/);
     expect(legal.notOnCardTopUp).toMatch(/once, to spend up to 1\.5 times what it has cost so far/);
@@ -201,11 +203,11 @@ describe('How it works', () => {
     expect([...example.querySelectorAll('ol.example-order li')].map((li) => li.textContent)).toEqual([...money.exampleOrder]);
     expect(money.exampleOrder[0]).toMatch(/^The card the supporter picked/);
     expect(money.exampleOrder[1]).toMatch(/next cards in line/);
-    expect(money.exampleOrder[2]).toMatch(/Not on a card yet/);
+    expect(money.exampleOrder[2]).toMatch(/waits for the next card to open/);
     expect(example.textContent).not.toMatch(/operations/i);
   });
 
-  it('names the board, what it can do, what it files and its standing duties, and what code and the agents do (docs/specs/copy-pass.md)', () => {
+  it('names the board, what it can do and what it files, and what code and the agents do (docs/specs/copy-pass.md)', () => {
     renderPage(null);
     const who = screen.getByRole('region', { name: legal.whoRuns.heading });
     const text = who.textContent ?? '';
@@ -213,13 +215,9 @@ describe('How it works', () => {
     expect(text).toMatch(/pause the agents, cancel a card and change the spending caps/);
     expect(text).toMatch(/The board may file cards too\./);
     expect(text).toMatch(/When too few cards are open, the Game Designer, an AI agent, drafts one and the Game Director grades it before it opens\./);
-    // PLAN.md §4 The Board's standing duties since decision 74, one item each: no merging or prices.
-    const duties = within(who).getAllByRole('listitem').map((li) => li.textContent ?? '');
-    expect(duties).toHaveLength(5);
-    for (const duty of [/model credit/, /emergency fund/, /within 14 days/, /bank dispute/, /legal standing/]) expect(duties.some((d) => duty.test(d))).toBe(true);
-    expect(duties.join(' ')).not.toMatch(/\bmerg|\bprices?\b/i);
-    expect(text).toMatch(/need no board/);
-    expect(within(who).getByRole('link', { name: legal.contactEmail }).getAttribute('href')).toBe(`mailto:${legal.contactEmail}`);
+    // The board's standing duties stay in PLAN.md §4 The Board, not on the page (the copy audit of 18 October 2026).
+    expect(within(who).queryAllByRole('listitem')).toHaveLength(0);
+    expect(text).not.toMatch(/standing duties|model credit|bank dispute/);
     const code = screen.getByRole('region', { name: page.codeHeading });
     // One paragraph: the rules and the steps above already say each check in full.
     expect(within(code).queryAllByRole('listitem')).toHaveLength(0);

@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { copy } from '../lib/copy';
 import { legal } from '../lib/legal';
 import { formatDate } from '../lib/format';
-import { DEFAULT_STUDIO_PCT, RESERVE_PCT } from '../lib/payment';
+import { RESERVE_PCT } from '../lib/payment';
 import { books } from '../lib/books.test-fixture';
 import type { Role, Snapshot, StudioSource, Supply } from '../lib/source';
 import { SourceProvider } from '../lib/studio';
@@ -225,7 +225,7 @@ function role(id: string, title: string, description: string): Role {
 }
 
 function supply(over: Partial<Supply> = {}): Supply {
-  return { drafting: false, short: true, reason: null, runs_today: 0, run_limit: 3, next_check_at: null, ...over };
+  return { drafting: false, stalled: false, short: true, reason: null, runs_today: 0, run_limit: 3, next_check_at: null, ...over };
 }
 
 function fakeSource(over: Partial<Snapshot> = {}): StudioSource {
@@ -328,7 +328,8 @@ describe('Landing', () => {
     // The first game's tile: its name, its box art with alt text, and Play to the game (decision 68).
     expect(screen.getByRole('link', { name: copy.game.play }).getAttribute('href')).toBe('https://play.example');
     expect(screen.getByRole('img', { name: copy.game.alt }).getAttribute('src')).toBe('/games/dust-box-art.svg');
-    expect(screen.getByText(legal.agentShareLine, { exact: false })).toBeTruthy();
+    // The split is told on /how-it-works and /contribute, not again on home.
+    expect(screen.queryByText(legal.agentShareLine, { exact: false })).toBeNull();
     expect(bands[2]!.querySelector('h2')?.id).toBe('team');
     expect(bands[3]!.querySelector('h2')?.id).toBe('money');
     expect(screen.getByText(copy.flow.fundIntro)).toBeTruthy();
@@ -339,7 +340,7 @@ describe('Landing', () => {
     // Every card is in band 2.
     expect(container.querySelectorAll('li.card').length).toBeGreaterThan(0);
     for (const card of container.querySelectorAll('li.card, .funding-bar')) expect(card.closest('main > .band')).toBe(bands[1]);
-    // The stations, Fund first, each also a link in the rail and a tag in the room.
+    // The stations, Fund first, each also a link in the rail; the room carries no labels over them.
     expect([...container.querySelectorAll('.floor-parts > [data-station-part]')].map((part) => part.getAttribute('data-station-part'))).toEqual([
       'fund',
       'ideas',
@@ -348,7 +349,7 @@ describe('Landing', () => {
       'shipped',
     ]);
     expect([...container.querySelectorAll('.floor-stations a')].map((a) => a.getAttribute('href'))).toEqual(['#fund', '#ideas', '#next', '#building', '#shipped', '#team']);
-    expect([...bands[0]!.querySelectorAll('.station-tags a')].map((a) => a.getAttribute('href'))).toEqual(['#fund', '#ideas', '#building', '#shipped', '#team']);
+    expect(bands[0]!.querySelectorAll('.station-tags, .station-tag, .station-pill')).toHaveLength(0);
     // No filter chips, no old sections, no Right now panel, no How it works steps, no fixed rules.
     expect(screen.queryByRole('group', { name: copy.filterLabel })).toBeNull();
     for (const old of ['Building now', "Fund what's next", 'Queued', 'Planned next']) expect(screen.queryByRole('heading', { level: 2, name: old })).toBeNull();
@@ -435,8 +436,10 @@ describe('Landing', () => {
       'https://buy.stripe.com/test-link?client_reference_id=next2',
       'https://buy.stripe.com/test-link?client_reference_id=studio1',
     ]);
-    // Three cards: no See all link.
-    expect(fund.querySelector('p.more')).toBeNull();
+    // Three cards: no See all link, only the link to what a contribution gets you.
+    expect(fund.querySelector('p.more a[href="/contribute"]')).toBeNull();
+    expect(within(fund).getByRole('link', { name: legal.perks.link }).getAttribute('href')).toBe('/contribute#perks-title');
+    expect(fund.querySelector('.perks')).toBeNull();
     const building = lane('building');
     expect(laneTitles('building')).toEqual(['The core loop', 'Gatherer costs 11']);
     expect(within(building).getByText(`${copy.sources.board} · $3.20 ${legal.spentSoFar}`)).toBeTruthy();
@@ -444,11 +447,11 @@ describe('Landing', () => {
     expect(within(building).queryByRole('progressbar')).toBeNull();
     // No brief on a card; the agreement is said once, under the fund grid, and nowhere else.
     expect(document.querySelector('details.brief')).toBeNull();
-    // The Machine card (docs/specs/final-state.md) is its own checkout link and carries its own
-    // agreement line; outside it, the agreement is said once.
-    const outsideMachine = (els: HTMLElement[]) => els.filter((el) => el.closest('.machine-card') === null);
-    expect(outsideMachine(within(fund).getAllByText(/By funding you accept/))).toHaveLength(1);
-    expect(outsideMachine(screen.getAllByText(/By funding you accept/))).toHaveLength(1);
+    // The Machine card (docs/specs/final-state.md) is its own checkout link; the one agreement line
+    // under the cards covers it too, so the page says it once.
+    expect(within(fund).getAllByText(/By funding you accept/)).toHaveLength(1);
+    expect(screen.getAllByText(/By funding you accept/)).toHaveLength(1);
+    expect(fund.querySelector('.machine-card .fund-agreement')).toBeNull();
   });
 
   it('shows three cards to fund and links See all n open cards to /contribute', async () => {
@@ -523,7 +526,8 @@ describe('Landing', () => {
     expect(panel.querySelector('.fund-empty-title')?.textContent).toBe(legal.pickForMe);
     expect(within(panel).getByText(legal.fundEmptyBody)).toBeTruthy();
     expect(panel.textContent).not.toContain(copy.status.openNone);
-    expect(panel.querySelector('.fund-empty-agent')?.textContent).toBe(copy.flow.draftingIdle);
+    // Next up says what the Game Designer is doing, so the panel does not.
+    expect(panel.querySelector('.fund-empty-agent')).toBeNull();
     expect(within(panel).getByRole('link', { name: copy.contribute }).getAttribute('href')).toBe('/contribute');
     expect(document.querySelector('ul.fund-grid')).toBeNull();
     expect(lane('building').querySelector('.flow-empty')?.textContent).toBe(copy.flow.lanes.building.empty);
@@ -609,16 +613,16 @@ describe('Landing', () => {
     );
   });
 
-  it('says where the money goes: the pool with the coin, the split from the fixed constants, and the five latest actions', async () => {
+  it('says where the money goes: the pool with the coin in one line, that these are contributions and the ledger has every figure, and the five latest actions', async () => {
     renderLanding(fakeSource());
     const money = await screen.findByRole('region', { name: legal.moneyHeading });
     await waitFor(() => expect(within(money).getByText('$48.56')).toBeTruthy());
     expect(money.querySelector('.pool-line svg.coin')).not.toBeNull();
-    expect(within(money).getByText(legal.describeAvailable)).toBeTruthy();
-    const split = money.querySelector('p.money-split')!.textContent!;
-    expect(split).toContain(`${RESERVE_PCT}% of every contribution`);
-    expect(split).toContain(`${100 - DEFAULT_STUDIO_PCT}% goes to the agents and ${DEFAULT_STUDIO_PCT}% to the studio`);
-    expect(split.endsWith(legal.notDonations)).toBe(true);
+    expect(money.querySelector('.pool-line')?.textContent).toBe(`$48.56 ${legal.poolInline}`);
+    expect(within(money).getByText(`${legal.notDonations} ${legal.moneyLedgerLine}`)).toBeTruthy();
+    // The split is told on /how-it-works and /contribute (the copy audit of 18 October 2026).
+    expect(money.querySelector('p.money-split')).toBeNull();
+    expect(money.textContent).not.toContain(`${RESERVE_PCT}% of every contribution`);
     expect(within(money).getByRole('heading', { level: 3, name: legal.latestActions })).toBeTruthy();
     expect(within(money).getAllByRole('listitem')).toHaveLength(HOME_ACTIONS);
     expect(within(money).getByRole('link', { name: copy.fullLedger }).getAttribute('href')).toBe('/ledger');
@@ -628,7 +632,7 @@ describe('Landing', () => {
     renderLanding(fakeSource({ pool: { ...snapshot.pool!, balance_usd: -1.234 } }));
     const money = await screen.findByRole('region', { name: legal.moneyHeading });
     await waitFor(() => expect(within(money).getByText('$0.00')).toBeTruthy());
-    expect(within(money).getByText(`${legal.describeAvailable} ${legal.shortfall.replace('{amount}', '$1.23')}`)).toBeTruthy();
+    expect(within(money).getByText(`${legal.shortfall.replace('{amount}', '$1.23')} ${legal.notDonations} ${legal.moneyLedgerLine}`)).toBeTruthy();
     expect(screen.queryByText(/-\$/)).toBeNull();
   });
 

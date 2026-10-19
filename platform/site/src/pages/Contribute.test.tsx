@@ -157,9 +157,9 @@ describe('Contribute', () => {
     const agreement = first.nextElementSibling as HTMLElement;
     expect(agreement.tagName).toBe('P');
     expect(agreement.textContent).toBe(
-      legal.contributeAgreement.replace('{terms}', legal.footerLinks.terms).replace('{refunds}', legal.refundsPageLink),
+      legal.fundAgreement.replace('{terms}', legal.footerLinks.terms).replace('{refunds}', legal.refundsPageLink),
     );
-    expect(agreement.textContent).toMatch(/adult where you live, or have the permission of a parent or guardian/);
+    expect(agreement.textContent).toMatch(/adult where you live or have a parent's or guardian's permission/);
     expect(within(agreement).getByRole('link', { name: legal.footerLinks.terms }).getAttribute('href')).toBe('/terms');
     expect(within(agreement).getByRole('link', { name: legal.refundsPageLink }).getAttribute('href')).toBe('/refunds');
     const cardLink = checkoutLinks()[1]!;

@@ -1585,9 +1585,8 @@ button.link:hover:not(:disabled) {
 }
 
 /* Home with no card open for funding: one wide panel on the primary fill that funds the next card in
-   line and says what the Game Designer is doing, so the first band never reads empty. */
-.fund-empty,
-.fund-next {
+   line, so the first band never reads empty. */
+.fund-empty {
   display: grid;
   justify-items: start;
   gap: var(--space-2);
@@ -1602,23 +1601,20 @@ button.link:hover:not(:disabled) {
 
 /* Beside the Machine card the tile takes the row's height: its lines stay at the top and its
    Contribute button sits at the foot of the row, so no hollow pools under it. */
-.fund-empty,
-.fund-next {
+.fund-empty {
   align-self: stretch;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
 }
 
-.fund-empty > .button,
-.fund-next > .button {
+.fund-empty > .button {
   margin-top: auto;
 }
 
 /* On a phone the tile keeps a card's inset, so its lines keep the width. */
 @media (max-width: 29.99rem) {
-  .fund-empty,
-  .fund-next {
+  .fund-empty {
     padding: var(--space-3);
   }
 }
@@ -1628,8 +1624,7 @@ button.link:hover:not(:disabled) {
   font-size: var(--size-lead);
 }
 
-.fund-empty > p,
-.fund-next > p {
+.fund-empty > p {
   max-width: var(--measure-text);
   margin: 0;
 }
@@ -1638,18 +1633,6 @@ button.link:hover:not(:disabled) {
   font-size: var(--size-h2);
   font-weight: var(--weight-bold);
   line-height: var(--leading-heading);
-}
-
-.fund-empty-agent {
-  display: flex;
-  gap: var(--space-1);
-  align-items: flex-start;
-  font-size: var(--size-small);
-}
-
-.fund-empty-agent > .glyph {
-  flex: none;
-  margin-top: 0.125rem;
 }
 
 /* The agent brief: a native disclosure, closed by default. Its summary is a 44px target that takes
@@ -2606,8 +2589,7 @@ input[type='radio'] {
   margin-top: var(--space-3);
 }
 
-.who-tile,
-.who-duties {
+.who-tile {
   padding: var(--space-2) var(--space-3);
   border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
   border-radius: var(--radius-card);
@@ -2617,11 +2599,7 @@ input[type='radio'] {
   margin-bottom: 0;
 }
 
-.who-duties {
-  margin-top: var(--space-2);
-}
-
-/* /how-it-works' fixed rules: framed like the board's duties, on the ink band. */
+/* /how-it-works' fixed rules: framed like Who runs it's tiles, on the ink band. */
 .how-rules {
   padding: var(--space-3);
   border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
@@ -2630,29 +2608,6 @@ input[type='radio'] {
 
 .how-rules > :last-child {
   margin-bottom: 0;
-}
-
-.who-duties ol {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
-  gap: var(--space-2) var(--space-4);
-  margin: var(--space-2) 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* Each duty on a hairline, no number over it (the board, 18 October 2026). */
-.who-duties li {
-  border-top: 1px solid var(--hairline);
-  padding-top: var(--space-1);
-}
-
-.who-outro {
-  margin: 0;
-  padding-top: var(--space-2);
-  border-top: 1px solid color-mix(in srgb, currentColor 30%, transparent);
-  font-size: var(--size-small);
-  opacity: 0.85;
 }
 
 /* Motion ---------------------------------------------------------------------
@@ -2785,7 +2740,6 @@ input[type='radio'] {
 }
 
 .home .live-studio-head > h2,
-.home .live-studio-hold-title,
 .home .pipe-title {
   margin: 0;
   font-size: var(--size-small);
@@ -2802,19 +2756,9 @@ input[type='radio'] {
   margin: 0 0 var(--space-3);
 }
 
-/* The label's stand-in while the snapshot loads: the same line, unseen, and nothing in it takes focus. */
-.home .live-studio-hold {
-  visibility: hidden;
-}
-
-.home .live-studio-hold-title {
-  line-height: var(--leading-heading);
-}
-
 /* The room's label and its era are not drawn on the plate either (the board, 18 October 2026): the
    room says what it is. Screen readers still hear both. */
 .home .live-studio-head > h2,
-.home .live-studio-hold-title,
 .home .floor-plate .studio-era,
 .home .live-studio-head > p:not(.twitch),
 .home .pipe-intro {
@@ -2901,8 +2845,7 @@ input[type='radio'] {
     display: contents;
   }
 
-  .home .live-studio-head,
-  .home > .band.floor-plate > .live-studio-hold {
+  .home .live-studio-head {
     grid-column: 1;
     grid-row: 1;
     margin-bottom: var(--space-2);
@@ -2927,10 +2870,13 @@ input[type='radio'] {
     justify-content: center;
   }
 
+  /* The pipe keeps the room its two rows take while the feed loads, so the plate never grows under
+     the pitch when they arrive. */
   .home .live-studio-grid > .pipe {
     grid-column: 2;
     grid-row: 3;
     align-self: end;
+    min-height: 14rem;
     margin-top: var(--space-4);
     border-inline-start: 0;
     padding: 0;
@@ -2982,12 +2928,7 @@ input[type='radio'] {
   margin-top: var(--space-2);
 }
 
-.money-split {
-  max-width: var(--measure-text);
-  margin-top: var(--space-2);
-}
-
-/* Where the money goes: the pool and the split, and beside them from 64rem the latest actions. */
+/* Where the money goes: the pool and the ledger line, and beside them from 64rem the latest actions. */
 .money-grid {
   display: grid;
   gap: var(--space-5);
@@ -3016,6 +2957,11 @@ input[type='radio'] {
   display: grid;
   gap: var(--space-3);
   margin-top: var(--space-5);
+}
+
+/* The link to what a contribution gets you, under the Machine card, keeps a gap from the card's edge. */
+.fund-ways + .more {
+  margin-top: var(--space-3);
 }
 
 .fund-ways > .machine-card {
@@ -3485,10 +3431,6 @@ input[type='radio'] {
 
 .stopped-facts > * + * {
   margin-top: 0.125rem;
-}
-
-.what-changed code {
-  overflow-wrap: anywhere;
 }
 
 /* Supporters: the numbers in newspaper columns, filled down then across in number order, so the names
@@ -5145,62 +5087,7 @@ main.home > .band {
   padding-inline: max(var(--gutter), calc((100% - var(--wrap-floor)) / 2));
 }
 
-/* The station tags float over their pieces of the room, clear of the agents: a small pill in the room's
-   ink and paper, its link 44px tall and centred on the pill, so a press lands however small the room is
-   drawn. A lit station's tag is filled ink, and its footprint is outlined on the floor; nothing moves. */
-.station-tags {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  pointer-events: none;
-}
-
-.station-tag {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  pointer-events: auto;
-}
-
-.station-tag > a {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--target);
-  min-width: var(--target);
-  justify-content: center;
-  padding: 0 0.25rem;
-  text-decoration: none;
-}
-
-.station-pill {
-  display: inline-block;
-  padding: 0.125rem var(--space-1);
-  border: 2px solid var(--ink);
-  border-radius: 999px;
-  background: var(--paper);
-  color: var(--ink);
-  font-size: var(--size-small);
-  font-weight: var(--weight-strong);
-  line-height: 1.3;
-  white-space: nowrap;
-}
-
-.station-tag > a:hover .station-pill,
-.station-tag > a:focus-visible .station-pill,
-.station-tag[data-lit='true'] .station-pill {
-  background: var(--ink);
-  color: var(--paper);
-}
-
-/* A tag can float past the room's edge onto the dark plate, so the focused tag carries its own paper
-   ground and the ring keeps 3:1 against it wherever it sits. */
-.station-tag > a:focus-visible {
-  border-radius: 999px;
-  background: var(--paper);
-  outline-offset: 0;
-}
-
+/* A lit station's footprint is outlined on the rail map's floor; nothing moves. */
 .station-ring {
   fill: none;
   stroke: var(--ink);
@@ -5208,17 +5095,13 @@ main.home > .band {
   stroke-dasharray: 6 4;
 }
 
-/* On a phone the room is drawn edge to edge, as big as the screen allows, and the tags give way to the
-   station strip under it (the rail, below), which has room for the words. */
+/* On a phone the room is drawn edge to edge, as big as the screen allows; the station strip under it
+   (the rail, below) has the links. */
 @media (max-width: 47.99rem) {
   .home .live-studio-grid > .studio > .studio-stage {
     margin-inline: calc(-1 * var(--gutter));
     border-inline: 0;
     border-radius: 0;
-  }
-
-  .home .station-tags {
-    display: none;
   }
 }
 
@@ -5311,7 +5194,7 @@ main.home > .band {
   }
 
   /* The plate's room shrinks onto the map as the page scrolls (lib/studio-morph.ts). The plate is
-     lifted over the floor while it moves, the room's tags and era label fade in its first half, and
+     lifted over the floor while it moves, the room's era label fades in its first half, and
      the map takes over as the room lands on it. Only transform and opacity change. */
   .home[data-morph] > .band.floor-plate {
     position: relative;
@@ -5322,7 +5205,6 @@ main.home > .band {
     transform-origin: 0 0;
   }
 
-  .home[data-morph] .floor-plate .station-tags,
   .home[data-morph] .floor-plate .studio-era {
     opacity: calc(1 - 2 * var(--morph, 0));
   }
@@ -5334,12 +5216,11 @@ main.home > .band {
     opacity: 0;
   }
 
-  .home[data-morph='on'] .floor-plate .studio-frame,
-  .home[data-morph='on'] .floor-plate .station-tag {
+  .home[data-morph='on'] .floor-plate .studio-frame {
     pointer-events: none;
   }
 
-  /* Landed, the room is see-through and inert (studio-morph.ts), so its tags take no focus. */
+  /* Landed, the room is see-through and inert (studio-morph.ts). */
   .home[data-morph='done'] .floor-plate .studio-frame {
     opacity: 0;
     pointer-events: none;

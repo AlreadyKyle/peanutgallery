@@ -11,7 +11,7 @@
 // and {discord} the Discord invite. The words of the Terms and the Refunds page are not here: every
 // posted version of them is in terms-versions.ts (docs/specs/legal-copy.md).
 // Resume by rule (docs/specs/agent-system-core.md): the one case where money in Not on a card yet goes
-// to a card that is not the next to open. Said under /ledger's Not on a card yet and on /how-it-works.
+// to a card that is not the next to open. Said only under /ledger's Not on a card yet.
 const CEILING_TOP_UP =
   'A card paused at its spending limit for the first time can take enough from Not on a card yet, once, to spend up to 1.5 times what it has cost so far; its bar can then read above its target.';
 
@@ -44,9 +44,11 @@ export const legal = {
   agentWork: 'Agent work',
   deploys: 'Deploys',
   poolBalance: 'In the pool',
-  // The pool figure on home, after the coin and the amount: "$0.50 in the pool".
-  poolInline: 'in the pool',
-  // Home's last band: the pool, the split and the latest agent actions.
+  // The pool figure on home, after the coin and the amount: "$0.50 ready for the agents to spend."
+  poolInline: 'ready for the agents to spend.',
+  // Home's last band: the pool, this one line, the latest agent actions and the Full ledger link. The
+  // split is told on /how-it-works and /contribute, not again here.
+  moneyLedgerLine: 'Every figure is on the ledger.',
   moneyHeading: 'Where the money goes',
   // Home's five latest agent actions, above the rows.
   latestActions: 'Latest agent actions',
@@ -93,7 +95,9 @@ export const legal = {
   // A card that was not built, on the design guide's sample face; /ledger's Stopped rows say where the
   // money went card by card (movedTo).
   notBuiltMoney: 'Its unspent money went to the next cards in line.',
-  folders: { 'seed-1': 'Game', platform: 'Site' } as Record<string, string>,
+  // A deploy row: "Dust update passed checks", with the commit in the row's tooltip.
+  folders: { 'seed-1': 'Dust update', platform: 'Site update' } as Record<string, string>,
+  deployCommit: 'Commit {sha}',
   eventVerbs: {
     start: 'started',
     tool_call: 'used a tool',
@@ -181,7 +185,7 @@ export const legal = {
     exampleOrder: [
       'The card the supporter picked, if any, up to its target.',
       'Then the next cards in line, each up to its target.',
-      'Then Not on a card yet, where it waits for the next card to open.',
+      'Then it waits for the next card to open.',
     ],
     sections: [
       {
@@ -189,7 +193,7 @@ export const legal = {
         paragraphs: [
           "The 10% reserve covers disputes, and agents never spend it. The emergency fund is kept for urgent fixes.",
           'Agent credit pays only for model usage on funded cards, within daily and per-card caps.',
-          `Money given with no card, or beyond a card's target, goes to the next cards in line, each up to its target. What no card can take waits in Not on a card yet for the next card to open. ${CEILING_TOP_UP}`,
+          "Money given with no card, or beyond a card's target, goes to the next cards in line, each up to its target. What no card can take waits for the next card to open.",
         ],
       },
       {
@@ -242,16 +246,12 @@ export const legal = {
   // money waits when no card takes money, and names no card when the order did not load
   // (docs/specs/money-surfaces.md).
   pickForMe: 'Fund the next card in line',
-  // Home's always-present second option beside the open cards (PLAN.md §10 decision 73): the
-  // waterfall's order, said plainly. Money left after the open cards waits in Not on a card yet,
-  // which is what pays for drafting new cards.
-  fundNextBody: 'Your contribution fills the open cards in line first. Whatever is left waits in Not on a card yet and pays the agents to draft the next cards.',
   pickForMeBody: 'Your contribution funds whatever the agents build next.',
   nextInLine: 'Next in line: {title}',
-  nextInLineNone: 'No card is open for funding right now. Your contribution waits in Not on a card yet and funds the next card that opens.',
+  nextInLineNone: 'No card is open for funding right now. Your contribution waits for the next card to open, then funds it.',
   // Home's fund section with no card open: the same rule as nextInLineNone, without repeating the
   // status line just above it.
-  fundEmptyBody: 'Your contribution waits in Not on a card yet, then funds the next card that opens.',
+  fundEmptyBody: 'Your contribution waits for the next card to open, then funds it.',
   orPickACard: 'Or pick a card yourself',
   noFundableCards: 'No card is open for funding right now. Fund the next card in line and your money waits for the next one that opens.',
   // Under /contribute's card choices.
@@ -368,6 +368,8 @@ export const legal = {
   // A card's own page and its supporters (docs/specs/supporter-pages.md). A supporter shows only as
   // a number, in number order, with no amount, time or name.
   costLabel: 'Cost from contributions',
+  // The same figure on a card the agents have not started building: what drafting it cost.
+  draftCostLabel: 'Drafting cost from contributions',
   supportersHeading: 'Supporters',
   supportersLede: 'Everyone whose money reached this card, by supporter number.',
   supporter: 'Supporter {n}',
@@ -388,7 +390,9 @@ export const legal = {
   },
   // /team's running and paused rows: what the role's work paid for with contributions has cost. Only
   // rows billed to the studio count; founder-billed work stays private (PLAN.md §4 The Board).
-  teamSpent: 'Spent from contributions {total}, {week} in the last 7 days',
+  // The 7-day part only when it is not $0.00, and the whole clause only when the total is not.
+  teamSpent: 'Spent from contributions {total}',
+  teamSpentWeek: 'Spent from contributions {total}, {week} in the last 7 days',
   // /roadmap's label on a card the board vetoed, beside the board's reason. Here, not in copy.ts,
   // because the site-kernel test keeps the word held out of copy.ts.
   heldByBoard: 'Held by the board',
@@ -400,10 +404,10 @@ export const legal = {
     resumed: { one: 'resumed the card by rule after its spending limit' },
     ranked: { one: 'ranked the cards open for funding' },
   } as Record<string, { one: string; many?: string }>,
-  // /how-it-works' Who runs it, repeated at the foot of /team (docs/specs/copy-pass.md): the board by
-  // name, what it can do, what it files (PLAN.md §4 Who files cards) and its standing duties as
-  // PLAN.md §4 The Board lists them. Here, not in copy.ts, because the duties name money. No line says
-  // the board's actions are published: no public list of them exists. {email} is the contact address.
+  // /how-it-works' Who runs it, its first line repeated at the foot of /team (docs/specs/copy-pass.md):
+  // the board by name, what it can do and what it files (PLAN.md §4 Who files cards). The board's
+  // standing duties stay in PLAN.md §4 The Board, not on a public page. No line says the board's
+  // actions are published: no public list of them exists.
   whoRuns: {
     heading: 'Who runs it',
     paragraphs: [
@@ -413,16 +417,6 @@ export const legal = {
     ],
     agentsLabel: 'The agents act on their own',
     boardLabel: 'The board can step in',
-    dutiesIntro: "The board's standing duties",
-    duties: [
-      "After each Stripe payout, buy the agents' model credit and raise the balance Stripe holds back to the books' figure.",
-      'Turn emergency fund money into model credit when an urgent fix needs it.',
-      'Refund any request sent to {email} within 14 days of the contribution.',
-      "Answer any bank dispute before Stripe's deadline.",
-      "Keep the studio's legal standing: its named operator, terms and tax registration.",
-    ],
-    dutiesOutro:
-      'Merging checked changes, adding model prices and spending within the caps need no board. If the board does none of its duties, the studio pauses or stays as it is.',
   },
   // /thanks, where Stripe's redirect lands (docs/specs/supporter-pages.md). No answer holds an amount,
   // an email or a name, and an unknown session reads the same as one not yet recorded.
@@ -447,7 +441,7 @@ export const legal = {
     stateStopped: 'Stopped before it shipped. Its page says why.',
     cardFallback: 'A card your money reached',
     held: 'Your contribution is held before it counts, until {date}.',
-    waiting: 'Part of your contribution waits as Not on a card yet and goes to the next card that opens.',
+    waiting: 'Part of your contribution waits for the next card to open.',
     reversed: 'This payment was refunded or disputed, so nothing from it is on a card.',
     terms: 'Your contribution is under version {n} of the {terms}, including the {refunds}.',
     followHeading: 'Follow along',
@@ -462,9 +456,9 @@ export const legal = {
     faceNumber: 'Supporter {n}',
     nextHeading: 'What happens next',
     nextSteps: [
-      { key: 'drafting', label: 'Drafting', body: 'Once the card is fully funded, an agent plans the change.' },
+      { key: 'drafting', label: 'Waiting', body: 'Once the card is fully funded, an agent picks it up.' },
       { key: 'building', label: 'Building', body: 'An agent builds it, and you can watch every step on the card.' },
-      { key: 'gate', label: 'Checks', body: 'The gate runs the tests and checks before anything goes live.' },
+      { key: 'gate', label: 'Checks', body: 'Automated tests and checks run before anything goes live.' },
       { key: 'live', label: 'Live', body: 'It ships in the game for everyone.' },
     ],
     nextNow: 'Now',
@@ -494,11 +488,11 @@ export const legal = {
   termsLoading: 'Loading the terms.',
   termsUnconfirmed:
     'This page cannot confirm which version is in force right now. Email {email} to ask which version applies to your contribution.',
-  // Before every path to checkout: directly under the first choice on /contribute, and under every
-  // live Fund this card link (Contribute.tsx, Funding.tsx).
-  contributeAgreement:
-    'Contributing means you accept the {terms} in force when your checkout starts, including the {refunds}. To contribute you must be an adult where you live, or have the permission of a parent or guardian.',
-  fundAgreement: "By funding you accept the {terms} and the {refunds}, and confirm you are an adult or have a guardian's permission.",
+  // Before every path to checkout, said once per page: directly under the first choice on
+  // /contribute, under home's cards to fund (or its ways to fund when none is open) and under a card
+  // page's Fund this card (Contribute.tsx, Flow.tsx, Funding.tsx).
+  fundAgreement:
+    "By funding you accept the {terms} in force when your checkout starts, including the {refunds}, and confirm you are an adult where you live or have a parent's or guardian's permission.",
   // Privacy is a notice with its own date, not part of a Terms version.
   privacyUpdated: 'Last updated 17 October 2026.',
   privacy: {
@@ -606,6 +600,8 @@ export const legal = {
   // you. Paying never needs an account. XP is a record of taking part, not money.
   perks: {
     title: 'What you get',
+    // Home and a card's page link to the panel on /contribute instead of repeating it.
+    link: 'What you get for funding',
     guestTitle: 'As a guest',
     guest: ['A Supporter number on the card you fund.', "The card's own page, to watch the agents build it."],
     profileTitle: 'With a free profile',
@@ -617,7 +613,6 @@ export const legal = {
     ],
     note: 'Paying never needs an account. Paid as a guest already? Sign in with the email on your receipt and claim it.',
     noteClosed: 'Paying never needs an account.',
-    signIn: 'Make a free profile',
     keepTitle: 'Keep this card',
     keepBody: 'Sign in with the email on your receipt and this card joins your collection, with its XP and badges. There is no password.',
     keep: 'Add it to my collection',

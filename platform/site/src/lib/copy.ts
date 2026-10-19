@@ -107,6 +107,8 @@ export const copy = {
         title: 'Building',
         who: 'A builder agent makes the change, then automated checks test it.',
         empty: 'Nothing is being built right now. A funded card starts within about half an hour.',
+        // While the studio is not taking work (Supply.stalled): no start time is promised.
+        emptyStalled: 'Nothing is being built right now.',
         lastBuilt: 'Last built: {title}, shipped {date}.',
       },
       shipped: {
@@ -180,7 +182,7 @@ export const copy = {
     planned: 'Planned',
     plannedIntro: 'These roles are planned, with no start set yet.',
     // A card role whose folder the board has not opened (the platform code lane).
-    laneClosed: 'Starts when the board opens the studio code lane.',
+    laneClosed: 'Starts when studio cards open for funding.',
     rolePaused: 'The board has paused this agent.',
     statusPaused: 'Paused',
     // Home's team strip shows three agents; this link goes to the rest on /team.
@@ -268,8 +270,6 @@ export const copy = {
     ideasUpvoteOne: '1 upvote',
     ideasUpvoteMany: '{n} upvotes',
     changedLede: 'The values the checks confirmed after the change went live.',
-    changedValue: '{file} {path}: {value}',
-    changed: 'changed',
     // A check in plain words, where the game's config says what its field means (lib/config-words.ts).
     plain: {
       baseCost: '{name} costs {value} dust to build.',
@@ -277,6 +277,11 @@ export const copy = {
       name: '{name} is now called {value}.',
       atTotalDust: '{name} unlocks at {value} total dust.',
       effectValue: '{name} multiplies dust by {value}.',
+      // The checks with no plain words, counted instead of shown raw.
+      moreOne: "And 1 more value in the game's settings.",
+      moreMany: "And {n} more values in the game's settings.",
+      onlyOne: "1 value in the game's settings changed.",
+      onlyMany: "{n} values in the game's settings changed.",
     },
     stoppedHeading: 'Why it stopped',
     linesHeading: 'What the agents did',
@@ -671,6 +676,7 @@ export const copy = {
   me: {
     title: 'Your desk',
     lede: 'Your desk holds the cards you helped fund and the ideas you pitched, under your own name and avatar.',
+    ledeClosed: 'Once profiles open, your desk will hold the cards you helped fund and the ideas you pitched, under your own name and avatar.',
     closedTitle: 'Profiles are not open yet',
     closedBody: 'Sign-in is off for now, so there are no profiles yet. You can still fund any card as a guest: paying never needs an account.',
     loading: 'Loading your profile.',
@@ -739,7 +745,6 @@ export const copy = {
   },
   // Home's floor (docs/specs/place.md): the room's stations, each a way to its part of the floor.
   floor: {
-    mapLabel: 'Stations in the studio',
     railLabel: 'The floor',
     stations: {
       ideas: { name: 'Ideas', where: 'The whiteboard', line: 'Players pitch changes and upvote them.' },
@@ -749,7 +754,6 @@ export const copy = {
       shipped: { name: 'Shipped', where: 'The dock', line: 'Changes that passed every check.' },
       team: { name: 'Team', where: 'The lounge', line: 'The agents between cards.' },
     },
-    goTo: '{name}: {where}',
     ledger: 'Every figure is on the ledger',
   },
   // The plate's panel beside the room: who you are to the studio today.

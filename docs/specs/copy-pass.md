@@ -83,7 +83,7 @@ Built on `launch/agent-upkeep` (bc265ef), 26 September 2026. The Production crit
 **Behaviour items.**
 1. One game: done here. `pitchTitle`, the footer, `index.html`'s three tags, `og.png` (re-rendered by `node platform/site/scripts/og-image.mjs`: `wrote platform/site/public/og.png 1200x630 39347 bytes`), PLAN §2's pitch line and §10 decision 54.
 2. Star Citizen and Multiverse: done here (PLAN §2, §9; retrievals below). No launch draft or `docs/specs/announcement.md` quotes either (`git grep -n -i 'star citizen\|multiverse'` finds only PLAN §2 and §9 outside this spec).
-3. Who runs it: done here (`legal.whoRuns`, `components/WhoRuns.tsx` on /how-it-works, and at the foot of /team as its first line with a link to the rest (the copy audit of 18 October 2026 cut the repeat); `copy.howItWorksPage.code` and `agents`).
+3. Who runs it: done here (`legal.whoRuns`, `components/WhoRuns.tsx` on /how-it-works, and at the foot of /team as its first line with a link to the rest (the copy audit of 18 October 2026 cut the repeat, and decision 76 moved the board's standing duties off the page, back to PLAN.md §4 The Board); `copy.howItWorksPage.code` and `agents`).
 4. The $5 example: done here. money-logic had not rewritten it: the base still showed "A $10.00 contribution after Stripe's fee".
 5. The roadmap: done here (migration, parser, `file-backlog`, `Roadmap.tsx`).
 6. The lane line: done earlier, 90be039 (#82, supporter-pages): `copy.team.laneClosed` "Starts when the board opens the studio code lane."

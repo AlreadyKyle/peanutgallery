@@ -2,7 +2,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { books } from '../lib/books.test-fixture';
-import { changedLine, idName, plainCheck } from '../lib/config-words';
+import { changedLines, idName, plainCheck } from '../lib/config-words';
 import { LAST_VISIT_KEY, readLastVisit, shippedSince, SINCE_LIMIT, writeLastVisit } from '../lib/last-visit';
 import { legal } from '../lib/legal';
 import type { Card, Snapshot } from '../lib/source';
@@ -190,24 +190,27 @@ describe('What changed in plain words', () => {
     expect(idName('wider-paths')).toBe('Wider paths');
   });
 
-  it('falls back to the raw path for anything else, or a value it cannot show', () => {
-    expect(changedLine({ file: 'seed-1/config/game.json', path: 'unlocks[0].labels', value: null })).toEqual({
-      text: 'seed-1/config/game.json unlocks[0].labels: changed',
-      plain: false,
-    });
-    expect(changedLine({ file: 'x.json', path: 'rows[id=mill].colour', value: '"red"' }).plain).toBe(false);
-    expect(changedLine({ file: 'x.json', path: 'rows[id=mill].baseCost', value: null }).plain).toBe(false);
+  it('counts anything else, or a value it cannot show, instead of showing the raw path', () => {
+    const plain = { file: 'seed-1/config/game.json', path: 'buildings[id=gatherer].baseCost', value: '12' };
+    const raw = [
+      { file: 'seed-1/config/game.json', path: 'unlocks[0].labels', value: null },
+      { file: 'x.json', path: 'rows[id=mill].colour', value: '"red"' },
+      { file: 'x.json', path: 'rows[id=mill].baseCost', value: null },
+    ];
+    expect(changedLines([plain])).toEqual({ lines: ['Gatherer costs 12 dust to build.'], rest: null });
+    expect(changedLines([plain, raw[0]!])).toEqual({ lines: ['Gatherer costs 12 dust to build.'], rest: "And 1 more value in the game's settings." });
+    expect(changedLines([plain, ...raw])).toEqual({ lines: ['Gatherer costs 12 dust to build.'], rest: "And 3 more values in the game's settings." });
+    expect(changedLines([raw[0]!])).toEqual({ lines: [], rest: "1 value in the game's settings changed." });
+    expect(changedLines(raw)).toEqual({ lines: [], rest: "3 values in the game's settings changed." });
   });
 
-  it('falls back, never throws, on a collection or field named like an Object.prototype key', () => {
-    expect(changedLine({ file: 'x.json', path: 'constructor[id=mill].name', value: '1' })).toEqual({ text: 'x.json constructor[id=mill].name: 1', plain: false });
-    expect(changedLine({ file: 'x.json', path: 'rows[id=mill].toString', value: '1' }).plain).toBe(false);
-    expect(changedLine({ file: 'x.json', path: 'rows[id=mill].constructor', value: '1' }).plain).toBe(false);
+  it('counts, never throws on, a collection or field named like an Object.prototype key', () => {
+    const odd = ['constructor[id=mill].name', 'rows[id=mill].toString', 'rows[id=mill].constructor'].map((path) => ({ file: 'x.json', path, value: '1' }));
+    expect(changedLines(odd)).toEqual({ lines: [], rest: "3 values in the game's settings changed." });
   });
 
   it('shows a value with $ characters as written, not as a replacement pattern', () => {
     expect(plainCheck({ file: 'seed-1/config/game.json', path: 'buildings[id=gatherer].name', value: '"$& Mill"' })).toBe('Gatherer is now called "$& Mill".');
-    expect(changedLine({ file: 'x.json', path: 'unlocks[0].label', value: "\"$$ and $'\"" }).text).toBe("x.json unlocks[0].label: \"$$ and $'\"");
   });
 });
 

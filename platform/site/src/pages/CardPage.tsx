@@ -5,7 +5,7 @@ import { FollowCard } from '../components/Follow';
 import { Glyph } from '../components/Glyph';
 import { NotFound } from '../components/NotFound';
 import { PageHeader } from '../components/PageHeader';
-import { Perks } from '../components/Perks';
+import { MoreLink } from '../components/MoreLink';
 import { Replay } from '../components/Replay';
 import { ShareCard } from '../components/ShareCard';
 import { StoppedFacts } from '../components/Stopped';
@@ -14,7 +14,7 @@ import { Supporters } from '../components/Supporters';
 import { Timeline } from '../components/Timeline';
 import { parseChecks, useCardDetail, type CardDetail, type Milestones } from '../lib/card-source';
 import { faceOf, isPlanned } from '../lib/cards';
-import { changedLine } from '../lib/config-words';
+import { changedLines } from '../lib/config-words';
 import { copy } from '../lib/copy';
 import { SOURCE_PARAM } from '../lib/count';
 import { siteEnv } from '../lib/env';
@@ -169,20 +169,21 @@ function Changed({ detail }: { detail: CardDetail }) {
   if (detail.card.stage !== 'live') return null;
   const checks = parseChecks(detail.card.acceptance_test);
   if (checks.length === 0) return null;
+  const { lines, rest } = changedLines(checks);
   return (
     <section className="section" aria-labelledby="card-changed">
       <h2 id="card-changed">{words.changedHeading}</h2>
       <p className="muted">{words.changedLede}</p>
-      <ul className="rows what-changed">
-        {checks.map((check) => {
-          const line = changedLine(check);
-          return (
-            <li key={`${check.file} ${check.path}`} data-plain={line.plain ? 'true' : undefined}>
-              {line.plain ? line.text : <code>{line.text}</code>}
+      {lines.length === 0 ? null : (
+        <ul className="rows what-changed">
+          {lines.map((line, index) => (
+            <li key={index} data-plain="true">
+              {line}
             </li>
-          );
-        })}
-      </ul>
+          ))}
+        </ul>
+      )}
+      {rest === null ? null : <p className="muted what-changed-rest">{rest}</p>}
     </section>
   );
 }
@@ -217,7 +218,11 @@ function Detail({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }
         {detail.stopped === null && isPlanned(detail.card) ? <Planned detail={detail} /> : <Replay detail={detail} snapshot={snapshot} />}
         {liveFundLink(detail.card, snapshot) ? <FundAgreement /> : null}
         <FollowCard cardId={detail.card.id} stage={detail.card.stage} />
-        {liveFundLink(detail.card, snapshot) ? <Perks /> : null}
+        {liveFundLink(detail.card, snapshot) ? (
+          <p className="more">
+            <MoreLink to="/contribute#perks-title">{legal.perks.link}</MoreLink>
+          </p>
+        ) : null}
       </section>
       <Facts detail={detail} />
       <Changed detail={detail} />

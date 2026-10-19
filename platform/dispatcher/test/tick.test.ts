@@ -434,6 +434,16 @@ describe('tick', () => {
     expect(await tick(deps(db, [], { alert }))).toEqual({ action: 'started', cardId: card().id });
   });
 
+  it('starts nothing with no monthly cap, and its one alert says the cap is set by SQL, not on the board', async () => {
+    const db = new FakeDb();
+    db.studio.monthly_cap_usd = null;
+    db.cards = [card()];
+    const alert = new RecordingAlerter();
+    expect(await tick(deps(db, [], { alert }))).toEqual({ action: 'sleep', reason: 'monthly_cap' });
+    expect(await tick(deps(db, [], { alert }))).toEqual({ action: 'sleep', reason: 'monthly_cap' });
+    expect(alert.messages).toEqual(['studio_state has no monthly cap, so no card starts. Set studio_state.monthly_cap_usd by SQL; the board shows the caps read-only.']);
+  });
+
   it('reads the spend totals once a tick, from the New York month start and the tier month start', async () => {
     const db = new FakeDb();
     db.cards = [card()];

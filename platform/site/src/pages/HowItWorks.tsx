@@ -253,8 +253,7 @@ export function HowItWorks() {
           </section>
         </div>
       </div>
-      {/* Who runs it as /team draws it: the lede, two tiles and the duties checklist, then what code
-          does under it at the page's width. */}
+      {/* Who runs it: the lede and two tiles, then what code does under it at the page's width. */}
       <div className="band">
         <WhoRuns id="how-who" />
         <section className="section" aria-labelledby="how-code">

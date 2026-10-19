@@ -9,7 +9,9 @@ import { legal } from '../lib/legal';
 import { canFund } from '../lib/payment';
 import type { Card, Snapshot, Supply } from '../lib/source';
 import { plannedLine } from './Card';
-import { draftingLine, FundNow, HOME_FUND_CARDS, MachineFlow } from './Flow';
+import { supplyFrom } from '../lib/source';
+import { buildingEmptyLine, draftingLine, FundNow, HOME_FUND_CARDS, MachineFlow } from './Flow';
+import { MachineCard } from './MachineCard';
 
 const STRIPE = 'https://buy.stripe.com/test-link';
 
@@ -59,7 +61,7 @@ function snapshot(cards: Card[], over: Partial<Snapshot> = {}): Snapshot {
 }
 
 function supply(over: Partial<Supply> = {}): Supply {
-  return { drafting: false, short: false, reason: null, runs_today: 0, run_limit: 3, next_check_at: null, ...over };
+  return { drafting: false, stalled: false, short: false, reason: null, runs_today: 0, run_limit: 3, next_check_at: null, ...over };
 }
 
 function renderFlow(snap: Snapshot) {
@@ -270,10 +272,10 @@ describe('MachineFlow', () => {
 });
 
 describe('FundNow', () => {
-  function renderFund(snap: Snapshot) {
+  function renderFund(snap: Snapshot, machine = false) {
     return render(
       <MemoryRouter>
-        <FundNow cards={groupCards(snap.cards, fundingPlace(snap)).fund} snapshot={snap} />
+        <FundNow cards={groupCards(snap.cards, fundingPlace(snap)).fund} snapshot={snap} machine={machine ? <MachineCard agreement={false} /> : null} />
       </MemoryRouter>,
     );
   }
@@ -304,24 +306,26 @@ describe('FundNow', () => {
     ]);
     expect(document.querySelectorAll('p.fund-agreement')).toHaveLength(1);
     expect(grid.contains(document.querySelector('p.fund-agreement'))).toBe(false);
-    // There is always a second way to fund (decision 73): the next card in line, in the row under the grid.
-    const next = document.querySelector('.fund-ways > .fund-next')!;
-    expect(grid.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(grid.querySelector('.fund-next')).toBeNull();
-    expect(next.textContent).toContain(legal.pickForMe);
-    expect(next.textContent).toContain(legal.fundNextBody);
-    expect(next.querySelector('a[href="/contribute"]')).not.toBeNull();
-    expect(document.querySelectorAll('a[href="/contribute"]')).toHaveLength(1);
-    // Next up says what the Game Designer is doing, so the panel does not repeat it.
-    expect(next.querySelector('.fund-empty-agent')).toBeNull();
+    expect(grid.nextElementSibling?.classList.contains('fund-agreement')).toBe(true);
+    // Fund the next card in line is on /contribute only: with cards open, home's other way is the Machine card.
+    expect(document.querySelector('.fund-next')).toBeNull();
+    expect(screen.queryByText(legal.pickForMe)).toBeNull();
   });
 
-  it('keeps the next card in line under a single open card, so there are always two ways to fund', () => {
-    renderFund(snapshot(open(1)));
+  it('sets the Machine card under the cards and says the agreement once for both (decision 73)', () => {
+    vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
+    renderFund(snapshot(open(1)), true);
     const items = document.querySelectorAll('ul.fund-grid > li');
     expect(items).toHaveLength(1);
-    expect(items[0]!.classList.contains('card')).toBe(true);
-    expect(document.querySelector('.fund-ways > .fund-next')?.textContent).toContain(legal.pickForMe);
+    const machine = document.querySelector('.fund-ways > .machine-card')!;
+    expect(document.querySelector('ul.fund-grid')!.compareDocumentPosition(machine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(machine.querySelector('p.fund-agreement')).toBeNull();
+    expect(document.querySelectorAll('p.fund-agreement')).toHaveLength(1);
+    cleanup();
+    // With no card carrying a live link, the Machine card's link still has the agreement under the grid.
+    renderFund(snapshot(open(2), { money: books([]) }), true);
+    expect(screen.queryByRole('link', { name: legal.fundThis })).toBeNull();
+    expect(document.querySelectorAll('p.fund-agreement')).toHaveLength(1);
   });
 
   it('says no agreement when no card carries a live link', () => {
@@ -342,7 +346,7 @@ describe('FundNow', () => {
     expect(document.querySelector('p.more a')).toBeNull();
   });
 
-  it('stands in a panel with no card open: fund the next card in line, the drafting line, and Contribute only while the Payment Link is set', () => {
+  it('stands in a panel with no card open: fund the next card in line, and Contribute only while the Payment Link is set', () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
     renderFund(snapshot([card({ id: 'b', stage: 'building' })], { supply: supply({ drafting: true }) }));
     const panel = document.querySelector('.fund-empty') as HTMLElement;
@@ -350,9 +354,8 @@ describe('FundNow', () => {
     expect(within(panel).getByText(legal.fundEmptyBody)).toBeTruthy();
     // The status line above already says no card is open, so the panel does not repeat it.
     expect(panel.textContent).not.toContain(copy.status.openNone);
-    const agent = panel.querySelector('p.fund-empty-agent')!;
-    expect(agent.textContent).toBe(copy.flow.drafting);
-    expect(agent.querySelector('svg[data-glyph="pencil"]')).not.toBeNull();
+    // Next up says what the Game Designer is doing, so the panel does not repeat it.
+    expect(panel.querySelector('.fund-empty-agent')).toBeNull();
     expect(within(panel).getByRole('link', { name: copy.contribute }).getAttribute('href')).toBe('/contribute');
     expect(document.querySelector('ul')).toBeNull();
     expect(document.querySelector('p.fund-agreement')).toBeNull();
@@ -360,8 +363,15 @@ describe('FundNow', () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', '');
     renderFund(snapshot([]));
     expect(document.querySelector('.fund-empty-title')?.textContent).toBe(legal.pickForMe);
-    expect(document.querySelector('p.fund-empty-agent')?.textContent).toBe(copy.flow.draftingIdle);
     expect(screen.queryByRole('link')).toBeNull();
+    cleanup();
+    // Beside the Machine card, the agreement goes under both, once.
+    vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
+    renderFund(snapshot([]), true);
+    const ways = document.querySelector('.fund-ways')!;
+    expect(ways.querySelector('.machine-card')).not.toBeNull();
+    expect(ways.nextElementSibling?.classList.contains('fund-agreement')).toBe(true);
+    expect(document.querySelectorAll('p.fund-agreement')).toHaveLength(1);
   });
 });
 
@@ -376,6 +386,22 @@ describe('draftingLine', () => {
     expect(draftingLine(snapshot([], { supply: supply({ reason: 'not_short' }) }))).toEqual({ text: copy.flow.draftingIdle, drafting: false });
     expect(draftingLine(snapshot([], { supply: null }))).toEqual({ text: copy.flow.draftingIdle, drafting: false });
     expect(draftingLine(snapshot([]))).toEqual({ text: copy.flow.draftingIdle, drafting: false });
+  });
+});
+
+describe('a draft that waited since an earlier day', () => {
+  it('is read as stalled: nothing is drafting, and Building promises no start time', () => {
+    // Production on 18 October 2026: a draft queued on 15 October that nothing has started.
+    const stalled = supplyFrom({ drafting: true, short: true, reason: 'already_queued', runs_today: 0, run_limit: 12, next_check_at: null });
+    expect(stalled).toMatchObject({ drafting: false, stalled: true });
+    expect(draftingLine(snapshot([], { supply: stalled }))).toEqual({ text: copy.flow.draftingIdle, drafting: false });
+    expect(buildingEmptyLine(snapshot([], { supply: stalled }))).toBe(copy.flow.lanes.building.emptyStalled);
+    expect(copy.flow.lanes.building.emptyStalled).not.toMatch(/hour|minute|soon/);
+    // A draft made today is drafting, and the promise stands.
+    const today = supplyFrom({ drafting: true, short: true, reason: 'already_queued', runs_today: 1, run_limit: 12, next_check_at: null });
+    expect(today).toMatchObject({ drafting: true, stalled: false });
+    expect(buildingEmptyLine(snapshot([], { supply: today }))).toBe(copy.flow.lanes.building.empty);
+    expect(supplyFrom({ drafting: false, runs_today: 0 })).toMatchObject({ drafting: false, stalled: false });
   });
 });
 

@@ -5,7 +5,7 @@ import { expect, overflowsHorizontally, test } from './fixtures';
 import { BUILDING_CARD_ID, LIVE_CARD_ID, OPEN_CARD_ID, SESSIONS, SUPPORTER_STUDIO } from './supporter-studio';
 
 // Mob Machine as a place (docs/specs/place.md): the top bar knows who is here, home is the studio's
-// floor with the room's stations as links, Fund first and Ideas beside it, /me is the player's desk, and
+// floor with the rail's stations as links, Fund first and Ideas beside it, /me is the player's desk, and
 // what a contribution gets you is said where people pay and once they have. Set E2E_PLACE_SHOTS to a
 // folder to also save the pages' frames, signed out and signed in, at 375, 768 and 1440px.
 test.use({ studio: SUPPORTER_STUDIO });
@@ -16,9 +16,9 @@ test('signed out, the top bar offers Sign in and the floor names every station',
   await page.goto('/');
   await expect(page.locator('.you-chip')).toHaveText('Sign in');
   await expect(page.locator('.you-chip')).toHaveAttribute('href', '/me');
-  // The room's tags go to its five stations, Fund first; the rail lists Next up too.
-  const tags = page.locator('.station-tags a');
-  await expect(tags).toHaveCount(5);
+  // The room is one clean scene with no labels floating over it (the board, 18 October 2026); the rail
+  // lists the six stations, Fund first.
+  await expect(page.locator('.floor-plate .station-tags, .floor-plate .station-pill')).toHaveCount(0);
   await expect(page.locator('.floor-stations a')).toHaveCount(6);
   expect(await page.locator('[data-station-part]').evaluateAll((parts) => parts.map((part) => part.getAttribute('data-station-part')))).toEqual([
     'fund',
@@ -33,12 +33,11 @@ test('signed out, the top bar offers Sign in and the floor names every station',
   await expect(ideas.getByText(IDEAS[0]!.title)).toBeVisible();
   await expect(ideas.getByText('14 upvotes')).toBeVisible();
   await expect(ideas.getByRole('link', { name: 'Pitch an idea' })).toHaveAttribute('href', '/suggest#suggest-send');
-  // What you get sits with the cards to fund, and paying never asks for an account.
-  const perks = page.locator('[data-station-part="fund"] .perks');
-  await expect(perks.getByText('As a guest', { exact: true })).toBeVisible();
-  await expect(perks.getByText('10 XP for every dollar, more on rarer cards.')).toBeVisible();
-  // Pressing a station in the room goes to its part of the floor.
-  await page.locator('.station-tags a[href="#shipped"]').click();
+  // What you get is said on /contribute; the cards to fund link to it.
+  await expect(page.locator('[data-station-part="fund"] .perks')).toHaveCount(0);
+  await expect(page.locator('[data-station-part="fund"]').getByRole('link', { name: 'What you get for funding' })).toHaveAttribute('href', '/contribute#perks-title');
+  // Pressing a station on the rail goes to its part of the floor.
+  await page.locator('.floor-stations a[href="#shipped"]').click();
   await expect(page).toHaveURL(/#shipped$/);
   await expect(page.locator('[data-station-part="shipped"] h2')).toBeInViewport();
   expect(await overflowsHorizontally(page)).toBe(false);
@@ -54,8 +53,6 @@ test('signed in, the top bar shows the player and home welcomes them back with t
   await expect(panel.getByRole('link', { name: 'The live card' })).toBeVisible();
   await expect(panel.getByRole('link', { name: 'Fund a card' })).toHaveAttribute('href', '#fund');
   await expect(panel.getByRole('link', { name: 'Open your desk' })).toHaveAttribute('href', '/me');
-  // A signed-in player is not asked to make a profile.
-  await expect(page.locator('[data-station-part="fund"] .perks').getByRole('link', { name: 'Make a free profile' })).toHaveCount(0);
   expect(await overflowsHorizontally(page)).toBe(false);
 });
 
@@ -108,12 +105,18 @@ test('Pitch an idea sends a signed-out visitor to sign in and back to the form, 
   await expect.poll(() => posts.filter((post) => post.path.endsWith('/claim_contributions')).length).toBe(1);
 });
 
-test('a fundable card says what you get on its page, a shipped one does not', async ({ page }) => {
+test('a fundable card links to what you get, a shipped one does not, and /contribute says it', async ({ page }) => {
   await answerCommunity(page);
   await page.goto(`/card/${OPEN_CARD_ID}`);
-  await expect(page.locator('.card-face-column .perks')).toBeVisible();
-  await page.goto(`/card/${LIVE_CARD_ID}`);
+  const link = page.locator('.card-face-column').getByRole('link', { name: 'What you get for funding' });
+  await expect(link).toHaveAttribute('href', '/contribute#perks-title');
   await expect(page.locator('.card-face-column .perks')).toHaveCount(0);
+  await link.click();
+  await expect(page).toHaveURL(/\/contribute#perks-title$/);
+  await expect(page.locator('.perks').getByText('As a guest', { exact: true })).toBeVisible();
+  await expect(page.locator('.perks').getByText('10 XP for every dollar, more on rarer cards.')).toBeVisible();
+  await page.goto(`/card/${LIVE_CARD_ID}`);
+  await expect(page.locator('.card-face-column').getByRole('link', { name: 'What you get for funding' })).toHaveCount(0);
 });
 
 test('a card names the players whose ideas it came from, and a card from no idea names no one', async ({ page }) => {
@@ -136,15 +139,21 @@ test('a card names the players whose ideas it came from, and a card from no idea
 test('while sign-in is closed the site offers no profile, and paying still works', async ({ page }) => {
   await answerCommunity(page, { signInOpen: false });
   await page.goto('/');
-  await expect(page.locator('[data-station-part="fund"] .perks')).toHaveAttribute('data-sign-in', 'closed');
   await expect(page.locator('.you-chip')).toHaveCount(0);
   const fund = page.locator('[data-station-part="fund"]');
-  await expect(fund.getByText('With a free profile')).toHaveCount(0);
-  await expect(fund.getByText('Paying never needs an account.', { exact: true })).toBeVisible();
   await expect(fund.getByRole('link', { name: 'Fund this card' }).first()).toBeVisible();
   const ideas = page.locator('[data-station-part="ideas"]');
   await expect(ideas.getByText('Pitching needs a profile, and profiles are not open yet.', { exact: false })).toBeVisible();
   await expect(ideas.getByRole('link', { name: 'Pitch an idea' })).toHaveCount(0);
+  await page.goto('/contribute');
+  const perks = page.locator('.perks');
+  await expect(perks).toHaveAttribute('data-sign-in', 'closed');
+  await expect(perks.getByText('With a free profile')).toHaveCount(0);
+  await expect(perks.getByText('Paying never needs an account.', { exact: true })).toBeVisible();
+  await page.goto('/faq');
+  await expect(page.getByText('Profiles, with a name, an avatar, XP and a collection of the cards you funded, are not open yet.')).toBeVisible();
+  await expect(page.getByRole('main').getByRole('link', { name: 'Your desk' })).toHaveCount(0);
+  await expect(page.getByRole('main').getByRole('link', { name: 'Pitch an idea' })).toHaveCount(0);
   await page.goto('/me');
   await expect(page.getByRole('heading', { level: 2, name: 'Profiles are not open yet' })).toBeVisible();
   await expect(page.getByRole('textbox')).toHaveCount(0);

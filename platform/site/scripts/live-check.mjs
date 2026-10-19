@@ -125,7 +125,7 @@ const STATUS_LINE =
   /^(No card is open for funding right now\.|The agents are drafting the next card\.|1 card is open for funding\.|\d[\d,]* cards are open for funding\.)( (1 card is|\d[\d,]* cards are) being built\.)?$/;
 // Fund the next card in line's second line with the funding order loaded: the next card, or the waits line.
 const NEXT_IN_LINE = /^Next in line: (.+)$/;
-const WAITS_LINE = 'No card is open for funding right now. Your contribution waits in Not on a card yet and funds the next card that opens.';
+const WAITS_LINE = 'No card is open for funding right now. Your contribution waits for the next card to open, then funds it.';
 // The line naming no card, which /contribute shows while the first card in the order is not in /api/cards yet.
 const PICK_BODY = 'Your contribution funds whatever the agents build next.';
 const RECONCILE_LINE = /^(Reconciled with Stripe on \d{1,2} [A-Z][a-z]{2} \d{4}|Not yet reconciled with Stripe)\.$/;
@@ -214,8 +214,8 @@ async function livePart(key) {
 
 /**
  * Every Payment Link in main that does not carry the agreement: the Terms and Refunds links and the
- * age condition in the one agreement line under its card grid (the board, 27 Sep 2026), or on
- * /contribute in the line directly under the first choice.
+ * age condition in the one agreement line of its section (the board, 27 Sep 2026; once per page since
+ * 18 Oct 2026), or on /contribute in the line directly under the first choice.
  */
 function linksWithoutAgreement(page) {
   return page.evaluate((tokens) => {
@@ -229,11 +229,13 @@ function linksWithoutAgreement(page) {
     const underFirst = location.pathname === '/contribute' && line?.tagName === 'P' && has(line);
     return [...document.querySelectorAll('main a[href^="https://buy.stripe.com/"]')]
       .filter((a) => {
-        const grid = a.closest('ul.card-grid, ul.fund-grid');
-        const next = grid === null ? [] : [grid.nextElementSibling, grid.nextElementSibling?.nextElementSibling];
-        // The Machine card carries its own agreement inside it (components/MachineCard.tsx).
+        // The one agreement line of the link's section: home's Fund station says it once for its cards
+        // and the Machine card (components/Flow.tsx FundNow).
+        const section = a.closest('section');
+        const inSection = section !== null && [...section.children].some((el) => el.classList.contains('fund-agreement') && has(el));
+        // A Machine card drawn on its own carries its own agreement inside it (components/MachineCard.tsx).
         const machine = a.closest('.machine-card')?.querySelector('.fund-agreement') ?? null;
-        return !underFirst && !has(machine) && !next.some((el) => el?.classList.contains('fund-agreement') && has(el));
+        return !underFirst && !has(machine) && !inSection;
       })
       .map((a) => `${(a.textContent ?? '').trim()} -> ${a.getAttribute('href')}`);
   }, AGREEMENT_TOKENS);

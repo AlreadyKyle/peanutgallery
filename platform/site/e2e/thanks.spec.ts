@@ -145,7 +145,7 @@ test('a held payment says until when, a partly unplaced one says it waits', asyn
   await expect(page.locator('[data-note="waiting"]')).toHaveCount(0);
   await open(page, SESSIONS.waiting);
   await expect(page.locator('[data-note="waiting"]')).toHaveText(
-    'Part of your contribution waits as Not on a card yet and goes to the next card that opens.',
+    'Part of your contribution waits for the next card to open.',
   );
   await expect(page.locator('[data-note="held"]')).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Where your money went' }).locator('li')).toHaveCount(1);
@@ -193,7 +193,7 @@ test('a recorded payment draws the card it went to with the supporter number on 
   await expect(face.getByRole('link', { name: 'A cheaper Cart' })).toHaveAttribute('href', `/card/${BUILDING_CARD_ID}`);
   await expect(reward.getByRole('button', { name: 'Share' })).toBeVisible();
   const steps = reward.locator('.thanks-next > li');
-  await expect(steps.locator('strong')).toHaveText(['Drafting', 'Building', 'Checks', 'Live']);
+  await expect(steps.locator('strong')).toHaveText(['Waiting', 'Building', 'Checks', 'Live']);
   // The fixture's card is being built, so Building is the current step.
   await expect(reward.locator('[aria-current="step"]')).toHaveAttribute('data-step', 'building');
   await expect(reward.locator('[data-note="ship-email"]')).toHaveText('When it goes live, the studio emails you a ship notice.');

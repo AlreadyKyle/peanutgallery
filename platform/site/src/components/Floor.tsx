@@ -11,7 +11,7 @@ import type { Card, Snapshot } from '../lib/source';
 import { useSignInOpen } from '../lib/sign-in';
 import { Suggestion } from '../pages/Suggest';
 import { CardFace } from './Card';
-import { draftingLine } from './Flow';
+import { buildingEmptyLine, draftingLine } from './Flow';
 import { Glyph, type GlyphName } from './Glyph';
 import { MoreLink } from './MoreLink';
 import { PersonAvatar } from './Person';
@@ -44,13 +44,9 @@ export function floorStations(snapshot: Snapshot) {
   return FLOOR_STATIONS.filter((station) => station.id !== 'team' || team);
 }
 
-/** The station tags for the room: each a link to its heading on this page. */
+/** The stations that stand at a piece of the room, for the rail map's lit outline. */
 export function stationTags(snapshot: Snapshot): StationTag[] {
-  return floorStations(snapshot).flatMap(({ id, piece }) => {
-    if (piece === null) return [];
-    const words = copy.floor.stations[id];
-    return [{ id, piece, name: words.name, label: copy.floor.goTo.replace('{name}', words.name).replace('{where}', words.where), href: `#${id}` }];
-  });
+  return floorStations(snapshot).flatMap(({ id, piece }) => (piece === null ? [] : [{ id, piece }]));
 }
 
 /**
@@ -266,7 +262,7 @@ export function BuildingStation({ snapshot, groups, index }: { snapshot: Snapsho
         snapshot={snapshot}
         empty={
           <>
-            <p>{copy.flow.lanes.building.empty}</p>
+            <p>{buildingEmptyLine(snapshot)}</p>
             {last === undefined ? null : (
               <p className="card-meta">{copy.flow.lanes.building.lastBuilt.replace('{title}', last.title).replace('{date}', formatDate(shippedAt(last)))}</p>
             )}

@@ -314,12 +314,35 @@ function under(file: string, dir: string): boolean {
   return file === dir || file.startsWith(`${dir}/`);
 }
 
-// A kernel path, or a path with a kernel name as any of its segments. Case is ignored: a
-// case-insensitive checkout (macOS) reads claude.md as CLAUDE.md and Platform/Gate as platform/gate.
+// The extensions Vite and Vitest try, in this order, for an import written without one: the same
+// list as GATE_RESOLVE_ORDER in platform/gate/lib/common.sh. A module under an earlier extension is
+// imported in place of a locked source file, while TypeScript's own check still resolves the locked
+// file, so the shadow passes the typecheck and replaces the locked file without touching it.
+export const RESOLVE_ORDER: readonly string[] = ['mjs', 'js', 'mts', 'ts', 'jsx', 'tsx', 'json'];
+
+// True when file is a module that resolves ahead of the locked file: the same name under an earlier
+// extension of RESOLVE_ORDER than the locked file's own (gate_shadows_kernel_file in the gate).
+export function shadowsLockedFile(file: string, locked: string): boolean {
+  const dot = locked.lastIndexOf('.');
+  if (dot < 0) return false;
+  const own = RESOLVE_ORDER.indexOf(locked.slice(dot + 1));
+  if (own < 0) return false;
+  const stem = locked.slice(0, dot);
+  return RESOLVE_ORDER.slice(0, own).some((ext) => file === `${stem}.${ext}`);
+}
+
+// Equal to the locked path, under it, or a module that shadows it; both are lower case.
+function lockedBy(file: string, locked: string): boolean {
+  return under(file, locked) || shadowsLockedFile(file, locked);
+}
+
+// A kernel path or a module that shadows a kernel source file, or a path with a kernel name as any of
+// its segments. Case is ignored: a case-insensitive checkout (macOS) reads claude.md as CLAUDE.md and
+// Platform/Gate as platform/gate.
 export function isKernelPath(file: string): boolean {
   const lower = file.toLowerCase();
   return (
-    KERNEL_PATHS.some((kernel) => under(lower, kernel.toLowerCase())) ||
+    KERNEL_PATHS.some((kernel) => lockedBy(lower, kernel.toLowerCase())) ||
     file.split('/').some((segment) => KERNEL_NAME_PATTERNS.some((pattern) => pattern.test(segment)))
   );
 }
@@ -338,10 +361,11 @@ export function lanePaths(folder: CardFolder, lane: CardLane): string[] {
   return folder === 'seed-1' ? [...CONFIG_LANE_PATHS] : [];
 }
 
-// A kernel design file, or a file under a design folder; case is ignored, as for kernel paths.
+// A kernel design file, a file under a design folder, or a module that shadows a design source file
+// (routes.ts beside routes.tsx); case is ignored, as for kernel paths.
 export function isDesignPath(file: string): boolean {
   const lower = file.toLowerCase();
-  return DESIGN_PATHS.some((design) => under(lower, design.toLowerCase()));
+  return DESIGN_PATHS.some((design) => lockedBy(lower, design.toLowerCase()));
 }
 
 // The kernel and design paths that lie inside the allowed paths, named in the session prompt.

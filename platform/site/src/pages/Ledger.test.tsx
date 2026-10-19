@@ -109,8 +109,10 @@ describe('Ledger', () => {
     const deploys = listItems('Deploys');
     expect(deploys).toHaveLength(2);
     // A deploy row is the folder, the sha and passed or failed: the smoke bot's raw output is never shown.
-    expect(deploys[0]?.textContent).toBe(`${formatDateTime('2026-09-14T02:10:00Z')}Game b7e1c9a failed checks`);
-    expect(deploys[1]?.textContent).toBe(`${formatDateTime('2026-09-14T01:20:00Z')}Game 2775bcb passed checks`);
+    expect(deploys[0]?.textContent).toBe(`${formatDateTime('2026-09-14T02:10:00Z')}Dust update failed checks`);
+    expect(deploys[1]?.textContent).toBe(`${formatDateTime('2026-09-14T01:20:00Z')}Dust update passed checks`);
+    // The commit code is in the row's tooltip, not its words.
+    expect(deploys[1]?.querySelector('.row-body')?.getAttribute('title')).toBe('Commit 2775bcb');
     expect(screen.queryByText('restored')).toBeNull();
   });
 
@@ -120,7 +122,7 @@ describe('Ledger', () => {
     const raw = { ...deploy, smoke_result: 'bot: 812 simulated seconds, 13 unlocks, budget 900 s' };
     renderLedger(sourceOf({ ...snapshot, deploys: [raw] }));
     await waitFor(() => expect(listItems('Deploys')).toHaveLength(1));
-    expect(listItems('Deploys')[0]?.textContent).toBe(`${formatDateTime('2026-09-14T01:20:00Z')}Game 2775bcb passed checks`);
+    expect(listItems('Deploys')[0]?.textContent).toBe(`${formatDateTime('2026-09-14T01:20:00Z')}Dust update passed checks`);
     expect(screen.queryByText(/simulated seconds/)).toBeNull();
   });
 

@@ -3,13 +3,9 @@ import { CardsStatus } from '../components/CardsStatus';
 import { EventList } from '../components/EventList';
 import { ExplainerVideo } from '../components/ExplainerVideo';
 import { FundNow } from '../components/Flow';
-import { BuildingStation, FloorRail, FLOOR_STATIONS, IdeasStation, NextStation, ShippedStation, StationPart, stationCounts, stationTags, useLitStation, useSignedInPanel, WelcomePanel } from '../components/Floor';
-import { Perks } from '../components/Perks';
-import { useSignedIn } from '../lib/account';
-import { splitSentence } from '../components/Funding';
+import { BuildingStation, FloorRail, FLOOR_STATIONS, IdeasStation, NextStation, ShippedStation, StationPart, stationCounts, useLitStation, useSignedInPanel, WelcomePanel } from '../components/Floor';
 import { Glyph } from '../components/Glyph';
-import { LiveStudio, TwitchLink } from '../components/LiveStudio';
-import { twitchChannel } from '../lib/twitch';
+import { LiveStudio } from '../components/LiveStudio';
 import { MachineCard } from '../components/MachineCard';
 import { Announcer } from '../components/Announcer';
 import { PoolLine } from '../components/PoolStat';
@@ -144,11 +140,10 @@ function ShowcaseSection() {
 
 /**
  * The Fund station: the cards open for funding, first and biggest, or the loading or unavailable line
- * while there is no snapshot; then what a contribution gets you.
+ * while there is no snapshot; then a link to what a contribution gets you.
  */
 function FundSection({ studio, live, index }: { studio: StudioState; live: ReturnType<typeof useLiveHome>; index: number }) {
   const view = live.view;
-  const signedIn = useSignedIn();
   return (
     <StationPart id="fund" index={index} title={copy.flow.fundTitle} intro={copy.flow.fundIntro}>
       <div className="fund-status">
@@ -159,7 +154,7 @@ function FundSection({ studio, live, index }: { studio: StudioState; live: Retur
         unavailable={view === null && studio.state !== 'loading'}
       />
       {view !== null ? (
-        <FundNow cards={view.groups.fund} snapshot={view.snapshot} changed={live.changed} machine={<MachineCard />} />
+        <FundNow cards={view.groups.fund} snapshot={view.snapshot} changed={live.changed} machine={<MachineCard agreement={false} />} />
       ) : studio.state === 'loading' ? (
         <p className="muted" aria-busy="true">
           {copy.loadingCards}
@@ -170,7 +165,10 @@ function FundSection({ studio, live, index }: { studio: StudioState; live: Retur
       {/* The Machine card (docs/specs/final-state.md, Card suits): always open, general support. With the
           cards drawn it sits beside the next card in line; without them it follows the loading line. */}
       {view !== null ? null : <MachineCard />}
-      <Perks signIn={!signedIn} />
+      {/* What a contribution gets you is said on /contribute and /me (docs/specs/place.md); here, a link. */}
+      <p className="more">
+        <MoreLink to="/contribute#perks-title">{legal.perks.link}</MoreLink>
+      </p>
     </StationPart>
   );
 }
@@ -193,13 +191,13 @@ function TeamSection({ view }: { view: HomeView }) {
   );
 }
 
-/** Where the money goes: the pool with the coin, the split, the latest agent actions and the ledger. */
+/** Where the money goes: the pool with the coin, that every figure is on the ledger, the latest agent actions and the ledger link. */
 function MoneySection({ studio, view }: { studio: StudioState; view: HomeView | null }) {
   const snapshot = view?.snapshot ?? null;
   return (
     <section className="section" aria-labelledby="money">
       <h2 id="money">{legal.moneyHeading}</h2>
-      {/* The pool and the split on the left, the latest agent actions beside them from 64rem. */}
+      {/* The pool on the left, the latest agent actions beside it from 64rem. */}
       <div className="money-grid">
         <div className="money-summary">
           {snapshot === null ? (
@@ -211,9 +209,6 @@ function MoneySection({ studio, view }: { studio: StudioState; view: HomeView | 
           ) : (
             <PoolLine balance={snapshot.pool.balance_usd} />
           )}
-          <p className="money-split">
-            {splitSentence()} {legal.agentShareLine} {legal.notDonations}
-          </p>
         </div>
         <div className="money-actions">
           {snapshot === null ? null : (
@@ -259,15 +254,9 @@ export function Landing() {
         ) : (
           <WelcomePanel profile={player} snapshot={view?.snapshot ?? null} />
         )}
-        {/* While the snapshot loads, the room's label keeps its row, so the panel's heading holds still. */}
-        {view === null ? (
-          <div className="live-studio-head live-studio-hold" aria-hidden="true">
-            <span className="live-studio-hold-title">{copy.studioRoom.title}</span>
-            <TwitchLink channel={twitchChannel()} />
-          </div>
-        ) : (
-          <LiveStudio snapshot={view.snapshot} stations={stationTags(view.snapshot)} lit={lit} pipeSize={2} />
-        )}
+        {/* While the snapshot loads, the room is drawn empty in its own box and the pipe tells the feed,
+            so nothing under them moves when the agents arrive. */}
+        <LiveStudio snapshot={view?.snapshot ?? null} pipeSize={2} />
       </div>
       {/* The stations in the machine's order, the rail with the room's small map beside them from
           64rem; then the first game. */}

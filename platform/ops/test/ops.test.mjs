@@ -1690,7 +1690,9 @@ describe('the GitHub Actions host', () => {
   test('hands DISPATCHER_ENV to the run and alert steps alone, never to the install, and echoes no secret', () => {
     const withSecrets = steps.filter((candidate) => JSON.stringify(candidate).includes('secrets.'));
     assert.deepEqual(withSecrets.map((candidate) => candidate.name), ['Run the dispatcher', 'Alert the board']);
-    for (const candidate of withSecrets) assert.deepEqual(candidate.env, { DISPATCHER_ENV: '${{ secrets.DISPATCHER_ENV }}' });
+    // The run step also holds the job token, to read the run before it (previous_stop).
+    assert.deepEqual(step('Run the dispatcher').env, { DISPATCHER_ENV: '${{ secrets.DISPATCHER_ENV }}', GH_TOKEN: '${{ github.token }}' });
+    assert.deepEqual(step('Alert the board').env, { DISPATCHER_ENV: '${{ secrets.DISPATCHER_ENV }}' });
     assert.deepEqual([...new Set([...text.matchAll(/secrets\.([A-Z_]+)/g)].map((match) => match[1]))], ['DISPATCHER_ENV']);
     for (const candidate of steps) {
       assert.doesNotMatch(candidate.run ?? '', /secrets\.|\$\{\{\s*env\./, `${candidate.name} puts an expression in its script`);
@@ -1744,8 +1746,73 @@ describe('the GitHub Actions host', () => {
     assert.equal(redispatch('false false false 600'), 'true', 'after a run of ten minutes');
     assert.equal(redispatch('false false false 599'), 'false', 'a short failed run waits for the schedule');
     assert.match(script, /^EXIT_FATAL=78$/m);
-    assert.match(script, /stop_fatal\(\) \{\n[^}]*output redispatch false\n[^}]*alert "Mob Machine dispatcher stopped on GitHub Actions: fatal startup error\$\{2:\+: \$2\}"\n\s+exit "\$EXIT_FATAL"/);
-    assert.match(script, /stop_fatal "the dispatcher exited \$EXIT_FATAL; the encrypted log says why" "\$\(fatal_reason\)"/);
+    assert.match(script, /stop_fatal\(\) \{\n[^}]*output redispatch false\n/);
+    assert.match(script, /stop_fatal "the dispatcher exited \$EXIT_FATAL \(\$\(stop_reason\)\)" "\$\(fatal_reason\)"/);
+  });
+
+  // A fake gh answering the run list with run 200 and its logs with a zip of the given public log,
+  // and a fake curl keeping each ntfy config it is given.
+  function stopHost(previousLog) {
+    const dir = mkdtempSync(path.join(scratch, 'actions-stop-'));
+    mkdirSync(path.join(dir, 'bin'));
+    mkdirSync(path.join(dir, 'host', 'env'), { recursive: true });
+    writeFileSync(path.join(dir, 'host', 'env', 'dispatcher.env'), 'NTFY_TOPIC_URL=https://ntfy.sh/fixture-topic\n');
+    writeFileSync(path.join(dir, 'previous.txt'), previousLog);
+    const zipped = spawnSync('python3', ['-c', 'import sys, zipfile; z = zipfile.ZipFile(sys.argv[1], "w"); z.write(sys.argv[2], "0_dispatcher.txt"); z.close()', path.join(dir, 'logs.zip'), path.join(dir, 'previous.txt')]);
+    assert.equal(zipped.status, 0, String(zipped.stderr));
+    writeFileSync(path.join(dir, 'bin', 'gh'), `#!/bin/bash\nprintf '%s\\n' "$*" >> "${dir}/gh-calls"\ncase "$2" in\n  */workflows/dispatcher.yml/runs*) echo 200 ;;\n  */actions/runs/200/logs) cat "${dir}/logs.zip" ;;\n  *) exit 1 ;;\nesac\n`);
+    writeFileSync(path.join(dir, 'bin', 'curl'), `#!/bin/bash\nfor arg; do last=$arg; done\ncat "$last" >> "${dir}/ntfy"\n`);
+    chmodSync(path.join(dir, 'bin', 'gh'), 0o755);
+    chmodSync(path.join(dir, 'bin', 'curl'), 0o755);
+    writeFileSync(path.join(dir, 'output'), '');
+    const env = { PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`, ACTIONS_HOST_DIR: path.join(dir, 'host'), RUNNER_TEMP: dir, GITHUB_OUTPUT: path.join(dir, 'output'), GH_TOKEN: 'fixture-job-token', GITHUB_REPOSITORY: 'AlreadyKyle/peanutgallery', GITHUB_RUN_ID: '300' };
+    const read = (name) => (existsSync(path.join(dir, name)) ? readFileSync(path.join(dir, name), 'utf8') : '');
+    return { env, read };
+  }
+  const KEY_STOP = 'the dispatcher exited 78 (stop reason: anthropic key refused)';
+  const publicLog = (...lines) => lines.map((line) => `2026-10-18T22:01:31.8358444Z actions-host: ${line}`).join('\r\n');
+
+  test('alerts a fatal stop once while it holds, and again when the stop changes or the last alert did not go out', () => {
+    const stop = (host, env = {}) => actionsFn(`stop_fatal "${KEY_STOP}" "STUDIO_ANTHROPIC_API_KEY answered 401"`, { ...host.env, ...env });
+
+    const same = stopHost(publicLog(`stopped: fatal startup error: ${KEY_STOP}`, 'alert sent'));
+    const held = stop(same);
+    assert.equal(held.status, 78);
+    assert.match(held.stdout, /actions-host: alert held: the run before stopped the same way/);
+    assert.equal(same.read('ntfy'), '', 'no alert');
+    assert.match(same.read('output'), /^alerted=true$/m, 'the fallback alert step stays quiet');
+    assert.match(same.read('output'), /^fatal=true$/m);
+    assert.match(same.read('gh-calls'), /select\(\.id != 300 and/, 'skips its own run');
+
+    const heldBefore = stopHost(publicLog(`stopped: fatal startup error: ${KEY_STOP}`, 'alert held: the run before stopped the same way and the board has that alert'));
+    assert.equal(stop(heldBefore).status, 78);
+    assert.equal(heldBefore.read('ntfy'), '');
+
+    const changed = stopHost(publicLog('stopped: fatal startup error: the dispatcher exited 78 (stop reason: github read token refused)', 'alert sent'));
+    const sent = stop(changed);
+    assert.match(sent.stdout, /actions-host: alert sent/);
+    assert.match(changed.read('ntfy'), /data-binary = "Mob Machine dispatcher stopped on GitHub Actions: fatal startup error: the dispatcher exited 78 \(stop reason: anthropic key refused\): STUDIO_ANTHROPIC_API_KEY answered 401\. Nothing runs until this is fixed; this alert comes once, and again only if the stop changes\."/);
+
+    const unsent = stopHost(publicLog(`stopped: fatal startup error: ${KEY_STOP}`, 'could not post to ntfy'));
+    stop(unsent);
+    assert.match(unsent.read('ntfy'), /anthropic key refused/);
+
+    const noToken = stopHost(publicLog(`stopped: fatal startup error: ${KEY_STOP}`, 'alert sent'));
+    stop(noToken, { GH_TOKEN: '' });
+    assert.match(noToken.read('ntfy'), /anthropic key refused/, 'with no way to read the run before, it alerts');
+    assert.equal(noToken.read('gh-calls'), '');
+  });
+
+  test("names the dispatcher's public stop reason, from the fixed lifecycle lines only", () => {
+    const host = mkdtempSync(path.join(scratch, 'actions-reason-'));
+    mkdirSync(path.join(host, 'logs'));
+    writeFileSync(path.join(host, 'logs', 'dispatcher.log'), [
+      JSON.stringify({ msg: 'dispatcher exited with an error', error: 'fixture-secret' }),
+      JSON.stringify({ msg: 'stop reason: fixture-secret' }),
+      JSON.stringify({ msg: 'stop reason: anthropic key refused', exitCode: 78 }),
+    ].join('\n'));
+    assert.equal(actionsFn('stop_reason', { ACTIONS_HOST_DIR: host }).stdout, 'stop reason: anthropic key refused');
+    assert.equal(actionsFn('stop_reason', { ACTIONS_HOST_DIR: path.join(host, 'none') }).stdout, 'the encrypted log says why');
   });
 
   test("puts the dispatcher's own fatal reason in the ntfy alert alone, with the env file's values masked", () => {
