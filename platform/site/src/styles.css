@@ -2307,9 +2307,11 @@ button.link:hover:not(:disabled) {
   font-size: var(--size-small);
 }
 
-/* On an ink band an avatar sits on a paper disc and draws unchanged. */
+/* On an ink band an avatar sits on a paper disc and draws unchanged, a little in from the disc's edge,
+   so an idle bob never lifts an antenna past it. */
 main > .band:nth-child(2n + 3) .avatar,
 main > .band:first-child .pipe .avatar {
+  padding: 0.1875rem;
   border-radius: 50%;
   background: var(--paper);
 }

@@ -45,8 +45,9 @@ function RoleRow({ role, status, snapshot }: { role: Role; status: TeamStatus; s
     <li className="agent" id={`agent-${role.id}`} data-status={status.kind} data-kind={role.code_only === true ? 'code' : undefined}>
       {/* Awake while the studio is paused (the board, 23 Sep 2026: running agents have their eyes
           open); asleep when the board has paused this one agent, and every role still to come
-          (the board's #75 call), with its smaller avatar. */}
-      <Avatar note={role.species_note} asleep={coming || (status.kind === 'paused' && status.by === 'role')} size={coming ? 56 : 96} />
+          (the board's #75 call), with its smaller avatar. A member on the team bobs as an idle
+          agent in the live studio does; a role still to come holds still. */}
+      <Avatar note={role.species_note} asleep={coming || (status.kind === 'paused' && status.by === 'role')} size={coming ? 56 : 96} idle={!coming} />
       <h3 id={`role-${role.id}`}>{role.name}</h3>
       <p className="agent-kind">{kind}</p>
       {role.description === null || role.description.trim() === '' ? null : <p>{role.description}</p>}

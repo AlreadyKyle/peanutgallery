@@ -1,4 +1,5 @@
-import { useId, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type CSSProperties, type ReactNode } from 'react';
+import { watchIdle } from '../lib/idle';
 
 /**
  * Agent avatars, drawn by code (the art policy: art in the games and the agent avatars is drawn by
@@ -293,11 +294,17 @@ export function avatarParts(features: AvatarFeatures, asleep = false): ReactNode
  * An agent's picture, drawn from its species note. The note is also the picture's text alternative,
  * so a screen reader hears what the drawing shows. The pose comes only from data: `asleep` (eyes
  * closed) while public_studio.paused is true, and the default drawing until the studio row loads.
+ * `idle` gives it the live studio's idle bob (lib/idle.ts): the body rises and settles over its
+ * ground shadow on its own rhythm, seeded from the note, and is drawn still under reduced motion.
  */
-export function Avatar({ note, size = 96, asleep = false }: { note: string; size?: number; asleep?: boolean }) {
+export function Avatar({ note, size = 96, asleep = false, idle = false }: { note: string; size?: number; asleep?: boolean; idle?: boolean }) {
   const titleId = useId();
+  const body = useRef<SVGGElement>(null);
   const features = avatarFeatures(note);
   const style = { '--avatar-fill': `var(--creature-${features.colour})` } as CSSProperties;
+  const [ground, ...figure] = avatarParts(features, asleep);
+  const phase = (noteHash(note) % 6283) / 1000;
+  useEffect(() => (idle && body.current !== null ? watchIdle(body.current, phase) : undefined), [idle, phase]);
   return (
     <svg
       className="avatar"
@@ -310,9 +317,11 @@ export function Avatar({ note, size = 96, asleep = false }: { note: string; size
       style={style}
       data-colour={features.colour}
       data-pose={asleep ? 'asleep' : 'awake'}
+      data-idle={idle ? 'true' : undefined}
     >
       <title id={titleId}>{note}</title>
-      {avatarParts(features, asleep)}
+      {ground}
+      <g ref={body}>{figure}</g>
     </svg>
   );
 }
