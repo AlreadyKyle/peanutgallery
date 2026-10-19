@@ -87,7 +87,7 @@ Headings are bold and sentence case, never shouting. No italic anywhere. Nothing
 
 ## Grid and layout
 
-- **One width.** Everything lines up to a 76rem (1216px) column with a side margin that grows with the screen (20px on a phone, 5% of the width on a tablet or laptop, 64px and up on a desktop), so the top bar, every section and the footer share a left edge. Home alone is wider (90rem), top bar and footer included, since the floor is the studio itself.
+- **One width.** Everything lines up to one 90rem (1440px) frame with a side margin inside it that grows with the screen (20px on a phone, 5% of the width on a tablet or laptop, 64px and up on a desktop), so the top bar, every section and the footer share a left edge. Running text keeps its reading line inside the frame.
 - **Bands.** A page is a stack of full-bleed bands: the ink plate first (the top bar shares it), then paper and ink in turn. The change of ground is the only divider.
 - **The index.** Every section after the plate opens on a 2px rule over its heading. It is the machine's spec-sheet line; the heading is the label, so no number sits over it. Home's stations carry no numbers either (the board, 18 October 2026): each opens on its glyph and where in the room it is, in the order a card moves.
 - **Five layouts**, and nothing else:

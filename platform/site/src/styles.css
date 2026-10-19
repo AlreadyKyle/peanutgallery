@@ -300,12 +300,15 @@ main:not(.wide, .sheet, .card-page) > .band > * {
   max-width: var(--measure);
 }
 
-/* flow-root, so no child margin opens a strip of page ground between two grounds. */
+/* flow-root, so no child margin opens a strip of page ground between two grounds. A band's content
+   sits on the top bar's and the footer's frame (--wrap-floor, the gutter inside it), so every page
+   has one left edge from the wordmark down to the footer (the full pass: inner pages at 1440 started
+   48px in from the bar). */
 main > .band {
   display: flow-root;
   max-width: none;
   padding-block: var(--band-pad);
-  padding-inline: max(var(--gutter), calc((100% - var(--wrap)) / 2));
+  padding-inline: calc(var(--gutter) + max(0px, (100% - var(--wrap-floor)) / 2));
 }
 
 .band > * + * {
@@ -717,8 +720,13 @@ main.sheet > .band:not(:first-child) > .section > h2:first-child + .faq-item {
     padding-top: 0;
   }
 
-  /* The text column is the measure itself (about 80 characters at 1440px), so its paragraphs fill it. */
-  main.sheet > .band:not(:first-child) > .section p,
+  /* The text column holds the reading line: its paragraphs and lists of sentences fill it up to the
+     page's measure (44rem, about 80 characters), so the wider frame from 1440px never stretches a
+     line, while its rows, figures and tiles still run to the column's edge, the frame's. */
+  main.sheet > .band:not(:first-child) > .section :is(p, .rules, .plain-list, .steps-list) {
+    max-width: var(--measure);
+  }
+
   main.sheet > .band:not(:first-child) > .section .faq-item {
     max-width: none;
   }
