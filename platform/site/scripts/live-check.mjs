@@ -293,7 +293,8 @@ function checkPolicy(reports, label) {
 
 // This check is the studio's own robot, not a visitor (docs/specs/counter-senders.md): every page it
 // opens answers the counters' beacons to /api/count itself with a 204, so a run adds nothing to
-// home_load or any other daily count. No check here reads a count, so none is skipped. `beacons`
+// home_load, contribute_load or any other daily count. It presses no link, so it sends no
+// checkout_open or home_play_click. No check here reads a count, so none is skipped. `beacons`
 // tallies every count request a page made and how many the route answered; the two must match.
 const COUNT_ROUTE = '**/api/count';
 const beacons = { sent: 0, held: 0 };

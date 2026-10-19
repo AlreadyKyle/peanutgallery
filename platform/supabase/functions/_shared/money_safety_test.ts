@@ -106,10 +106,11 @@ Deno.test("the money tables are append-only, and corrections are new rows", {
         `select t.tgname as trigger, c.relname as table, t.tgenabled as enabled from pg_trigger t join pg_class c on c.oid = t.tgrelid
          where t.tgfoid = 'public.refuse_money_change()'::regprocedure order by 2, 1`,
       );
-      // terms_versions, the posted Terms versions (docs/specs/legal-copy.md), shares the guard.
+      // terms_versions, the posted Terms versions (docs/specs/legal-copy.md), shares the guard, and so
+      // does studio_pause_log, the kill switch's record (docs/specs/moderator-pause-only.md).
       assertEquals(
         triggers,
-        [...APPEND_ONLY, "terms_versions"].flatMap((table) => [
+        [...APPEND_ONLY, "terms_versions", "studio_pause_log"].flatMap((table) => [
           { trigger: `${table}_append_only`, table, enabled: "O" },
           { trigger: `${table}_no_truncate`, table, enabled: "O" },
         ]).sort((a, b) => a.table.localeCompare(b.table) || a.trigger.localeCompare(b.trigger)),

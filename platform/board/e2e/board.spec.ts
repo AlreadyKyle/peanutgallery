@@ -423,6 +423,27 @@ test('at the second factor the panel shows Status, Activity and Actions, and eve
   await expect(run.getByRole('status')).toHaveText('Queued weekly_report. It runs on the next dispatcher tick.');
   expect(bodies).toContainEqual({ path: '/rest/v1/rpc/enqueue_manual_job', body: { p_job: 'weekly_report', p_card: null, p_reason: 'Debugging', p_input: {} } });
 
+  // Resume asks first (docs/specs/moderator-pause-only.md): dismissed, nothing is sent; accepted, the
+  // pause lifts with p_paused false alone.
+  const pause = page.getByRole('region', { name: 'Pause and resume' });
+  const asked: string[] = [];
+  page.once('dialog', (dialog) => {
+    asked.push(dialog.message());
+    void dialog.dismiss();
+  });
+  await pause.getByRole('button', { name: 'Resume agents' }).click();
+  await expect.poll(() => asked.length).toBe(1);
+  expect(bodies.filter((b) => b.path === '/rest/v1/rpc/set_paused')).toEqual([]);
+  page.once('dialog', (dialog) => {
+    asked.push(dialog.message());
+    void dialog.accept();
+  });
+  await pause.getByRole('button', { name: 'Resume agents' }).click();
+  await expect(pause.getByRole('status')).toHaveText('Agents resumed.');
+  expect(asked).toHaveLength(2);
+  for (const line of asked) expect(line).toMatch(/^Resume the agents\? This lifts the pause whatever its reason/);
+  expect(bodies.filter((b) => b.path === '/rest/v1/rpc/set_paused')).toEqual([{ path: '/rest/v1/rpc/set_paused', body: { p_paused: false } }]);
+
   expect(await overflows(page)).toBe(false);
   for (const name of RETIRED) expect(seen).not.toContain(`POST /rest/v1/rpc/${name}`);
   expect(reports).toEqual([]);
@@ -461,12 +482,20 @@ for (const [who, role, aal] of [
       await page.goto('/');
       if (role === 'board') await expect(page.getByText('An e2e card').first()).toBeVisible();
       else await expect(page.locator('main section')).toHaveCount(1);
+      // The moderator pauses only: its section is Pause, with no Resume (docs/specs/moderator-pause-only.md).
+      const pause = page.getByRole('region', { name: role === 'board' ? 'Pause and resume' : 'Pause', exact: true });
+      await expect(pause.getByRole('button', { name: 'Resume agents' })).toHaveCount(role === 'board' ? 1 : 0);
       await page.getByRole('button', { name: 'Pause agents' }).click();
-      await expect(page.getByRole('region', { name: 'Pause and resume' }).getByRole('status')).toHaveText('Agents paused.');
+      await expect(pause.getByRole('status')).toHaveText('Agents paused.');
       const tight = (await sectionGaps(page)).filter(({ gap }) => gap < 15.5);
       expect(tight, `${width} px`).toEqual([]);
-      // BOARD_E2E_SHOTS=<folder> keeps a full-page screenshot of each width to look at.
-      if (process.env.BOARD_E2E_SHOTS) await page.screenshot({ path: `${process.env.BOARD_E2E_SHOTS}/${role}-${width}.png`, fullPage: true });
+      // BOARD_E2E_SHOTS=<folder> keeps a full-page screenshot of each width to look at, and the
+      // Status and pause sections on their own.
+      if (process.env.BOARD_E2E_SHOTS) {
+        await page.screenshot({ path: `${process.env.BOARD_E2E_SHOTS}/${role}-${width}.png`, fullPage: true });
+        await pause.screenshot({ path: `${process.env.BOARD_E2E_SHOTS}/${role}-pause-${width}.png` });
+        if (role === 'board') await page.getByRole('region', { name: 'Status' }).screenshot({ path: `${process.env.BOARD_E2E_SHOTS}/${role}-status-${width}.png` });
+      }
 
       // Reached from the keyboard, the select shows its focus ring, which must end above the buttons.
       await page.getByLabel('Pause reason').focus();
