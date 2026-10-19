@@ -320,12 +320,14 @@ export type PauseReason = 'awaiting_credit' | 'spend_limit' | 'incident' | 'boar
 // before a post so the primary key refuses a second claim, and never posted again whatever its state.
 export type PostKind = 'ship' | 'weekly' | 'announce';
 
-// A card that went live, with what its ship post names: the executor's name, its studio-billed cost
-// and its first supporters by number with their count (public_card_supporters).
+// A card that went live, with what its ship post names: the executor's name, its studio-billed cost,
+// its first supporters by number with their count (public_card_supporters) and when its build first
+// started (its earliest agent_events 'start' row; null when it has none).
 export interface ShipPost {
   id: string;
   title: string;
   live_at: string;
+  started_at: string | null;
   role_name: string | null;
   cost_usd: number;
   supporters: { number: number; founding: boolean }[];
@@ -1209,14 +1211,19 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       if (todo.length === 0) return [];
       const ids = todo.map((row) => text(row, 'id'));
       const roleIds = [...new Set(todo.map((row) => optionalText(row, 'executor_role_id')).filter((id): id is string => id !== null))];
-      const [roles, spend] = await Promise.all([
+      const [roles, spend, starts] = await Promise.all([
         roleIds.length === 0 ? Promise.resolve({ data: [] as Row[], error: null }) : client.from('roles').select('id, name').in('id', roleIds),
         client.from('dispatcher_card_spend').select('card_id, spent_usd').in('card_id', ids),
+        client.from('agent_events').select('card_id, created_at').eq('type', 'start').in('card_id', ids).order('created_at', { ascending: true }),
       ]);
       if (roles.error) fail('roles names', roles.error);
       if (spend.error) fail('dispatcher_card_spend', spend.error);
+      if (starts.error) fail('agent_events starts', starts.error);
       const names = new Map(rows(roles.data).map((row) => [text(row, 'id'), text(row, 'name')]));
       const cost = new Map(rows(spend.data).map((row) => [text(row, 'card_id'), num(row, 'spent_usd')]));
+      // Oldest first, so the first row seen for a card is when its build first started.
+      const started = new Map<string, string>();
+      for (const row of rows(starts.data)) if (!started.has(text(row, 'card_id'))) started.set(text(row, 'card_id'), text(row, 'created_at'));
       const posts: ShipPost[] = [];
       for (const row of todo) {
         const id = text(row, 'id');
@@ -1232,6 +1239,7 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
           id,
           title: text(row, 'title'),
           live_at: text(row, 'live_at'),
+          started_at: started.get(id) ?? null,
           role_name: roleId === null ? null : (names.get(roleId) ?? null),
           cost_usd: cost.get(id) ?? 0,
           supporters: rows(supporters.data).map((s) => ({ number: num(s, 'supporter_number'), founding: s.founding === true })),

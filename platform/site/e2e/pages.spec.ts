@@ -219,3 +219,15 @@ test.describe('the production /team model check', () => {
     });
   });
 });
+
+// Who made what (/how-it-works, under the rules): the agents, the code they wrote and the board.
+test('/how-it-works says who made what under the rules that never change', async ({ page }) => {
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/how-it-works');
+    const rules = page.getByRole('region', { name: 'Rules that never change' });
+    await expect(rules.getByRole('heading', { level: 3, name: 'Who made what' })).toBeVisible();
+    await expect(rules).toContainText('no image, sound or music model is used');
+    expect(await overflowsHorizontally(page), `${width}px`).toBe(false);
+  }
+});

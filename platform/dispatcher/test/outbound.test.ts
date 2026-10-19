@@ -2,7 +2,7 @@ import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { createDiscordPoster, MAX_CONTENT } from '../src/discord.js';
 import { createLogger } from '../src/log.js';
-import { lastEndedWeek, MAX_POSTS_PER_TICK, runOutbound, shipText, weeklyText, type OutboundDeps } from '../src/outbound.js';
+import { lastEndedWeek, MAX_POSTS_PER_TICK, runOutbound, shipText, timeToLive, weeklyText, type OutboundDeps } from '../src/outbound.js';
 import { FakeDb, NOW, shipPost } from './helpers/fake-db.js';
 import { hangingFetch, mockFetch, type Route } from './helpers/mock-fetch.js';
 
@@ -229,6 +229,30 @@ describe('the post texts', () => {
     );
     expect(shipText(shipPost({ supporters: [{ number: 5, founding: false }], supporter_count: 1 }), SITE)).toContain('from contributions, funded by Supporter 5. Watch');
     expect(shipText(shipPost({ supporters: [{ number: 5, founding: false }, { number: 2, founding: false }], supporter_count: 2 }), SITE)).toContain('funded by Supporter 2 and Supporter 5. Watch');
+  });
+
+  it('says how long the card took from its build starting to live, when a start is recorded', () => {
+    const started = shipPost({ started_at: '2026-09-14T13:22:00.000Z' });
+    expect(shipText(started, SITE)).toBe(
+      `Shipped: Gatherers cost one more. Built by Builder A for $0.29 from contributions, funded by Founding supporter 1, Supporter 3 and 2 more. Live 68 minutes after the build started. Watch how it was built: ${SITE}/card/${shipPost().id}`,
+    );
+    expect(shipText(shipPost(), SITE)).not.toContain('Live ');
+    const long = shipText(shipPost({ title: 'x'.repeat(4000), started_at: '2026-09-14T13:22:00.000Z' }), SITE);
+    expect(long.length).toBeLessThanOrEqual(MAX_CONTENT);
+    expect(long.endsWith(`Live 68 minutes after the build started. Watch how it was built: ${SITE}/card/${shipPost().id}`)).toBe(true);
+  });
+
+  it('rounds the time to live to the minute, in hours past two, and drops a missing or backwards one', () => {
+    const live = shipPost().live_at;
+    const before = (ms: number) => shipPost({ started_at: new Date(Date.parse(live) - ms).toISOString() });
+    expect(timeToLive(before(20_000))).toBe('1 minute');
+    expect(timeToLive(before(119 * 60_000))).toBe('119 minutes');
+    expect(timeToLive(before(125 * 60_000))).toBe('2 hours 5 minutes');
+    expect(timeToLive(before(26 * HOUR))).toBe('26 hours');
+    expect(timeToLive(before(61 * 60_000 + HOUR))).toBe('2 hours 1 minute');
+    expect(timeToLive(before(-60_000))).toBeNull();
+    expect(timeToLive(shipPost({ started_at: 'not a time' }))).toBeNull();
+    expect(timeToLive(shipPost({ started_at: null }))).toBeNull();
   });
 
   it('escapes markdown and @ in titles, and stays within 2,000 characters with its link whole', () => {

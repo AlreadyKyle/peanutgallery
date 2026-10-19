@@ -374,3 +374,29 @@ describe('no display name (docs/specs/legal-copy.md)', () => {
     );
   });
 });
+
+describe('the card page state line and who made what', () => {
+  it('says who made what in two or three short sentences: the agents, the code they wrote and the board', () => {
+    const body = copy.whoMadeWhat.body;
+    expect(body.length).toBeGreaterThanOrEqual(2);
+    expect(body.length).toBeLessThanOrEqual(3);
+    for (const sentence of body) expect(sentence.split(/\s+/).length).toBeLessThanOrEqual(25);
+    const text = body.join(' ');
+    expect(text).toMatch(/AI agents/);
+    expect(text).toMatch(/drawn by code/);
+    expect(text).toMatch(/no image, sound or music model/);
+    expect(text).toMatch(/board/);
+  });
+
+  it('keeps the build clock to whole minutes, with no seconds and no countdown', () => {
+    for (const line of Object.values(copy.cardPage.buildClock)) {
+      expect(line).toContain('{n} min in');
+      expect(line).not.toMatch(/sec|left|remaining|!/i);
+    }
+  });
+
+  it('writes the shipped stamp as one line with its times and the cost slot', () => {
+    expect(copy.cardPage.liveAfter).toBe('Live {minutes} after work started, {start} to {live}');
+    expect(copy.cardPage.stampCost).toBe('{when}, cost {cost}');
+  });
+});

@@ -15,7 +15,7 @@ describe.each([
   { player: CASUAL, firstLayers: 180, firstFork: 480 },
 ])('the $player.name player', ({ player, firstLayers, firstFork }) => {
   const run = play(live, player, 3600);
-  const p = pacing(run);
+  const p = pacing(run, live);
 
   it('buys within 30 seconds and sees an unlock within the minute', () => {
     expect(p.firstBuy).not.toBeNull();
@@ -38,6 +38,12 @@ describe.each([
   it('makes choices that are not purchases all through the hour', () => {
     expect(p.choicesPerMinute.first10).toBeGreaterThanOrEqual(1);
     expect(p.choicesPerMinute.tenTo60).toBeGreaterThanOrEqual(1);
+  });
+
+  it('reports when it last met a new mechanic, without holding it to a bar', () => {
+    expect(p.depth.lastNewMechanic).not.toBeNull();
+    expect(p.depth.lastNewMechanic!.atSeconds).toBeLessThanOrEqual(3600);
+    expect(p.depth.multipliersAfter).toBeGreaterThanOrEqual(0);
   });
 
   it('comes back after eight hours to a payoff and a choice', () => {

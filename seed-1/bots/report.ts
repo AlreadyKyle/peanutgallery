@@ -4,6 +4,8 @@ import type { InvariantResult } from '../sim/invariants';
 import type { SimConfig, UnlockEvent } from '../sim/types';
 import type { BotArgs } from './args';
 import { loadConfigFromDir } from './config';
+import { depthMark, formatDepth } from './depth';
+import type { DepthMark } from './depth';
 import { runGreedy } from './greedy';
 
 export interface BotReport {
@@ -13,6 +15,8 @@ export interface BotReport {
   unlocks: UnlockEvent[];
   finalTotalDust: number;
   stateHash: string;
+  /** When the run last met a new mechanic, and the multiplier-only unlocks after it. Reported, never failed. */
+  depth: DepthMark;
 }
 
 export const CONFIG_INVARIANT = 'config-loads';
@@ -50,6 +54,7 @@ export function runBot(config: SimConfig, args: BotArgs): BotReport {
     unlocks: run.log.unlocks,
     finalTotalDust: run.state.totalDust,
     stateHash: run.log.stateHash,
+    depth: depthMark(config, run.log.unlocks),
   };
 }
 
@@ -64,6 +69,7 @@ export function failureReport(name: string, message: string): BotReport {
     unlocks: [],
     finalTotalDust: 0,
     stateHash: '',
+    depth: { lastNewMechanic: null, multipliersAfter: 0, newMechanicsNotReached: 0 },
   };
 }
 
@@ -73,6 +79,7 @@ export function formatReport(report: BotReport): string {
   ];
   for (const result of report.invariants) lines.push(`${result.ok ? 'ok  ' : 'fail'} ${result.name}: ${result.detail}`);
   for (const event of report.unlocks) lines.push(`unlock ${event.id} at ${event.atSeconds} s`);
+  if (report.simulatedSeconds > 0) lines.push(`last new mechanic ${formatDepth(report.depth)}`);
   lines.push(`final total dust ${report.finalTotalDust}`);
   lines.push(`state hash ${report.stateHash}`);
   return lines.join('\n');

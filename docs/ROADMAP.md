@@ -6,7 +6,7 @@ The launch checklist: what stands between today and Go live, in order, each item
 
 These are two different states.
 
-- **Contributions open** is true now. The Contribute button is live, and the dispatcher runs unattended on GitHub Actions since 6 October 2026 (PLAN.md §10 decision 61); funded cards build on the studio key's Console balance (PLAN.md §10 decision 65), and the board's site is an optional panel the studio never waits on (PLAN.md §10 decision 66). The public site shows no paused notice (PLAN.md §10 decision 62). The board announces now, before Go live, to bring the first players' money in (PLAN.md §10 decision 64, `docs/launch/`). A player's contribution from it is what closes criterion 1.
+- **Contributions open** is true now. The Contribute button is live, and the dispatcher runs unattended on GitHub Actions since 6 October 2026 (PLAN.md §10 decision 61); funded cards build on the studio key's Console balance (PLAN.md §10 decision 65), and the board's site is an optional panel the studio never waits on (PLAN.md §10 decision 66). The public site shows no paused notice (PLAN.md §10 decision 62). The board announces now, before Go live, to bring the first players' money in (PLAN.md §10 decision 64, `docs/launch/`). On 18 October 2026 the board held the posts until the dispatcher builds again and email sign-ups are on (`docs/launch/README.md`, When they go out). A player's contribution from it is what closes criterion 1.
 - **Go live** is when every criterion below holds with its evidence quoted in the specs. There is no Go live button and no founding label (PLAN.md §10 decisions 62 and 63): the site runs or it is down. The announcement does not wait for it (PLAN.md §10 decision 64).
 
 ## What "live" means

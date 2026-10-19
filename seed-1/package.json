@@ -9,7 +9,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "e2e": "tsx e2e/frame-states.ts node_modules/.cache/frame-states.json && E2E_FRAME_STATES=node_modules/.cache/frame-states.json playwright test",
-    "bot": "tsx bots/cli.ts"
+    "bot": "tsx bots/cli.ts",
+    "capture": "tsx scripts/capture.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

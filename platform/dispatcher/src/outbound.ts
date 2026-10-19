@@ -73,16 +73,33 @@ function listWithMore(items: readonly string[], total: number): string {
   return `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
 }
 
+// "68 minutes", "1 minute", "3 hours 5 minutes", "26 hours": from the build's first start to live,
+// rounded to the minute and at least one. Null when either time is missing or they run backwards.
+export function timeToLive(card: ShipPost): string | null {
+  if (card.started_at === null) return null;
+  const ms = Date.parse(card.live_at) - Date.parse(card.started_at);
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  if (minutes < 120) return plural(minutes, 'minute');
+  const hours = Math.floor(minutes / 60);
+  return minutes % 60 === 0 ? plural(hours, 'hour') : `${plural(hours, 'hour')} ${plural(minutes % 60, 'minute')}`;
+}
+
 // "Shipped: <title>. Built by <role> for $0.29 from contributions, funded by Supporter 3, Founding
-// supporter 1 and 2 more. Watch how it was built: <site>/card/<id>". At $0.00 from contributions
-// (founder-billed work) the cost clause is left out, and with no supporter the funded clause.
+// supporter 1 and 2 more. Live 68 minutes after the build started. Watch how it was built:
+// <site>/card/<id>". At $0.00 from contributions (founder-billed work) the cost clause is left out,
+// with no supporter the funded clause, and with no recorded start the live clause. The live clause
+// rides with the link, so a long title is cut before either.
 export function shipText(card: ShipPost, siteUrl: string): string {
   let built = card.role_name ? `Built by ${escapeDiscord(card.role_name)}` : '';
   if (Math.round(card.cost_usd * 100) > 0) built += `${built ? ' for' : 'Built for'} ${usd(card.cost_usd)} from contributions`;
   const named = [...card.supporters].sort((a, b) => a.number - b.number).slice(0, SHIP_SUPPORTERS_NAMED).map(supporterName);
   if (named.length > 0) built += `${built ? ', funded' : 'Funded'} by ${listWithMore(named, Math.max(card.supporter_count, named.length))}`;
   const head = `Shipped: ${escapeDiscord(card.title)}.${built ? ` ${built}.` : ''}`;
-  return fitPost(head, ` Watch how it was built: ${siteUrl}/card/${card.id}`);
+  const took = timeToLive(card);
+  const live = took === null ? '' : ` Live ${took} after the build started.`;
+  return fitPost(head, `${live} Watch how it was built: ${siteUrl}/card/${card.id}`);
 }
 
 // "The week of 14 September at Mob Machine: 2 cards shipped (<title>, <title>). 6 cards were open for
