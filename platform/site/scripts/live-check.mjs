@@ -55,6 +55,9 @@
 // The data checks need the site's /api documents. A local `vite preview` has no Netlify Function, so
 // it has none; --allow-no-data turns those checks into SKIP lines instead of failures.
 //
+// The run is not a visit: every page it opens answers the counters' /api/count beacons in the browser
+// (newPage below), so the daily counts hold no live-check loads, and the run checks that none got out.
+//
 // The first line is PASS or FAIL with the counts; one line per check follows. Exit 0 pass, 1 fail.
 
 import { readFileSync } from 'node:fs';
@@ -285,6 +288,24 @@ function checkPolicy(reports, label) {
   check(reports.length === 0, `${label} no Content Security Policy reports${reports.length === 0 ? '' : `: ${reports.slice(0, 3).join(' | ')}`}`);
 }
 
+// This check is the studio's own robot, not a visitor (docs/specs/counter-senders.md): every page it
+// opens answers the counters' beacons to /api/count itself with a 204, so a run adds nothing to
+// home_load or any other daily count. No check here reads a count, so none is skipped. `beacons`
+// tallies every count request a page made and how many the route answered; the two must match.
+const COUNT_ROUTE = '**/api/count';
+const beacons = { sent: 0, held: 0 };
+async function newPage(browser, viewport) {
+  const page = await browser.newPage({ viewport });
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.startsWith('/api/count')) beacons.sent += 1;
+  });
+  await page.route(COUNT_ROUTE, (route) => {
+    beacons.held += 1;
+    return route.fulfill({ status: 204 });
+  });
+  return page;
+}
+
 async function open(page, path) {
   const response = await page.goto(BASE + path, { waitUntil: 'load' });
   // The page polls /api/live each minute, so give the first load a moment either way.
@@ -299,7 +320,7 @@ try {
     [375, 812],
     [1440, 1000],
   ]) {
-    const page = await browser.newPage({ viewport: { width, height } });
+    const page = await newPage(browser, { width, height });
     const reports = await watchPolicy(page);
     const errors = [];
     page.on('console', (message) => {
@@ -355,7 +376,7 @@ try {
   // 404 status from Netlify, no sign-in form and no address for the board. vite preview has no
   // redirect rules, so a local server answers it 200.
   {
-    const board = await browser.newPage({ viewport: { width: 375, height: 812 } });
+    const board = await newPage(browser, { width: 375, height: 812 });
     const response = await open(board, '/board');
     const status = response?.status() ?? 0;
     if (LOCAL.test(BASE)) skip(`/board status ${status}: a local server has no redirect rules`);
@@ -372,7 +393,7 @@ try {
     await board.close();
   }
 
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const page = await newPage(browser, { width: 1440, height: 1000 });
   const reports = await watchPolicy(page);
   await open(page, '/');
   const homeTitle = await page.title();
@@ -685,6 +706,7 @@ try {
   await page.waitForTimeout(500);
   checkPolicy(reports, 'landing, contribute, how it works, team, roadmap and terms interactions');
   await page.close();
+  check(beacons.held === beacons.sent, `every count beacon answered in the browser, none sent to ${BASE}: ${beacons.held} of ${beacons.sent}`);
 
   // The site's own documents and their caching (docs/specs/site-snapshot.md).
   {
