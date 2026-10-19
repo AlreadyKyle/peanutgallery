@@ -171,11 +171,17 @@ export function parseRoleSpec(raw: unknown, source: string): RoleSpec {
 }
 
 /**
+ * The Game Designer's model when .env leaves MODEL_DESIGNER unset (docs/PLAN.md §10 decision 77): the
+ * same default platform/ops/dispatcher-env.mjs writes into the dispatcher's env.
+ */
+export const DEFAULT_DESIGNER_MODEL = "claude-sonnet-5-5";
+
+/**
  * The model id for a spec: the value of the named environment variable. MODEL_DESIGNER, the Game
- * Designer's, falls back to MODEL_DIRECTOR when unset, as the dispatcher resolves it (role-model.ts).
+ * Designer's, is DEFAULT_DESIGNER_MODEL when unset, the model the dispatcher's env gives it.
  */
 export function resolveModel(spec: Pick<RoleSpec, "model" | "name">, env: Env): string {
-  const value = env[spec.model]?.trim() || (spec.model === "MODEL_DESIGNER" ? env.MODEL_DIRECTOR?.trim() : undefined);
+  const value = env[spec.model]?.trim() || (spec.model === "MODEL_DESIGNER" ? DEFAULT_DESIGNER_MODEL : undefined);
   if (!value) {
     throw new Error(`${spec.name}: ${spec.model} is not set in .env`);
   }

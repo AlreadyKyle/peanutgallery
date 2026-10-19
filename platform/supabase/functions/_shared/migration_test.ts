@@ -320,6 +320,10 @@ Deno.test("migrations on PGlite", {
         "20261019010000_moderator_pause_only.sql",
         // funnel counters (docs/specs/counter-senders.md): /contribute, checkout and home's Play.
         "20261019020000_funnel_counters.sql",
+        // hold-drafting (docs/specs/studio-reports.md, PLAN.md §10 decision 77): no draft while nothing sells.
+        "20261019030000_hold_drafting.sql",
+        // The Game Designer drafts on its own, cheaper model (PLAN.md §10 decision 77).
+        "20261019040000_designer_model.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);

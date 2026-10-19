@@ -1,4 +1,4 @@
-import { RUNNING_MODEL, runningModelsCheck } from '../scripts/team-models.mjs';
+import { RUNNING_MODEL, runningModelsCheck, runningRoleRows } from '../scripts/team-models.mjs';
 import { DEFAULT_STUDIO, expect, test } from './fixtures';
 import { BUILDER_A, OPENS_SOON_ID, QA, SUPPORTER_STUDIO, VETOED_ID, VETO_REASON } from './supporter-studio';
 
@@ -29,7 +29,7 @@ test.describe('while the studio is paused', () => {
     );
     // A zero figure is left out, so a row of zeros never reads as an idle studio.
     await expect(page.locator(`#agent-${QA} .card-meta`)).toHaveText('claude-opus-5-5 · Worked on 1 shipped card');
-    const models = runningModelsCheck(await running.locator('li.agent:not([data-kind="code"]) .card-meta').allTextContents());
+    const models = runningModelsCheck(await runningRoleRows(running));
     expect(models.ok, models.message).toBe(true);
     // Home's team strip draws the same roles, awake.
     await page.goto('/');

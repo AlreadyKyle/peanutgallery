@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertSharesSumToOne, parseRoleSpec, resolveModel, type RoleSpec } from "../lib/roles.js";
+import { assertSharesSumToOne, DEFAULT_DESIGNER_MODEL, parseRoleSpec, resolveModel, type RoleSpec } from "../lib/roles.js";
 
 // The Builder A launch spec from platform/agents/builder-a.json, as parsed: a running role has no trigger.
 const builderA: RoleSpec = {
@@ -132,11 +132,15 @@ describe("resolveModel", () => {
     expect(resolveModel(host, { MODEL_HOST: " host-model-id " })).toBe("host-model-id");
   });
 
-  it("runs the Game Designer's MODEL_DESIGNER on MODEL_DIRECTOR until it is set", () => {
+  it("runs the Game Designer on claude-sonnet-5-5 until MODEL_DESIGNER is set (PLAN.md §10 decision 77)", () => {
     const designer = { name: "Game Designer", model: "MODEL_DESIGNER" as const };
-    expect(resolveModel(designer, { MODEL_DIRECTOR: "director-model-id" })).toBe("director-model-id");
+    expect(DEFAULT_DESIGNER_MODEL).toBe("claude-sonnet-5-5");
+    expect(resolveModel(designer, { MODEL_DIRECTOR: "director-model-id" })).toBe("claude-sonnet-5-5");
+    expect(resolveModel(designer, {})).toBe("claude-sonnet-5-5");
+    expect(resolveModel(designer, { MODEL_DESIGNER: " " })).toBe("claude-sonnet-5-5");
     expect(resolveModel(designer, { MODEL_DIRECTOR: "director-model-id", MODEL_DESIGNER: "designer-model-id" })).toBe("designer-model-id");
-    expect(() => resolveModel(designer, {})).toThrow("Game Designer: MODEL_DESIGNER is not set");
+    // The default is the Designer's alone: every other role still needs its own variable.
+    expect(() => resolveModel({ name: "Game Director", model: "MODEL_DIRECTOR" }, {})).toThrow("Game Director: MODEL_DIRECTOR is not set");
   });
 
   it("fails when the variable is empty or absent", () => {

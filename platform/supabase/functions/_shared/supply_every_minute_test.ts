@@ -57,7 +57,7 @@ async function migrated(): Promise<PGlite> {
       [name, klass === "planner", klass],
     );
   }
-  for (const name of ["20260924400000_agent_workflows.sql", "20261010200000_supply_refill.sql", "20261011200000_supply_every_minute.sql", "20261018100000_no_money_holds.sql"]) {
+  for (const name of ["20260924400000_agent_workflows.sql", "20261010200000_supply_refill.sql", "20261011200000_supply_every_minute.sql", "20261018100000_no_money_holds.sql", "20261019030000_hold_drafting.sql"]) {
     await db.exec(await sqlOf(name));
   }
   return db;
