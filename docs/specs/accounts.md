@@ -19,7 +19,7 @@ Out: switching a provider on (the board's step in the Supabase dashboard and eac
 
 **Pages.** `/sign-in`, `/sign-up`, `/forgot-password` and `/reset-password`, unlisted (not in the sitemap). Each opens on the plate with its title and lede; under it the form in a panel with the card's edge, and on sign-in and sign-up "What a profile keeps" beside it from 64rem (under it on a phone). The top bar's Sign in goes to `/sign-in`. A visitor already signed in who opens `/sign-in`, `/sign-up` or `/forgot-password` goes to `/me`.
 
-**The form.** Continue with each provider that is on (Google, Apple, GitHub, Discord, in that order), a hairline "or", Email, Password with a Show button, and the main button. Sign in has "Forgot password?" by the password and "Email me a sign-in link instead" under the main button; sign up says "At least 8 characters."; each links to the other. Refusals are ink text beside a 2px rule, never a colour: a wrong email or password reads the same whichever was wrong; an unconfirmed email offers the confirmation link again; too many tries says to wait.
+**The form.** Continue with each provider that is on (Google, Apple, GitHub, Discord, in that order), a hairline "or", Email, Password with a Show button, and the main button. Sign in has "Forgot password?" by the password and "Email me a sign-in link" under the main button; sign up says "At least 8 characters."; each links to the other. Refusals are ink text beside a 2px rule, never a colour: a wrong email or password reads the same whichever was wrong; an unconfirmed email offers the confirmation link again; too many tries says to wait.
 
 **Emails.** Sign-up, a reset and the sign-in link each answer "Check your email" with the address, Send it again and Use a different email. Sign-up and a reset answer the same for an address with or without an account, so the form never says who has one. Every link and provider lands on `/me`, which reads the session from the address and sends the player on: a reset link to `/reset-password` to choose a new password; anything else to the seed, card or page they were headed for, else the desk, which claims their guest contributions. A password sign-in goes the same places without leaving the page first.
 
@@ -33,12 +33,14 @@ Out: switching a provider on (the board's step in the Supabase dashboard and eac
 - [ ] A reset link lands on `/reset-password` and the new password is set with the reset session (e2e).
 - [ ] A provider button shows only for a provider the settings name, and links to `auth/authorize` (e2e).
 - [ ] The function refuses a short password, another origin, an unknown provider and a GET on a POST route, and maps Supabase's refusals to codes (`netlify/community.test.ts`).
+- [ ] On production the live check finds `/sign-in` drawing the form, and a password sign-in for an address with no account refused 401 "wrong" by Supabase (`scripts/live-check.mjs`).
 - [ ] On production, a new address signs up, confirms by the emailed link, signs out and signs in with its password.
 
 ## Verification
 
 - `pnpm verify`
 - `npx playwright test` in `platform/site`
+- The live-check workflow's run for the merge commit: quote its first line.
 - On production after the merge: sign up with a fresh address, open the confirmation email, sign in with the password, and quote the outcome.
 
 ## Evidence

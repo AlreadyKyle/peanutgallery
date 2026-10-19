@@ -45,7 +45,9 @@
 // 1200x630 PNG (docs/specs/card-preview.md); /ledger and /team as served carry their own title,
 // og:url and canonical link (docs/specs/page-previews.md). /board is the not found page, a 404 from Netlify, with no
 // sign-in form and no netlify.app address but the game's (board-address.mjs); with BOARD_SITE_URL
-// set, no route names the board site's address. The www redirect, and the old domain's 301 to the same path, run only against production. The
+// set, no route names the board site's address. Accounts (docs/specs/accounts.md): the auth settings name
+// signIn and the providers that are on; while sign-in is open, /sign-in draws the email and password form and a
+// password sign-in for an address with no account is refused 401 "wrong" by Supabase. The www redirect, and the old domain's 301 to the same path, run only against production. The
 // security headers from netlify.toml, the enforced policy's full value included,
 // run against any address that is not local; a local `vite preview` sends them too
 // (vite.config.ts), so they are checked there when present.
@@ -395,6 +397,39 @@ try {
     check(stray.length === 0, `/board names no netlify.app address but the game's (${PLAY_HOST ?? 'none set'})${stray.length === 0 ? '' : `: ${stray.join(', ')}`}`);
     if (BOARD_HOST !== null) check(!content.toLowerCase().includes(BOARD_HOST), "/board does not name the board site's address");
     await board.close();
+  }
+
+  // Accounts (docs/specs/accounts.md): the settings name the providers that are on, /sign-in draws
+  // the email and password form while sign-in is open, and a password sign-in for an address with no
+  // account comes back from Supabase as 401 "wrong", which proves the route reaches it without
+  // creating or emailing anything.
+  {
+    const settings = await fetch(`${BASE}/api/community/auth/settings`)
+      .then((response) => response.json())
+      .catch(() => null);
+    if (settings === null) noData('/api/community/auth/settings');
+    else {
+      check(
+        typeof settings.signIn === 'boolean' && Array.isArray(settings.providers),
+        `/api/community/auth/settings signIn ${settings.signIn}, providers ${JSON.stringify(settings.providers)}`,
+      );
+      if (settings.signIn === true) {
+        const signIn = await newPage(browser, { width: 375, height: 812 });
+        const response = await open(signIn, '/sign-in');
+        const h1 = await signIn.locator('h1').allTextContents();
+        const fields = (await signIn.getByLabel('Email').count()) + (await signIn.getByLabel('Password', { exact: true }).count());
+        check(response?.status() === 200 && JSON.stringify(h1) === JSON.stringify(['Sign in']) && fields === 2, `/sign-in draws the email and password form (h1 ${JSON.stringify(h1)}, ${fields} fields)`);
+        await signIn.close();
+        const refused = await fetch(`${BASE}/api/community/auth/password`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email: 'live-check@mobmachine.games', password: `not-a-password-${Date.now()}` }),
+        })
+          .then(async (reply) => ({ status: reply.status, code: (await reply.json().catch(() => ({})))?.code ?? null }))
+          .catch(() => ({ status: 0, code: null }));
+        check(refused.status === 401 && refused.code === 'wrong', `a password sign-in with no account is refused as wrong (${refused.status} ${refused.code})`);
+      }
+    }
   }
 
   const page = await newPage(browser, { width: 1440, height: 1000 });

@@ -114,7 +114,7 @@ test('a signed-out visitor signs in by email and comes back to the card with the
   const form = page.locator('.follow');
   await expect(form).toContainText('Sign in and the studio emails you once when this card goes live.');
   await form.getByLabel('Email').fill('visitor@example.com');
-  await form.getByRole('button', { name: 'Email me a sign-in link instead' }).click();
+  await form.getByRole('button', { name: 'Email me a sign-in link' }).click();
   await expect(form.getByRole('status')).toContainText('We sent a sign-in link to visitor@example.com. It works once.');
   const origin = new URL(page.url()).origin;
   expect(posts).toEqual([{ path: '/api/community/auth/otp', body: { email: 'visitor@example.com', redirectTo: `${origin}/me` }, auth: null }]);
@@ -135,7 +135,7 @@ test('when email sign-in is not available, the form says so and nothing is kept 
   await page.getByRole('button', { name: 'Tell me when this ships' }).click();
   const form = page.locator('.follow');
   await form.getByLabel('Email').fill('visitor@example.com');
-  await form.getByRole('button', { name: 'Email me a sign-in link instead' }).click();
+  await form.getByRole('button', { name: 'Email me a sign-in link' }).click();
   await expect(form.getByRole('alert')).toHaveText('That did not work just now. Try again in a moment.');
   expect(await page.evaluate(() => window.localStorage.getItem('mm:pending-follow'))).toBeNull();
   // The rest of the card's page is unchanged.

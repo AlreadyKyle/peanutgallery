@@ -227,7 +227,7 @@ async function post(req: Request, url: URL): Promise<Response> {
     }
     if (rest === 'auth/signout') {
       const token = bearer(req.headers.get('authorization'));
-      if (token !== null) await upstream('/auth/v1/logout?scope=local', { body: {}, token }).catch(() => undefined);
+      if (token !== null) await upstream('/auth/v1/logout?scope=local', { body: {}, token }).catch(() => null);
       return json(200, { signedOut: true }, NO_STORE);
     }
     if (rest === 'auth/refresh') {

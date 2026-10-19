@@ -758,7 +758,7 @@ export const copy = {
     sendReset: 'Send reset link',
     savePassword: 'Save new password',
     working: 'One moment.',
-    magicLink: 'Email me a sign-in link instead',
+    magicLink: 'Email me a sign-in link',
     toSignUp: 'New here?',
     toSignUpLink: 'Create an account',
     toSignIn: 'Already have an account?',
