@@ -1,3 +1,5 @@
 # mobmachine-ops
 
-Private. Runs Mob Machine's daily jobs (backup, Controller, quota check) on GitHub Actions, from the public studio repository's `platform/ops` at the commit in the `STUDIO_REF` variable. Secrets live only here. Runbook: `platform/ops/README.md` in AlreadyKyle/peanutgallery.
+Private. Runs Mob Machine's promotion engine (`promo/`, `promo.yml`) and the daily itch.io push (`itch.yml`) on GitHub Actions; secrets for those live only here.
+
+The daily jobs (backup, Controller, quota check, ship notices) moved to the public studio repository on 19 October 2026 (`.github/workflows/ops-jobs.yml` in AlreadyKyle/peanutgallery, PLAN.md §10 decision 78) after this account's free private minutes ran out. Runbook: `platform/ops/ops-repo/README.md` there.
