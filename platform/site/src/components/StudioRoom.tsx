@@ -215,7 +215,7 @@ function RoleCard({ place, at, onEnter, onLeave }: { place: AgentPlace; at: { le
       <Avatar note={place.role.species_note} size={44} asleep={place.asleep} />
       <div>
         <p className="role-card-name">{place.role.name}</p>
-        <p className="role-card-title">{place.role.title}</p>
+        {place.role.title === place.role.name ? null : <p className="role-card-title">{place.role.title}</p>}
         <p className="role-card-doing">{place.doing}</p>
         {place.card === null ? (
           <Link to={`/team#agent-${place.role.id}`}>{copy.studioRoom.meet}</Link>
