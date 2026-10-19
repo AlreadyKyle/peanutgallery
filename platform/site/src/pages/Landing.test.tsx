@@ -640,13 +640,13 @@ describe('Landing', () => {
     );
   });
 
-  it('says where the money goes: the pool with the coin in one line, that the ledger has every figure, and the five latest actions', async () => {
+  it('says where the money goes: the pool with the coin in one line, that these are contributions and the ledger has every figure, and the five latest actions', async () => {
     renderLanding(fakeSource());
     const money = await screen.findByRole('region', { name: legal.moneyHeading });
     await waitFor(() => expect(within(money).getByText('$48.56')).toBeTruthy());
     expect(money.querySelector('.pool-line svg.coin')).not.toBeNull();
     expect(money.querySelector('.pool-line')?.textContent).toBe(`$48.56 ${legal.poolInline}`);
-    expect(within(money).getByText(legal.moneyLedgerLine)).toBeTruthy();
+    expect(within(money).getByText(`${legal.notDonations} ${legal.moneyLedgerLine}`)).toBeTruthy();
     // The split is told on /how-it-works and /contribute (the copy audit of 18 October 2026).
     expect(money.querySelector('p.money-split')).toBeNull();
     expect(money.textContent).not.toContain(`${RESERVE_PCT}% of every contribution`);
@@ -659,7 +659,7 @@ describe('Landing', () => {
     renderLanding(fakeSource({ pool: { ...snapshot.pool!, balance_usd: -1.234 } }));
     const money = await screen.findByRole('region', { name: legal.moneyHeading });
     await waitFor(() => expect(within(money).getByText('$0.00')).toBeTruthy());
-    expect(within(money).getByText(`${legal.shortfall.replace('{amount}', '$1.23')} ${legal.moneyLedgerLine}`)).toBeTruthy();
+    expect(within(money).getByText(`${legal.shortfall.replace('{amount}', '$1.23')} ${legal.notDonations} ${legal.moneyLedgerLine}`)).toBeTruthy();
     expect(screen.queryByText(/-\$/)).toBeNull();
   });
 
