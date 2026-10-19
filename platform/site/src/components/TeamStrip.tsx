@@ -4,8 +4,8 @@ import { Avatar } from './Avatar';
 
 /**
  * The team strip: borderless links, each an agent's avatar beside its name and one-line job, linking
- * to its box on /team, three equal columns from 48rem. Never `li.agent` (a box there) (DESIGN.md,
- * The team).
+ * to its box on /team, three equal columns from 48rem, each avatar bobbing as an idle agent does in the
+ * live studio. Never `li.agent` (a box there) (DESIGN.md, The team).
  */
 export function TeamStrip({ roles, asleep }: { roles: readonly Role[]; asleep: boolean }) {
   return (
@@ -13,7 +13,7 @@ export function TeamStrip({ roles, asleep }: { roles: readonly Role[]; asleep: b
       {roles.map((role) => (
         <li key={role.id}>
           <Link className="member" to={`/team#agent-${role.id}`}>
-            <Avatar note={role.species_note} asleep={asleep} size={72} />
+            <Avatar note={role.species_note} asleep={asleep} size={72} idle />
             <span>
               <span className="member-name">{role.name}</span>
               <span className="member-job">{role.description ?? role.title}</span>
