@@ -280,7 +280,7 @@ export function Journey({ format }: { format: Format }) {
       {agentIn > 0 && agentOut < 1 ? (
         <At x={agentX} y={250 - agentHop - beatHop} w={220} h={220}>
           <div style={{ transformOrigin: '50% 100%', transform: `rotate(${wobble(f, 3, 3, 60)}deg)` }}>
-            <Avatar note={builder.note} size={220} blink={f % 140 > 133} />
+            <Avatar note={builder.note} size={220} />
           </div>
         </At>
       ) : null}

@@ -1061,7 +1061,7 @@ assert "workflow: the build job builds the sites only when detect selects them" 
 for job in seed-code platform end-to-end; do
   assert "workflow: $job caches the pnpm store" test "$(job_block "$job" | grep -c '^          cache: pnpm$')" = 1
 done
-for step in 'pnpm --filter @backseat/gate test' 'pnpm test:agents' 'pnpm test:ops' 'pnpm test:functions'; do
+for step in 'pnpm --filter @backseat/gate test' 'pnpm test:agents' 'pnpm test:ops' 'pnpm test:functions' 'pnpm --filter @backseat/explainer typecheck && pnpm --filter @backseat/explainer test'; do
   assert "workflow: the platform job runs $step after typecheck and tests" awk -v run="        run: $step" '/^  platform:$/{p=1; next} /^  [a-z-]+:$/{p=0} p && /name: Typecheck and tests$/{g=1} p && $0 == run {found=g} END{exit !found}' "$WORKFLOW"
 done
 assert "workflow: the platform job pins Deno" workflow_has '^          deno-version: v2\.[0-9]+\.[0-9]+$'

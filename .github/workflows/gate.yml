@@ -202,6 +202,10 @@ jobs:
         run: pnpm test:ops
       - name: Docs tests
         run: pnpm test:docs
+      # The explainer draws the agents with the site's avatar code, so a site change can break it; the
+      # checks phase above leaves it out because builders never change it.
+      - name: Explainer typecheck and tests
+        run: pnpm --filter @backseat/explainer typecheck && pnpm --filter @backseat/explainer test
       # The Deno tests read only platform/supabase, so detect selects them only for a change that can
       # reach it.
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2

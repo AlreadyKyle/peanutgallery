@@ -21,8 +21,6 @@ export function Team({ format }: { format: Format }) {
         const y = 130 + row * 280;
         const up = pop(frame, at(c.pops[i]!), 'bouncy');
         const out = progress(frame, at(c.exit) + i * 3, 24, EASE_IN);
-        // Each blink cue closes one agent's eyes for six frames, a different agent each time.
-        const blinking = c.blinks.some((b, j) => (j * 4 + 1) % roster.length === i && frame >= at(b) && frame < at(b) + 6);
         // A small hop on each beat once the agent is up.
         const beatPhase = ((frame + i * 7) % BEAT) / BEAT;
         const hop = up > 0.98 ? Math.max(0, Math.sin(beatPhase * Math.PI)) * 4 : 0;
@@ -30,7 +28,7 @@ export function Team({ format }: { format: Format }) {
           <div key={agent.title}>
             <At x={x} y={y - hop + out * 60} w={180} h={180} scale={up * (1 - out * 0.4)} opacity={1 - out}>
               <div style={{ transformOrigin: '50% 100%', transform: `rotate(${wobble(frame, i, 2)}deg)` }}>
-                <Avatar note={agent.note} size={180} blink={blinking} />
+                <Avatar note={agent.note} size={180} />
               </div>
             </At>
             <At x={x} y={y + 118} w={280} h={40} opacity={Math.min(1, up) * (1 - out)}>
