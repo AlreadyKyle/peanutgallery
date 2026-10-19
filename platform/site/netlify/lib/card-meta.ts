@@ -1,7 +1,8 @@
 // Kernel (platform/gate/kernel-paths.txt; docs/specs/card-preview.md): the link preview tags of a
 // card's own page. A link preview reader runs no script, so the page the app draws at /card/:id
 // cannot name its own preview; the edge function card-meta.ts puts the card's title, summary, address
-// and preview image into index.html's tags before the page leaves the CDN. Web APIs only: it runs on
+// and preview image into index.html's tags, and a canonical link to the card's address
+// (docs/specs/page-previews.md), before the page leaves the CDN. Web APIs only: it runs on
 // Deno at the edge and under vitest here.
 
 export const SITE = 'https://mobmachine.games';
@@ -18,6 +19,19 @@ export function cardIdFrom(pathname: string): string | null {
 
 export function escapeAttr(text: string): string {
   return text.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+const CANONICAL = /<link rel="canonical" href="[^"]*" \/>/;
+
+/**
+ * The page with one canonical link to `url` (docs/specs/page-previews.md): the one there replaced, or
+ * a new one at the end of the head. index.html carries none, since it is served at every path; each
+ * edge function names its own page's address, so a tagged link (?from=) counts as that page.
+ */
+export function withCanonical(html: string, url: string): string {
+  const link = `<link rel="canonical" href="${escapeAttr(url)}" />`;
+  if (CANONICAL.test(html)) return html.replace(CANONICAL, () => link);
+  return html.replace(/(\n?)([ \t]*)<\/head>/, (_, newline: string, indent: string) => `${newline}${indent}  ${link}\n${indent}</head>`);
 }
 
 /** The title and summary from /api/card's JSON text, or null. */
@@ -53,5 +67,6 @@ export function withCardMeta(html: string, id: string, meta: { title: string; su
     out = out.replace(new RegExp(`(<meta ${attr} content=")[^"]*(")`), (_, a: string, b: string) => `${a}${escapeAttr(value)}${b}`);
   }
   // A function, as above: a title holding $' or $& must not be read as a replacement pattern.
-  return out.replace(/<title>[^<]*<\/title>/, () => `<title>${escapeAttr(title)}</title>`);
+  out = out.replace(/<title>[^<]*<\/title>/, () => `<title>${escapeAttr(title)}</title>`);
+  return withCanonical(out, `${SITE}/card/${id}`);
 }

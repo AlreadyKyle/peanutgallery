@@ -42,7 +42,8 @@
 // and /api/reports?x=1 400 (docs/specs/studio-reports.md), and one /assets/*.js is immutable.
 // Assets (the icons and version.json), og:image as an absolute URL, and
 // /og.png as a 200 image/png of 1200x630; the newest live card's page names its own preview, a
-// 1200x630 PNG (docs/specs/card-preview.md). /board is the not found page, a 404 from Netlify, with no
+// 1200x630 PNG (docs/specs/card-preview.md); /ledger and /team as served carry their own title,
+// og:url and canonical link (docs/specs/page-previews.md). /board is the not found page, a 404 from Netlify, with no
 // sign-in form and no netlify.app address but the game's (board-address.mjs); with BOARD_SITE_URL
 // set, no route names the board site's address. The www redirect, and the old domain's 301 to the same path, run only against production. The
 // security headers from netlify.toml, the enforced policy's full value included,
@@ -832,6 +833,27 @@ try {
     await checkPng(ogImage, 'og:image');
   } else if (absolute) {
     skip(`og:image points at ${new URL(ogImage).origin}, not ${BASE}; ${BASE}/og.png was checked instead`);
+  }
+  // A fixed page's link preview (docs/specs/page-previews.md): the page as served, before any script,
+  // has its own title, og:url and canonical link, from the page-meta edge function.
+  if (LOCAL.test(BASE)) {
+    skip('/ledger and /team as served name themselves: a local server runs no edge function');
+  } else {
+    for (const [path, title] of [
+      ['/ledger', `Ledger · ${STUDIO_NAME}`],
+      ['/team', `The team · ${STUDIO_NAME}`],
+    ]) {
+      const served = await (await fetch(`${BASE}${path}`)).text();
+      const named = {
+        title: served.match(/<title>([^<]*)<\/title>/)?.[1] ?? null,
+        ogUrl: served.match(/<meta property="og:url" content="([^"]+)"/)?.[1] ?? null,
+        canonical: served.match(/<link rel="canonical" href="([^"]+)"/)?.[1] ?? null,
+      };
+      check(
+        named.title === title && named.ogUrl === `${PRODUCTION}${path}` && named.canonical === `${PRODUCTION}${path}`,
+        `${path} as served names itself: title ${named.title}, og:url ${named.ogUrl}, canonical ${named.canonical}`,
+      );
+    }
   }
 
   const probe = await fetch(`${BASE}/`);
