@@ -715,12 +715,7 @@ function InkBand({ studio }: { studio: ReturnType<typeof useStudio> }) {
             {studio.state === 'loading' ? copy.team.loading : guide.teamEmpty}
           </p>
         ) : (
-          <>
-            <h3>{guide.asleep}</h3>
-            <TeamStrip roles={roles} asleep />
-            <h3>{guide.awake}</h3>
-            <TeamStrip roles={roles} asleep={false} />
-          </>
+          <TeamStrip roles={roles} />
         )}
       </section>
     </div>

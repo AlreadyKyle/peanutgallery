@@ -422,9 +422,7 @@ export const copy = {
     flipBackNote: 'Press again to turn it back.',
     slamNote: 'A shipped card lands with a small press. It plays only in a replay.',
     teamHeading: 'The team strip',
-    teamIntro: 'The code-drawn cast. Poses come only from data: eyes closed while the agents are paused.',
-    asleep: 'Asleep, as while the agents are paused',
-    awake: 'The default drawing',
+    teamIntro: 'The code-drawn cast, eyes always open: an agent with no work putters about the room.',
     teamEmpty: 'The agents have not loaded.',
     cards: {
       open: { title: 'Rename the first thing you build', summary: 'A clearer name and a one-line description for the first building.' },
@@ -467,7 +465,7 @@ export const copy = {
       chatting: 'Chatting with {name} until the next card.',
       resting: 'Taking a break until the next card.',
       reading: 'Reading until the next card.',
-      paused: 'Paused for now, asleep in the lounge.',
+      paused: 'Paused for now, puttering about the studio.',
     },
   },
   pipe: {

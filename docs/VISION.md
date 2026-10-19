@@ -76,7 +76,7 @@ Five pillars follow. Every card the Game Designer drafts and every page the Plat
 2. **Time away is rewarded.** Idle games pay you for leaving. Dust credits up to 8 hours away and now says so: "While you were away: +N dust in 2h 14m". The site does the same for the studio with "Since your last visit".
 3. **A goal you can finish together.** Kickstarter's lesson is that a visible goal near done is the strongest prompt (`docs/research/comparables.md`). A bar near full, and a card small enough that one coffee's worth finishes it, is the studio's best moment.
 4. **A crowd steering one thing.** Twitch Plays Pokémon drew 1.16 million participants because chaos with a shared goal is a story. Here the steering is funded and ordered, so the story is legible: which card the crowd picked, which shipped, what it changed.
-5. **Characters at work.** Neuro-sama shows an AI persona can carry an audience. The code-drawn aliens on /team, asleep or awake, and the agents' steps as fixed lines, are the cast. They never plead or react to money (`platform/site/DESIGN.md`, Avatar). The planned host and stream extend this ([The host](BACKLOG.md#the-host)).
+5. **Characters at work.** Neuro-sama shows an AI persona can carry an audience. The code-drawn aliens on /team, always awake and puttering about, and the agents' steps as fixed lines, are the cast. They never plead or react to money (`platform/site/DESIGN.md`, Avatar). The planned host and stream extend this ([The host](BACKLOG.md#the-host)).
 
 Humble Bundle is the money comp: a slider people trust because they can move it, and a default most leave alone.
 

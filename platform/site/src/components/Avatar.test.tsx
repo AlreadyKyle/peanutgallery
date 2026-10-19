@@ -96,20 +96,16 @@ describe('Avatar', () => {
     for (const colour of CREATURE_COLOURS) expect(css).toMatch(new RegExp(`--creature-${colour}:\\s*#[0-9a-f]{6};`));
   });
 
-  it('closes its eyes when asleep and draws open eyes by default, with the same text alternative', () => {
-    const note = NOTES['Builder A']!;
-    const { container, rerender } = render(<Avatar note={note} />);
-    const svg = () => container.querySelector('svg.avatar')!;
-    expect(svg().getAttribute('data-pose')).toBe('awake');
-    const open = svg().querySelectorAll('.avatar-eye').length;
-    expect(open).toBeGreaterThan(0);
-    expect(svg().querySelectorAll('.avatar-lid')).toHaveLength(0);
-
-    rerender(<Avatar note={note} asleep />);
-    expect(svg().getAttribute('data-pose')).toBe('asleep');
-    expect(svg().querySelectorAll('.avatar-eye')).toHaveLength(0);
-    expect(svg().querySelectorAll('.avatar-pupil')).toHaveLength(0);
-    expect(svg().querySelectorAll('.avatar-lid')).toHaveLength(open);
-    expect(screen.getByRole('img', { name: note })).toBeTruthy();
+  it('draws every agent with its eyes open, never asleep (the board, 19 October 2026)', () => {
+    for (const note of Object.values(NOTES)) {
+      const { container } = render(<Avatar note={note} />);
+      const svg = container.querySelector('svg.avatar')!;
+      expect(svg.querySelectorAll('.avatar-eye').length, note).toBeGreaterThan(0);
+      expect(svg.querySelectorAll('.avatar-pupil').length, note).toBe(svg.querySelectorAll('.avatar-eye').length);
+      expect(svg.querySelectorAll('.avatar-lid'), note).toHaveLength(0);
+      expect(svg.hasAttribute('data-pose'), note).toBe(false);
+      expect(screen.getByRole('img', { name: note })).toBeTruthy();
+      cleanup();
+    }
   });
 });

@@ -150,13 +150,6 @@ function ActivityMark({ place }: { place: AgentPlace }) {
           <path className="mark-ink" d="M-4 4l1-3.5 6-6 2.5 2.5-6 6z" />
         </g>
       );
-    case 'paused':
-    case 'offline':
-      return (
-        <g className="agent-mark" transform={`translate(6 ${y + 4})`}>
-          <path className="mark-ink" d="M-4 -6h7l-7 7h7M4 -12h5l-5 5h5" />
-        </g>
-      );
     case 'reading':
       return (
         <g className="agent-mark" transform={`translate(0 ${y})`}>
@@ -185,7 +178,7 @@ function AgentFigure({ place }: { place: AgentPlace }) {
       <ellipse className="agent-ring" cx={0} cy={0} rx={22} ry={11} />
       <g className="agent-body">
         <g className="avatar" style={style} transform={`translate(${-60 * s} ${-113 * s}) scale(${s})`}>
-          {avatarParts(features, place.asleep)}
+          {avatarParts(features)}
         </g>
         <ActivityMark place={place} />
       </g>
@@ -212,7 +205,7 @@ function RoleCard({ place, at, onEnter, onLeave }: { place: AgentPlace; at: { le
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
     >
-      <Avatar note={place.role.species_note} size={44} asleep={place.asleep} />
+      <Avatar note={place.role.species_note} size={44} />
       <div>
         <p className="role-card-name">{place.role.name}</p>
         {place.role.title === place.role.name ? null : <p className="role-card-title">{place.role.title}</p>}

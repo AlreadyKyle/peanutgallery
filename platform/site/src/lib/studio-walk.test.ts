@@ -78,7 +78,7 @@ describe('the studio floor', () => {
       }
     });
 
-    it(`puts every agent to sleep at an idle spot while the agents are offline, a body apart, in the ${era}`, () => {
+    it(`has every agent putter about the room while the agents are offline, saying so, a body apart, in the ${era}`, () => {
       for (const count of [2, 5, 8]) {
         const room = idleRoom(count);
         // A building card and a drafting flag change nothing while offline (docs/specs/honest-status.md).
@@ -86,8 +86,10 @@ describe('the studio floor', () => {
         const offline: Snapshot = { ...room, cards: [building], supply: { drafting: true, offline: true, short: true, reason: null, runs_today: 0, run_limit: 12, next_check_at: null } };
         const places = placeAgents(offline, plan);
         expect(places).toHaveLength(count);
+        // Never asleep (the board, 19 October 2026): each one is idle, so it wanders, and says the agents are offline.
         for (const place of places) {
-          expect([place.activity, place.asleep, place.card, place.partner, place.doing]).toEqual(['offline', true, null, null, copy.agentsOffline]);
+          expect(['chatting', 'reading', 'resting']).toContain(place.activity);
+          expect([place.card, place.doing]).toEqual([null, copy.agentsOffline]);
         }
         for (let i = 0; i < places.length; i += 1) {
           for (let j = i + 1; j < places.length; j += 1) expect(crowded(places[i]!.spot, places[j]!.spot), `${places[i]!.role.id} and ${places[j]!.role.id}`).toBe(false);
@@ -95,6 +97,16 @@ describe('the studio floor', () => {
         // Online, the same room works: the builder is at a desk.
         expect(placeAgents({ ...offline, supply: { ...offline.supply!, offline: false } }, plan).find((place) => place.role.id === 'agent-0')?.activity).toBe('building');
       }
+    });
+
+    it(`has a role the board paused putter about the room with the rest, saying it is paused, in the ${era}`, () => {
+      const room = idleRoom(3);
+      const paused: Snapshot = { ...room, roles: room.roles.map((role, i) => (i === 1 ? { ...role, paused: true, paused_reason: 'A fix first.' } : role)) };
+      const places = placeAgents(paused, plan);
+      expect(places).toHaveLength(3);
+      const one = places.find((place) => place.role.id === 'agent-1')!;
+      expect(['chatting', 'reading', 'resting']).toContain(one.activity);
+      expect(one.doing).toBe(copy.studioRoom.doing.paused);
     });
 
     it(`stands two reviewers at the gate, and a builder at each desk, a body apart in the ${era}`, () => {
