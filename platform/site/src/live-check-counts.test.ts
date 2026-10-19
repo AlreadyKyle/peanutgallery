@@ -26,4 +26,8 @@ describe('live-check.mjs and the counters', () => {
     expect(helper).toContain('return route.fulfill({ status: 204 });');
     expect(script).toContain('check(beacons.held === beacons.sent, `every count beacon answered in the browser, none sent to ${BASE}');
   });
+
+  it('presses nothing, so a run never opens checkout or the game and sends no checkout_open or home_play_click', () => {
+    expect(script).not.toMatch(/\.(click|dblclick|tap|press|dispatchEvent)\(|\.mouse\./);
+  });
 });

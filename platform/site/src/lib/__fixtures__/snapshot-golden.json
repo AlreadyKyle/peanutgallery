@@ -334,7 +334,7 @@
       "title": "Game Designer",
       "description": "Drafts a new game card, with its numbers and a cost estimate, whenever too few cards are open, for the Game Director to grade.",
       "species_note": "A small red creature with three short arms and a curled tail.",
-      "model": "claude-opus-5-5",
+      "model": "claude-sonnet-5-5",
       "write_access": true,
       "state": "active",
       "hired_at": "2026-09-14T00:00:00Z"

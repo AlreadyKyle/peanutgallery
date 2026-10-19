@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
-import { RUNNING_MODEL, runningModelsCheck } from '../scripts/team-models.mjs';
+import { DESIGNER_MODEL, DESIGNER_ROLE, RUNNING_MODEL, runningModelsCheck, runningRoleRows } from '../scripts/team-models.mjs';
 import { PAYMENT_LINK } from './fixture-env';
 import { DEFAULT_STUDIO, expect, overflowsHorizontally, test, WIDTHS } from './fixtures';
 
@@ -18,6 +18,9 @@ async function screenshot(page: Page, name: string, width: number): Promise<void
 const RUNNING_ROLES = ['Builder A', 'Builder B', 'Game Designer', 'Game Director', 'Janitor', 'Platform Director', 'QA'];
 // The running roles that run on a model: all but the code-only Janitor.
 const MODEL_ROLES = RUNNING_ROLES.filter((title) => title !== 'Janitor');
+// Their models in /team's order: the Game Designer on its own (docs/PLAN.md §10 decision 77).
+const ROLE_MODELS = MODEL_ROLES.map((title) => (title === DESIGNER_ROLE ? DESIGNER_MODEL : RUNNING_MODEL));
+const MODELS_MESSAGE = `running roles on ${RUNNING_MODEL}, the ${DESIGNER_ROLE} on ${DESIGNER_MODEL}`;
 
 async function onlyOneH1(page: Page, title: string): Promise<void> {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText([title]);
@@ -124,7 +127,9 @@ for (const viewport of WIDTHS) {
       }
       // A running role shows its model, its cost from contributions and its ships; a role that does not run shows none,
       // and nor does the code-only Janitor, which says it calls no model.
-      await expect(running.getByText('claude-opus-5-5', { exact: false })).toHaveCount(MODEL_ROLES.length);
+      await expect(running.getByText(RUNNING_MODEL, { exact: false })).toHaveCount(MODEL_ROLES.length - 1);
+      await expect(running.getByText(DESIGNER_MODEL, { exact: false })).toHaveCount(1);
+      await expect(running.locator('#agent-r-game-designer .card-meta')).toContainText(DESIGNER_MODEL);
       await expect(running.locator('#agent-r-janitor')).toHaveAttribute('data-kind', 'code');
       await expect(running.locator('#agent-r-janitor .agent-kind')).toHaveText('Code only');
       await expect(running.locator('#agent-r-janitor .card-meta')).toHaveText('Calls no model. Runs every day on its own.');
@@ -136,8 +141,8 @@ for (const viewport of WIDTHS) {
         await expect(region.locator('.card-meta')).toHaveCount(0);
       }
       // The check scripts/live-check.mjs runs on production, on the same locators.
-      const models = runningModelsCheck(await running.locator('li.agent:not([data-kind="code"]) .card-meta').allTextContents());
-      expect(models).toEqual({ ok: true, message: `/team ${MODEL_ROLES.length} running roles, each on ${RUNNING_MODEL}: ${Array(MODEL_ROLES.length).fill(RUNNING_MODEL).join(', ')}` });
+      const models = runningModelsCheck(await runningRoleRows(running));
+      expect(models).toEqual({ ok: true, message: `/team ${MODEL_ROLES.length} ${MODELS_MESSAGE}: ${ROLE_MODELS.join(', ')}` });
       // Nothing is paused: every avatar is awake and no row says Paused.
       await expect(page.locator('svg.avatar[data-pose="asleep"]')).toHaveCount(DEFAULT_STUDIO.roles.length - RUNNING_ROLES.length);
       await expect(running.locator('li.agent[data-status="paused"]')).toHaveCount(0);
@@ -198,9 +203,24 @@ test.describe('the production /team model check', () => {
       await page.goto('/team');
       const running = page.getByRole('region', { name: 'Running', exact: true });
       await expect(running.getByRole('heading', { level: 3 })).toHaveText(RUNNING_ROLES);
-      const models = runningModelsCheck(await running.locator('li.agent:not([data-kind="code"]) .card-meta').allTextContents());
+      const models = runningModelsCheck(await runningRoleRows(running));
       expect(models.ok).toBe(false);
       expect(models.message).toContain('claude-sonnet-5, claude-sonnet-5');
+    });
+  });
+
+  test.describe("after a re-seed that left a builder on the Game Designer's model", () => {
+    test.use({
+      studio: { ...DEFAULT_STUDIO, roles: DEFAULT_STUDIO.roles.map((role) => (role.title === 'Builder A' ? { ...role, model: DESIGNER_MODEL } : role)) },
+    });
+
+    test('fails, since only the Game Designer may run on it', async ({ page }) => {
+      await page.goto('/team');
+      const running = page.getByRole('region', { name: 'Running', exact: true });
+      await expect(running.getByRole('heading', { level: 3 })).toHaveText(RUNNING_ROLES);
+      const models = runningModelsCheck(await runningRoleRows(running));
+      expect(models.ok).toBe(false);
+      expect(models.message).toContain(`: ${DESIGNER_MODEL}, ${RUNNING_MODEL}, ${DESIGNER_MODEL}, `);
     });
   });
 
@@ -214,8 +234,8 @@ test.describe('the production /team model check', () => {
       await expect(page.getByRole('region', { name: 'Starts later', exact: true })).toBeVisible();
       const running = page.getByRole('region', { name: 'Running', exact: true });
       await expect(running).toHaveCount(0);
-      const models = runningModelsCheck(await running.locator('li.agent:not([data-kind="code"]) .card-meta').allTextContents());
-      expect(models).toEqual({ ok: false, message: `/team 0 running roles, each on ${RUNNING_MODEL}: none` });
+      const models = runningModelsCheck(await runningRoleRows(running));
+      expect(models).toEqual({ ok: false, message: `/team 0 ${MODELS_MESSAGE}: none` });
     });
   });
 });

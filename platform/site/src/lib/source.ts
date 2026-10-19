@@ -212,17 +212,19 @@ export const ENRICHMENTS = ['funding', 'spend', 'studio', 'totals', 'events', 'd
 export type Enrichment = (typeof ENRICHMENTS)[number];
 
 /**
- * Whether the agents are drafting a card, from public_supply (docs/specs/home-flow.md): fixed codes
- * and counts, never card text. Home's Next up lane says when the Game Designer is drafting.
+ * Whether the agents are drafting a card, from public_supply (docs/specs/home-flow.md,
+ * docs/specs/honest-status.md): fixed codes, flags and counts, never card text. Home's Next up lane
+ * says when the Game Designer is drafting.
  */
 export type Supply = {
-  /** A draft run is queued or running now, made today (see stalled). */
+  /** A draft run is running now and the dispatcher checked in within 15 minutes; never while offline. */
   drafting: boolean;
   /**
-   * A draft run has waited since an earlier New York day: the studio is not taking work, so the site
-   * says nothing is being drafted and promises no start time (never a paused notice, decision 62).
+   * The dispatcher has not checked in for 24 hours, or never has: the site says "The agents are
+   * offline." where it says what the studio is doing (PLAN.md §10 decision 77). A pause is not
+   * offline and still shows nothing (decision 62). False in a document from before the flag existed.
    */
-  stalled: boolean;
+  offline: boolean;
   /** Fewer cards are open than the floor asks for. */
   short: boolean;
   /** Why no draft may be queued now (daily_limit, not_short, ...), or null when one may. */
@@ -268,8 +270,8 @@ export type Snapshot = {
    */
   roleStats?: Record<string, RoleStats>;
   /**
-   * Whether the agents are drafting, from the studio row's supply; absent before the database
-   * carries it, and in a sample or a test, which reads as not drafting.
+   * Whether the agents are drafting or offline, from the studio row's supply; absent before the
+   * database carries it, and in a sample or a test, which reads as neither.
    */
   supply?: Supply | null;
   /** The enrichments that failed to load, in ENRICHMENTS order. */
@@ -529,13 +531,10 @@ export function supplyFrom(value: unknown): Supply | null {
   const doc = value as Record<string, unknown>;
   const count = (key: string) => (typeof doc[key] === 'number' && Number.isFinite(doc[key]) ? (doc[key] as number) : 0);
   const textOr = (key: string) => (typeof doc[key] === 'string' && doc[key] !== '' ? (doc[key] as string) : null);
-  // public_supply says drafting while any draft run is queued or running, however old, and runs_today
-  // counts the draft runs made since the studio's New York midnight. A queued run with none made today
-  // has waited since an earlier day: nothing is drafting it.
-  const stalled = doc.drafting === true && count('runs_today') === 0;
+  const offline = doc.offline === true;
   return {
-    drafting: doc.drafting === true && !stalled,
-    stalled,
+    drafting: doc.drafting === true && !offline,
+    offline,
     short: doc.short === true,
     reason: textOr('reason'),
     runs_today: count('runs_today'),

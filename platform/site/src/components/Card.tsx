@@ -3,6 +3,7 @@ import { faceOf, sourceLabel, type Face } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { legal } from '../lib/legal';
+import { agentsOffline } from '../lib/offline';
 import type { Card, Snapshot } from '../lib/source';
 import { rarityOf, suitOf } from '../lib/suits';
 import { CardMoney, shippedCaption, type CardMode, type SpecRow } from './Funding';
@@ -27,11 +28,14 @@ export function writtenBy(card: Card, snapshot: Snapshot): string | null {
   return role === undefined ? copy.writtenByAgent : copy.writtenBy.replace('{role}', role.title);
 }
 
-/** Who is on a building card: the role building it when the roles loaded, else who filed it. */
+/**
+ * Who is on a building card: the role building it when the roles loaded, else who filed it. While the
+ * agents are offline the role is named without "is building this" (docs/specs/honest-status.md).
+ */
 export function whoOn(card: Card, snapshot: Snapshot): string {
   const role = card.executor_role_id === null ? undefined : snapshot.roles.find((r) => r.id === card.executor_role_id);
   if (role === undefined) return sourceLabel(card.source);
-  return card.stage === 'building' ? copy.buildingBy.replace('{name}', role.name) : role.name;
+  return card.stage === 'building' && !agentsOffline(snapshot) ? copy.buildingBy.replace('{name}', role.name) : role.name;
 }
 
 export type CardFaceProps = {

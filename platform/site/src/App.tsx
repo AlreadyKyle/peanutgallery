@@ -104,8 +104,9 @@ export function App({ onRouteChange }: { onRouteChange?: () => void } = {}) {
   useRouteChange(onRouteChange);
   useScrollReveal();
   // The benchmarks' daily counts (docs/specs/counter-senders.md): home views and dwell, the broadcast's
-  // load and QR landings, Discord presses. Each is a beacon carrying an event name and nothing else.
-  useSiteCounts(siteEnv().discordInvite);
+  // load and QR landings, Discord presses, and the funnel: /contribute's load, Payment Link presses and
+  // Play pressed on home. Each is a beacon carrying an event name and nothing else.
+  useSiteCounts(siteEnv());
   const { pathname } = useLocation();
   const bare = BARE_PATHS.includes(pathname.toLowerCase().replace(/\/+$/, ''));
   return (

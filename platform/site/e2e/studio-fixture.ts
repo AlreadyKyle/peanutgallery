@@ -35,7 +35,7 @@ export type StudioFixture = {
   thanks?: Record<string, Record<string, unknown>>;
   /** site_reports()' reports, newest first (docs/specs/studio-reports.md); none when left out. */
   reports?: Record<string, unknown>[];
-  /** public_supply (docs/specs/home-flow.md), the studio row's supply; left out as before it existed. */
+  /** public_supply (docs/specs/home-flow.md, docs/specs/honest-status.md), the studio row's supply; left out as before it existed. */
   supply?: Record<string, unknown>;
 };
 
@@ -75,11 +75,11 @@ export const POSTED_TERMS = [
   { version: 2, posted_at: '2026-09-24T15:00:00+00:00' },
 ];
 
-// The values the board set (docs/PLAN.md §10 decision 36): every role that runs is on claude-opus-5-5.
-// MODEL_DESIGNER is unset, so the Game Designer reads MODEL_DIRECTOR (platform/supabase/lib/roles.ts).
+// The values the board set (docs/PLAN.md §10 decision 36): every role that runs is on claude-opus-5-5
+// but the Game Designer, on its own default (decision 77; platform/supabase/lib/roles.ts).
 const MODELS: Record<string, string> = {
   MODEL_DIRECTOR: 'claude-opus-5-5',
-  MODEL_DESIGNER: 'claude-opus-5-5',
+  MODEL_DESIGNER: 'claude-sonnet-5-5',
   MODEL_BUILDER: 'claude-opus-5-5',
   MODEL_HOST: 'claude-haiku-4-5',
 };

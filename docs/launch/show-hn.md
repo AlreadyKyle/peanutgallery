@@ -1,6 +1,6 @@
 # Show HN
 
-Third in the posting order, after the first two Reddit posts (`README.md`). Hacker News allows an 80-character title. Every link carries `?from=hn`, the tag the site and Dust count (`docs/specs/channel-counters.md`).
+Fifth in the posting order, after the four Reddit posts (`README.md`). Hacker News allows an 80-character title. Every link carries `?from=hn`, the tag the site and Dust count (`docs/specs/channel-counters.md`).
 
 Two Hacker News rules shape this draft:
 

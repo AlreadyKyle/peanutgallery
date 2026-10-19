@@ -210,6 +210,24 @@ describe('the card faces', () => {
     expect(within(box).queryByRole('link')).toBeNull();
   });
 
+  it('says the agents are offline in that slot while they are, still with no link (docs/specs/honest-status.md)', () => {
+    const funded = card({ stage: 'funded', funded_usd: 3 });
+    const offline = { drafting: false, offline: true, short: false, reason: null, runs_today: 0, run_limit: 12, next_check_at: null };
+    const box = one(funded, { snapshot: { ...snapshot([funded]), supply: offline } });
+    expect(within(box).getByText(copy.agentsOffline).className).toBe('card-waiting');
+    expect(within(box).queryByText(copy.waitingForAgents)).toBeNull();
+    expect(within(box).queryByRole('link')).toBeNull();
+  });
+
+  it('names a building card\'s agent without "is building this" while the agents are offline', () => {
+    const building = card({ stage: 'building', spent_usd: 0.42, executor_role_id: 'r1' });
+    const roles = [{ id: 'r1', name: 'Builder A', title: 'Builder A', description: null, species_note: '', model: '', write_access: true, state: 'active', hired_at: '' }];
+    const offline = { drafting: false, offline: true, short: false, reason: null, runs_today: 0, run_limit: 12, next_check_at: null };
+    const box = one(building, { snapshot: { ...snapshot([building]), roles, supply: offline } });
+    expect(within(box).getByText(`Builder A · $0.42 ${legal.spentSoFar}`)).toBeTruthy();
+    expect(box.textContent).not.toContain(copy.buildingBy.replace('{name} ', ''));
+  });
+
   it('names the agent building a card and what it has spent, on the work face with no bar', () => {
     const building = card({ stage: 'building', spent_usd: 0.42, executor_role_id: 'r1' });
     const { container } = render(

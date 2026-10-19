@@ -6,8 +6,9 @@
 //
 // The benchmarks' counters (docs/strategy/benchmarks.md) are decided here from what the page already
 // knows: the route on show, how long home has been visible, the QR code's or a channel's source tag in
-// the address (docs/specs/channel-counters.md), and a press on a Discord link. useSiteCounts wires
-// them into the frame (App.tsx).
+// the address (docs/specs/channel-counters.md), and a press on a Discord link, a Payment Link or, on
+// home, a link into the game (the funnel, docs/specs/counter-senders.md). useSiteCounts wires them
+// into the frame (App.tsx).
 
 import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -21,7 +22,18 @@ export const CHANNEL_SOURCES = ['x', 'bsky', 'threads', 'mastodon', 'discord', '
 export type ChannelSource = (typeof CHANNEL_SOURCES)[number];
 export type ChannelEvent = `from_${ChannelSource}`;
 
-export type PlayEvent = 'card_share' | 'home_load' | 'home_dwell_mid' | 'home_dwell_long' | 'broadcast_load' | 'broadcast_qr' | 'discord_click' | ChannelEvent;
+export type PlayEvent =
+  | 'card_share'
+  | 'home_load'
+  | 'home_dwell_mid'
+  | 'home_dwell_long'
+  | 'broadcast_load'
+  | 'broadcast_qr'
+  | 'discord_click'
+  | ChannelEvent
+  | 'contribute_load'
+  | 'checkout_open'
+  | 'home_play_click';
 
 export const COUNT_PATH = '/api/count';
 
@@ -143,9 +155,50 @@ export function isDiscordLink(href: string, invite: string): boolean {
   return DISCORD_HOSTS.some((known) => host === known || host.endsWith(`.${known}`));
 }
 
+/**
+ * Whether a link opens checkout: the site's own Payment Link, at the same https address with any query
+ * (a card's Fund adds `client_reference_id`). It compares against the configured link rather than the
+ * payment host, so the build names no payment address but that one (platform/gate/payment-host-scan.mjs).
+ * No Payment Link, no checkout link.
+ */
+export function isCheckoutLink(href: string, paymentLink: string): boolean {
+  if (href === '' || paymentLink === '') return false;
+  try {
+    const link = new URL(href);
+    const checkout = new URL(paymentLink);
+    return link.protocol === 'https:' && link.origin === checkout.origin && link.pathname === checkout.pathname;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether a link goes into the game: the play address's origin, at or under its path, with any query
+ * or hash (a card's Play adds `from=card`). No play address, no game link.
+ */
+export function isGameLink(href: string, playUrl: string): boolean {
+  if (href === '' || playUrl === '') return false;
+  try {
+    const link = new URL(href);
+    const game = new URL(playUrl);
+    const base = game.pathname.replace(/\/+$/, '');
+    return link.origin === game.origin && (link.pathname === base || link.pathname.startsWith(`${base}/`));
+  } catch {
+    return false;
+  }
+}
+
+/** The link a press landed on: a click, or a middle-button press; null for anything else. */
+function pressedLink(event: MouseEvent): HTMLAnchorElement | null {
+  if (event.type === 'auxclick' && event.button !== 1) return null;
+  const anchor = (event.target as Element | null)?.closest?.('a[href]');
+  return anchor instanceof HTMLAnchorElement ? anchor : null;
+}
+
 // The paths these counts read, without a trailing slash and in lower case, as the router matches them.
 const HOME_PATH = '/';
 const BROADCAST_PATH = '/broadcast';
+const CONTRIBUTE_PATH = '/contribute';
 // How often the dwell clock is read, in milliseconds.
 const DWELL_CHECK_MS = 1000;
 
@@ -158,21 +211,29 @@ function pageVisible(): boolean {
   return typeof document === 'undefined' || document.visibilityState !== 'hidden';
 }
 
-// The page load's own once-each sender: the broadcast's load, a tagged landing, and a Discord press,
-// each count once however many times this page load sees them.
+// The page load's own once-each sender: the broadcast's and /contribute's loads, a tagged landing, and
+// a Discord or Payment Link press, each count once however many times this page load sees them.
 const perPageLoad = onceEach();
 const sendEach = (event: PlayEvent): void => countEvent(event);
+
+/** The site's own addresses the counts read: its Discord invite, the game's play address and its Payment Link. */
+export type CountLinks = { discordInvite: string; playUrl: string; stripePaymentLinkUrl?: string };
 
 /**
  * The site's benchmark counters, mounted once by the frame (App.tsx):
  * - each view of home counts home_load once it is shown, and home_dwell_mid and home_dwell_long once the view has been
  *   visible 15 and 45 seconds; leaving home stops the clock;
- * - /broadcast counts broadcast_load once a page load;
+ * - /broadcast counts broadcast_load, and /contribute contribute_load, once a page load;
  * - an address carrying the QR code's source tag counts broadcast_qr once, and a channel's tag counts
  *   from_<tag> once (docs/specs/channel-counters.md); either tag is then dropped;
- * - a press on a Discord link counts discord_click once a page load; the link opens as before.
+ * - a press on a Discord link counts discord_click, and a press on a Payment Link checkout_open, once a
+ *   page load; the link opens as before;
+ * - a press on a link into the game while home is shown counts home_play_click, once a view of home,
+ *   so it reads against home_load.
  */
-export function useSiteCounts(discordInvite: string, send: (event: PlayEvent) => void = sendEach, once: (event: PlayEvent) => void = perPageLoad): void {
+export function useSiteCounts(links: CountLinks, send: (event: PlayEvent) => void = sendEach, once: (event: PlayEvent) => void = perPageLoad): void {
+  const { discordInvite, playUrl } = links;
+  const paymentLink = links.stripePaymentLinkUrl ?? '';
   const { pathname, search, hash } = useLocation();
   const navigate = useNavigate();
   const path = routePath(pathname);
@@ -186,6 +247,7 @@ export function useSiteCounts(discordInvite: string, send: (event: PlayEvent) =>
 
   useEffect(() => {
     if (path === BROADCAST_PATH) once('broadcast_load');
+    if (path === CONTRIBUTE_PATH) once('contribute_load');
   }, [path, once]);
 
   useEffect(() => {
@@ -208,10 +270,14 @@ export function useSiteCounts(discordInvite: string, send: (event: PlayEvent) =>
   }, [path, send]);
 
   useEffect(() => {
+    if (path !== HOME_PATH || playUrl === '') return;
+    // One press counts for each view of home, however many of its Play links are pressed.
+    let pressed = false;
     const onPress = (event: MouseEvent) => {
-      if (event.type === 'auxclick' && event.button !== 1) return;
-      const anchor = (event.target as Element | null)?.closest?.('a[href]');
-      if (anchor instanceof HTMLAnchorElement && isDiscordLink(anchor.href, discordInvite)) once('discord_click');
+      const anchor = pressedLink(event);
+      if (pressed || anchor === null || !isGameLink(anchor.href, playUrl)) return;
+      pressed = true;
+      send('home_play_click');
     };
     document.addEventListener('click', onPress, true);
     document.addEventListener('auxclick', onPress, true);
@@ -219,5 +285,20 @@ export function useSiteCounts(discordInvite: string, send: (event: PlayEvent) =>
       document.removeEventListener('click', onPress, true);
       document.removeEventListener('auxclick', onPress, true);
     };
-  }, [discordInvite, once]);
+  }, [path, playUrl, send]);
+
+  useEffect(() => {
+    const onPress = (event: MouseEvent) => {
+      const anchor = pressedLink(event);
+      if (anchor === null) return;
+      if (isDiscordLink(anchor.href, discordInvite)) once('discord_click');
+      if (isCheckoutLink(anchor.href, paymentLink)) once('checkout_open');
+    };
+    document.addEventListener('click', onPress, true);
+    document.addEventListener('auxclick', onPress, true);
+    return () => {
+      document.removeEventListener('click', onPress, true);
+      document.removeEventListener('auxclick', onPress, true);
+    };
+  }, [discordInvite, paymentLink, once]);
 }

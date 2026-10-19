@@ -66,7 +66,7 @@ Out: a stream, a kill switch, display names, personal decisions, a `public_shipp
 - /board, after sign-in and the role check, runs a two-factor step for a board member:
   - With no verified TOTP factor, it shows enrolment: the QR code image from the enrol response, the secret as text, a 6-digit code field and Verify.
   - With a verified factor on an `aal1` session, it shows a challenge: a code field and Verify.
-- Until the session is `aal2`, the studio status and the board session heartbeat keep running. Go live, the agent mode, the Next card, directive and note forms, and the board's pause are not rendered, and a line says a second factor is needed. The moderator's pause and resume work at `aal1`.
+- Until the session is `aal2`, the studio status and the board session heartbeat keep running. Go live, the agent mode, the Next card, directive and note forms, and the board's pause are not rendered, and a line says a second factor is needed. The moderator's pause works at `aal1`; the moderator has no resume, which is the board's at `aal2` (`docs/specs/moderator-pause-only.md`, PLAN.md §10 decision 77).
 
 **Copy audit.** Every claim in `copy.ts` and `Board.tsx` is checked against what exists:
 - The meter line says a contribution shows within a minute up to $50 of agent credit a day, and larger amounts after 14 days.

@@ -2,7 +2,7 @@ import { copy } from '../src/lib/copy';
 import { legal } from '../src/lib/legal';
 import { PAYMENT_LINK } from './fixture-env';
 import { DEFAULT_STUDIO, expect, overflowsHorizontally, test, type StudioFixture } from './fixtures';
-import { DRAFTING_STUDIO, EMPTY_STUDIO, PROD_STUDIO } from './prod-studio';
+import { DRAFTING_STUDIO, EMPTY_STUDIO, OFFLINE_STUDIO, PROD_STUDIO } from './prod-studio';
 
 // Home's card band (docs/specs/home-flow.md), now the studio's floor (docs/specs/place.md): the cards
 // to fund as full faces or the panel that funds the next card in line, the first game, the players'
@@ -36,6 +36,7 @@ const CASES: { label: string; studio: StudioFixture }[] = [
   { label: 'production on 10 Oct 2026', studio: PROD_STUDIO },
   { label: 'while the Game Designer drafts', studio: DRAFTING_STUDIO },
   { label: 'a studio with no cards', studio: EMPTY_STUDIO },
+  { label: 'while the agents are offline', studio: OFFLINE_STUDIO },
 ];
 
 for (const { label, studio } of CASES) {
@@ -109,6 +110,29 @@ test.describe('home flow while drafting', () => {
     const items = await lanes(page);
     await expect(items.nth(1).locator('.flow-agent[data-drafting]')).toHaveText(copy.flow.drafting);
     await expect(page.locator('p.status-line')).toHaveText(copy.status.drafting);
+  });
+});
+
+// docs/specs/honest-status.md (decision 77): while the dispatcher has not checked in for 24 hours, home
+// says "The agents are offline." where it says what the studio is doing, in the same place and style.
+test.describe('home flow while the agents are offline', () => {
+  test.use({ studio: OFFLINE_STUDIO });
+  test('the status line, Next up and the funded card say so, and nothing says an agent is working', async ({ page }) => {
+    await page.goto('/');
+    const items = await lanes(page);
+    await expect(page.locator('p.status-line')).toHaveText(`2 cards are open for funding. ${copy.agentsOffline}`);
+    await expect(items.nth(1).locator('.flow-agent')).toHaveText(copy.agentsOffline);
+    await expect(items.nth(1).locator('.flow-agent[data-drafting]')).toHaveCount(0);
+    await expect(items.nth(2).locator('li.card[data-face="funded"] .card-waiting')).toHaveText(copy.agentsOffline);
+    const main = page.locator('main');
+    for (const working of [copy.flow.drafting, copy.status.drafting, copy.waitingForAgents, copy.flow.lanes.building.empty]) await expect(main).not.toContainText(working);
+    // No banner and no new box: the line is the only change, and nothing says paused (decision 62).
+    await expect(page.locator('main p.notice')).toHaveCount(0);
+    await expect(main).not.toContainText(/The agents are paused|The board has paused the agents/);
+    // In the room every agent sleeps.
+    const agents = page.locator('.floor-plate .studio-agent');
+    await expect(agents.first()).toBeVisible();
+    expect(new Set(await agents.evaluateAll((els) => els.map((el) => el.getAttribute('data-activity'))))).toEqual(new Set(['offline']));
   });
 });
 

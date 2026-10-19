@@ -314,6 +314,16 @@ Deno.test("migrations on PGlite", {
         "20261018120000_card_suggested_by.sql",
         // The copy audit's plain role descriptions on /team (PLAN.md §10 decision 76).
         "20261018130000_plain_role_descriptions.sql",
+        // honest-status (docs/specs/honest-status.md): drafting only while a draft runs, and offline.
+        "20261019000000_honest_status.sql",
+        // moderator-pause-only (docs/specs/moderator-pause-only.md): only the board resumes; the pause log.
+        "20261019010000_moderator_pause_only.sql",
+        // funnel counters (docs/specs/counter-senders.md): /contribute, checkout and home's Play.
+        "20261019020000_funnel_counters.sql",
+        // hold-drafting (docs/specs/studio-reports.md, PLAN.md §10 decision 77): no draft while nothing sells.
+        "20261019030000_hold_drafting.sql",
+        // The Game Designer drafts on its own, cheaper model (PLAN.md §10 decision 77).
+        "20261019040000_designer_model.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -377,6 +387,7 @@ Deno.test("migrations on PGlite", {
         "ship_notices",
         "standing_costs",
         "stream_state",
+        "studio_pause_log",
         "studio_reports",
         "studio_state",
         "supporters",
@@ -1731,7 +1742,7 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "a moderator can pause, heartbeat and read studio_state at aal1 but not file or launch",
+      "a moderator can pause, heartbeat and read studio_state at aal1 but not resume, file or launch",
       async () => {
         await signInAs(MODERATOR_EMAIL, "aal1");
         assertEquals(
@@ -1769,8 +1780,18 @@ Deno.test("migrations on PGlite", {
           await row(`select paused, paused_by from public.studio_state`),
           { paused: true, paused_by: MODERATOR_EMAIL },
         );
-        await db.exec(`select public.set_paused(false)`);
+        // Only the board resumes, at the second factor (docs/specs/moderator-pause-only.md).
+        await refuses(
+          `select public.set_paused(false)`,
+          "Only the board resumes the studio",
+        );
         await row(`select public.board_heartbeat()`);
+        await signInAs(BOARD_EMAIL, "aal2");
+        await db.exec(`select public.set_paused(false)`);
+        assertEquals(
+          await row(`select paused, paused_by from public.studio_state`),
+          { paused: false, paused_by: null },
+        );
       },
     );
 
@@ -2114,10 +2135,11 @@ Deno.test("migrations on PGlite", {
             `select table_name, privilege_type from information_schema.role_table_grants where grantee = $1 and table_schema = 'public' order by 1, 2`,
             [grantee],
           );
-          // agent-upkeep's findings (docs/specs/agent-upkeep.md): authenticated selects it, and its
-          // policy lets only a board member read a row.
+          // agent-upkeep's findings (docs/specs/agent-upkeep.md) and moderator-pause-only's pause log
+          // (docs/specs/moderator-pause-only.md): authenticated selects them, and each policy lets only a
+          // board member read a row.
           const want = grantee === "authenticated"
-            ? [...expected, { table_name: "findings", privilege_type: "SELECT" }].sort((a, b) => a.table_name.localeCompare(b.table_name))
+            ? [...expected, ...["findings", "studio_pause_log"].map((table_name) => ({ table_name, privilege_type: "SELECT" }))].sort((a, b) => a.table_name.localeCompare(b.table_name))
             : expected;
           assertEquals(grants, want, grantee);
           // cards is granted column by column. actual_usd counts founder-billed
@@ -4230,6 +4252,8 @@ Deno.test("migrations on PGlite", {
             "set_updated_at",
             "ship_notice_token",
             "stamp_launched_at",
+            // moderator-pause-only: the trigger that writes studio_pause_log, no role's.
+            "studio_pause_logged",
             "studio_pause_reason",
           ].sort(),
         );

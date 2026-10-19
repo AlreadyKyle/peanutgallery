@@ -8,6 +8,7 @@ import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { formatDay, formatInteger } from '../lib/format';
 import { legal } from '../lib/legal';
+import { agentsOffline } from '../lib/offline';
 import type { Card, Snapshot } from '../lib/source';
 import { useStudio } from '../lib/studio';
 import { useThanks, type ThanksAnswer } from '../lib/thanks';
@@ -22,11 +23,15 @@ type Recorded = Extract<ThanksAnswer, { status: 'recorded' }>;
 
 const OPEN_STAGES = new Set(['proposed', 'designing', 'voted']);
 
-/** A reached card's one state line, from the stage the live document carries. */
-function stateLine(card: Card | undefined, stopped: boolean): string | null {
+/**
+ * A reached card's one state line, from the stage the live document carries. While the agents are
+ * offline a funded, building or checks card says so instead (docs/specs/honest-status.md).
+ */
+function stateLine(card: Card | undefined, stopped: boolean, offline: boolean): string | null {
   if (stopped) return words.stateStopped;
   if (card === undefined) return null;
   if (OPEN_STAGES.has(card.stage)) return words.stateOpen;
+  if (offline && (card.stage === 'funded' || card.stage === 'building' || card.stage === 'gated')) return copy.agentsOffline;
   if (card.stage === 'funded') return words.stateFunded;
   if (card.stage === 'building') return words.stateBuilding;
   if (card.stage === 'gated') return words.stateChecks;
@@ -38,7 +43,7 @@ function ReachedRow({ id, snapshot }: { id: string; snapshot: Snapshot | null })
   const card = snapshot?.cards.find((c) => c.id === id);
   const stopped = snapshot?.stopped?.find((s) => s.card_id === id);
   const title = card?.title ?? stopped?.title ?? words.cardFallback;
-  const line = stateLine(card, stopped !== undefined);
+  const line = stateLine(card, stopped !== undefined, snapshot !== null && agentsOffline(snapshot));
   const open = card !== undefined && OPEN_STAGES.has(card.stage) && card.funding_target_usd > 0;
   return (
     <li data-card={id}>
@@ -73,7 +78,7 @@ function RewardBand({ id, answer, snapshot }: { id: string; answer: Recorded; sn
   const card = snapshot?.cards.find((c) => c.id === id);
   const stopped = snapshot?.stopped?.find((s) => s.card_id === id);
   const title = card?.title ?? stopped?.title ?? words.cardFallback;
-  const line = stateLine(card, stopped !== undefined);
+  const line = stateLine(card, stopped !== undefined, snapshot !== null && agentsOffline(snapshot));
   const now = stopped === undefined ? currentStep(card?.stage) : null;
   return (
     <section className="section thanks-reward" aria-labelledby="reward">

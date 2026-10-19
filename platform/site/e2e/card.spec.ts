@@ -1,5 +1,7 @@
 import type { Route } from '@playwright/test';
+import { copy } from '../src/lib/copy';
 import { expect, mockStudio, test } from './fixtures';
+import { OFFLINE_STUDIO } from './prod-studio';
 import {
   BUILDER_B,
   BUILDING_CARD_ID,
@@ -303,6 +305,31 @@ test.describe('the Watch links', () => {
     await links.first().click();
     await expect(page).toHaveURL(/\/card\/[0-9a-f-]{36}$/);
     await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('Not found');
+  });
+});
+
+// docs/specs/honest-status.md: while the agents are offline a building card says so in its clock's
+// place, with no link to play while the agents work, and a funded card in its waiting line's.
+test.describe('while the agents are offline', () => {
+  test.use({ studio: { ...SUPPORTER_STUDIO, supply: OFFLINE_STUDIO.supply } });
+
+  test('a building card says the agents are offline instead of its build clock', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-09-21T14:44:59Z'));
+    await page.goto(`/card/${BUILDING_CARD_ID}`);
+    const facts = page.getByRole('region', { name: 'The facts' });
+    await expect(facts.locator('[data-fact="offline"]')).toHaveText(copy.agentsOffline);
+    await expect(facts.locator('[data-fact="offline"]')).toHaveClass('card-state');
+    await expect(page.locator('[data-fact="clock"]')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: copy.cardPage.playWhileBuilding })).toHaveCount(0);
+    await expect(page.locator('main')).not.toContainText(copy.buildingBy.replace('{name} ', ''));
+  });
+
+  test('a funded card says the agents are offline in its waiting line', async ({ page }) => {
+    await mockStudio(page, OFFLINE_STUDIO);
+    const funded = OFFLINE_STUDIO.cards.find((card) => card.stage === 'funded')!;
+    await page.goto(`/card/${String(funded.id)}`);
+    await expect(page.locator('main li.card .card-waiting')).toHaveText(copy.agentsOffline);
+    await expect(page.locator('main')).not.toContainText(copy.waitingForAgents);
   });
 });
 

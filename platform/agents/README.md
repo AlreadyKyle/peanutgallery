@@ -61,7 +61,7 @@ Three rules hold across files and are not expressible in the schema: `write_acce
 | curator | MODEL_BUILDER | 0 | level | none | first_pass_rate, cost_per_ship | web_only | false | starts |
 | art-director | MODEL_DIRECTOR | 0 | keen | read set | first_pass_rate, reopen_rate | reviewer | false | starts |
 
-The write set is `["Read", "Edit", "Write", "Glob", "Grep", "Bash"]` and the read set is `["Read", "Glob", "Grep"]`: the Studio Head and the two Directors read the repository and write nothing in it. The Game Designer holds the read set and Bash, `["Read", "Glob", "Grep", "Bash"]`: in a scratch checkout of `main` the dispatcher throws away, Bash runs only seed-1's package scripts, and the Designer writes card drafts, never files (`docs/specs/agent-workflows.md`). The roles added on 23 September 2026 start with no tools and no write access; only the board grants tools. `docs/SYSTEM.md` lists what each class may and may not do. `MODEL_DIRECTOR` and `MODEL_BUILDER` both hold `claude-opus-5-5` and `MODEL_HOST` holds `claude-haiku-4-5` (`docs/PLAN.md` §10 decision 36). `MODEL_DESIGNER`, the Game Designer's, falls back to `MODEL_DIRECTOR` when unset, in the seed and in the dispatcher alike, so the board can run drafting on a cheaper model without moving the Directors (`docs/specs/unattended-roles.md`).
+The write set is `["Read", "Edit", "Write", "Glob", "Grep", "Bash"]` and the read set is `["Read", "Glob", "Grep"]`: the Studio Head and the two Directors read the repository and write nothing in it. The Game Designer holds the read set and Bash, `["Read", "Glob", "Grep", "Bash"]`: in a scratch checkout of `main` the dispatcher throws away, Bash runs only seed-1's package scripts, and the Designer writes card drafts, never files (`docs/specs/agent-workflows.md`). The roles added on 23 September 2026 start with no tools and no write access; only the board grants tools. `docs/SYSTEM.md` lists what each class may and may not do. `MODEL_DIRECTOR` and `MODEL_BUILDER` both hold `claude-opus-5-5` and `MODEL_HOST` holds `claude-haiku-4-5` (`docs/PLAN.md` §10 decision 36). `MODEL_DESIGNER`, the Game Designer's, is `claude-sonnet-5-5` when `.env` leaves it unset, so drafting runs on a cheaper model than the Directors who grade it (`docs/PLAN.md` §10 decision 77): the seed uses that default and `make-dispatcher-env.sh` writes it into the dispatcher's env file. The dispatcher runs the Designer on `MODEL_DIRECTOR` only for an env file written before that (`docs/specs/unattended-roles.md`).
 
 ## How the seed script consumes a spec
 
@@ -73,7 +73,7 @@ The write set is `["Read", "Edit", "Write", "Glob", "Grep", "Bash"]` and the rea
 | title | title | as is |
 | description | description | as is |
 | species_note | species_note | as is |
-| model | model | the value of the named environment variable (`MODEL_DIRECTOR`, `MODEL_DESIGNER`, `MODEL_BUILDER` or `MODEL_HOST`; an unset `MODEL_DESIGNER` reads `MODEL_DIRECTOR`) |
+| model | model | the value of the named environment variable (`MODEL_DIRECTOR`, `MODEL_DESIGNER`, `MODEL_BUILDER` or `MODEL_HOST`; an unset `MODEL_DESIGNER` is `claude-sonnet-5-5`, as `make-dispatcher-env.sh` writes it for the dispatcher, `docs/PLAN.md` §10 decision 77) |
 | budget_share | budget_share | numeric(6,4) |
 | voice | voice | as is |
 | prompt_path | prompt_path | as is |

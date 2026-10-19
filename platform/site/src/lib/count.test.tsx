@@ -9,7 +9,9 @@ import {
   DWELL_MARKS,
   DwellClock,
   fromQr,
+  isCheckoutLink,
   isDiscordLink,
+  isGameLink,
   MAX_DWELL_STEP_MS,
   onceEach,
   QR_SOURCE,
@@ -23,9 +25,12 @@ import {
 
 // The site's counters (docs/specs/play-counts.md, docs/specs/counter-senders.md): the event's name
 // alone, to the site's own /api/count, decided from the route, the visible time on home, the QR
-// code's source tag and a press on a Discord link.
+// code's source tag and a press on a Discord link, a Payment Link or, on home, a link into the game.
 
 const INVITE = 'https://discord.gg/mob-machine';
+const PLAY = 'https://play.mobmachine.games';
+const PAYMENT_LINK = 'https://buy.stripe.com/test_link';
+const CHECKOUT = `${PAYMENT_LINK}?client_reference_id=split20`;
 
 afterEach(() => {
   cleanup();
@@ -37,15 +42,9 @@ describe('countEvent', () => {
   it('sends the event name alone as a beacon to /api/count', () => {
     const sendBeacon = vi.fn().mockReturnValue(true);
     const fetchFn = vi.fn();
-    for (const event of ['home_load', 'home_dwell_mid', 'home_dwell_long', 'broadcast_load', 'broadcast_qr', 'discord_click'] as const) countEvent(event, { sendBeacon }, fetchFn);
-    expect(sendBeacon.mock.calls.map((call) => call[1])).toEqual([
-      '{"event":"home_load"}',
-      '{"event":"home_dwell_mid"}',
-      '{"event":"home_dwell_long"}',
-      '{"event":"broadcast_load"}',
-      '{"event":"broadcast_qr"}',
-      '{"event":"discord_click"}',
-    ]);
+    const events = ['home_load', 'home_dwell_mid', 'home_dwell_long', 'broadcast_load', 'broadcast_qr', 'discord_click', 'contribute_load', 'checkout_open', 'home_play_click'] as const;
+    for (const event of events) countEvent(event, { sendBeacon }, fetchFn);
+    expect(sendBeacon.mock.calls.map((call) => call[1])).toEqual(events.map((event) => `{"event":"${event}"}`));
     expect(new Set(sendBeacon.mock.calls.map((call) => call[0]))).toEqual(new Set(['/api/count']));
     expect(fetchFn).not.toHaveBeenCalled();
   });
@@ -147,6 +146,35 @@ describe('isDiscordLink', () => {
   });
 });
 
+describe('isCheckoutLink and isGameLink (the funnel)', () => {
+  it("takes the site's own Payment Link, with any query, as checkout, and nothing else", () => {
+    expect(isCheckoutLink(CHECKOUT, PAYMENT_LINK)).toBe(true);
+    expect(isCheckoutLink(PAYMENT_LINK, PAYMENT_LINK)).toBe(true);
+    expect(isCheckoutLink('https://BUY.stripe.com/test_link', PAYMENT_LINK)).toBe(true);
+    expect(isCheckoutLink('http://buy.stripe.com/test_link', PAYMENT_LINK)).toBe(false);
+    expect(isCheckoutLink('https://buy.stripe.com/other_link', PAYMENT_LINK)).toBe(false);
+    expect(isCheckoutLink('https://buy.stripe.com.example.com/test_link', PAYMENT_LINK)).toBe(false);
+    expect(isCheckoutLink('https://mobmachine.games/contribute', PAYMENT_LINK)).toBe(false);
+    expect(isCheckoutLink(CHECKOUT, '')).toBe(false);
+    expect(isCheckoutLink('', PAYMENT_LINK)).toBe(false);
+    expect(isCheckoutLink('not a url', PAYMENT_LINK)).toBe(false);
+  });
+
+  it("takes a link to the play address's origin, with any query, as a link into the game", () => {
+    expect(isGameLink(PLAY, PLAY)).toBe(true);
+    expect(isGameLink(`${PLAY}/`, PLAY)).toBe(true);
+    expect(isGameLink(`${PLAY}/?from=card`, PLAY)).toBe(true);
+    expect(isGameLink('https://mobmachine.games/', PLAY)).toBe(false);
+    expect(isGameLink('https://play.mobmachine.games.example.com/', PLAY)).toBe(false);
+    expect(isGameLink(PLAY, '')).toBe(false);
+    expect(isGameLink('', PLAY)).toBe(false);
+    // A play address with a path matches that path and what is under it.
+    expect(isGameLink('https://example.com/play/?seed=1', 'https://example.com/play')).toBe(true);
+    expect(isGameLink('https://example.com/player', 'https://example.com/play')).toBe(false);
+    expect(isGameLink('https://example.com/', 'https://example.com/play')).toBe(false);
+  });
+});
+
 describe('useSiteCounts', () => {
   let sent: PlayEvent[];
   let once: (event: PlayEvent) => void;
@@ -160,7 +188,7 @@ describe('useSiteCounts', () => {
 
   // A frame that mounts the counts with one router, and links to move between pages.
   function Frame() {
-    useSiteCounts(INVITE, send, once);
+    useSiteCounts({ discordInvite: INVITE, playUrl: PLAY, stripePaymentLinkUrl: PAYMENT_LINK }, send, once);
     const navigate = useNavigate();
     const location = useLocation();
     const [, rerender] = useState(0);
@@ -170,12 +198,20 @@ describe('useSiteCounts', () => {
         <button type="button" onClick={() => navigate('/')}>home</button>
         <button type="button" onClick={() => navigate('/team')}>team</button>
         <button type="button" onClick={() => navigate('/broadcast')}>broadcast</button>
+        <button type="button" onClick={() => navigate('/contribute')}>contribute</button>
         <button type="button" onClick={() => rerender((n) => n + 1)}>rerender</button>
         <a href={INVITE} onClick={(event) => event.preventDefault()}>Discord</a>
         <a href="https://discord.com/x" onClick={(event) => event.preventDefault()}>
           <span>Discord channel</span>
         </a>
         <a href="/faq" onClick={(event) => event.preventDefault()}>FAQ</a>
+        <a href={CHECKOUT} onClick={(event) => event.preventDefault()}>
+          <span>Fund this card</span>
+        </a>
+        <a href={PLAY} onClick={(event) => event.preventDefault()}>Play free</a>
+        <a href={`${PLAY}/?from=card`} onClick={(event) => event.preventDefault()}>
+          <span>Play Dust</span>
+        </a>
       </div>
     );
   }
@@ -246,10 +282,10 @@ describe('useSiteCounts', () => {
 
   it('counts a landing from the QR code once and drops the tag from the address', () => {
     const view = mount('/contribute?from=broadcast#how');
-    expect(sent).toEqual(['broadcast_qr']);
+    expect(sent).toEqual(['broadcast_qr', 'contribute_load']);
     expect(view.getByTestId('where').textContent).toBe('/contribute#how');
     fireEvent.click(view.getByText('rerender'));
-    expect(sent).toEqual(['broadcast_qr']);
+    expect(sent).toEqual(['broadcast_qr', 'contribute_load']);
   });
 
   it("counts a landing from a channel's tagged link once and drops the tag, keeping the rest", () => {
@@ -279,5 +315,57 @@ describe('useSiteCounts', () => {
     const view = mount('/team');
     fireEvent(view.getByText('Discord'), new MouseEvent('auxclick', { bubbles: true, button: 1 }));
     expect(sent).toEqual(['discord_click']);
+  });
+
+  it('counts /contribute once a page load, however it is reached', () => {
+    const view = mount('/team');
+    expect(sent).toEqual([]);
+    fireEvent.click(view.getByText('contribute'));
+    fireEvent.click(view.getByText('rerender'));
+    fireEvent.click(view.getByText('team'));
+    fireEvent.click(view.getByText('contribute'));
+    expect(sent).toEqual(['contribute_load']);
+  });
+
+  it('counts a press on a Payment Link once a page load, on any page, and a right-button press not at all', () => {
+    const view = mount('/team');
+    fireEvent(view.getByText('Fund this card'), new MouseEvent('auxclick', { bubbles: true, button: 2 }));
+    expect(sent).toEqual([]);
+    fireEvent.click(view.getByText('Fund this card'));
+    fireEvent.click(view.getByText('home'));
+    fireEvent.click(view.getByText('Fund this card'));
+    expect(sent.filter((event) => event === 'checkout_open')).toEqual(['checkout_open']);
+  });
+
+  it('counts a press on a link into the game once a view of home, and nothing on another page', () => {
+    const view = mount('/team');
+    fireEvent.click(view.getByText('Play free'));
+    expect(sent).toEqual([]);
+    fireEvent.click(view.getByText('home'));
+    fireEvent.click(view.getByText('FAQ'));
+    fireEvent.click(view.getByText('Discord'));
+    expect(sent).toEqual(['home_load', 'discord_click']);
+    fireEvent.click(view.getByText('Play free'));
+    fireEvent.click(view.getByText('Play Dust'));
+    expect(sent).toEqual(['home_load', 'discord_click', 'home_play_click']);
+    // Another view of home counts its own press, a middle-button one included.
+    fireEvent.click(view.getByText('team'));
+    fireEvent.click(view.getByText('home'));
+    fireEvent(view.getByText('Play Dust'), new MouseEvent('auxclick', { bubbles: true, button: 1 }));
+    expect(sent).toEqual(['home_load', 'discord_click', 'home_play_click', 'home_load', 'home_play_click']);
+  });
+
+  it('counts no press into the game when the site has no play address', () => {
+    function NoPlay() {
+      useSiteCounts({ discordInvite: INVITE, playUrl: '' }, send, once);
+      return <a href={PLAY} onClick={(event) => event.preventDefault()}>Play free</a>;
+    }
+    const view = render(
+      <MemoryRouter initialEntries={['/']}>
+        <NoPlay />
+      </MemoryRouter>,
+    );
+    fireEvent.click(view.getByText('Play free'));
+    expect(sent).toEqual(['home_load']);
   });
 });
