@@ -4,8 +4,9 @@ import type { DevilState, OrderState, SimState, UnlockEvent, WeatherState } from
 // The save wrapper carries a version outside SimState so a format change
 // never touches the shape tests/timeline.test.ts pins the hash of.
 
-// The wrapper also carries savedAt, the wall-clock millisecond the save was written, so the game can
-// credit the time the player was away. It is optional: a save written before it existed still loads.
+// The wrapper also carries savedAt, the wall-clock millisecond the saved state was stepped to (the
+// moment it was written, in a visible tab), so the game can credit the time the player was away. It is
+// optional: a save written before it existed still loads.
 
 export const SAVE_VERSION = 1;
 

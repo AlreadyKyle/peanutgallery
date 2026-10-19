@@ -71,7 +71,7 @@ describe('effects and multipliers in words', () => {
     const words = Object.fromEntries(config.unlocks.gems!.perks.map((perk) => [perk.id, describePerk(perk, config, strings)]));
     expect(words).toEqual({
       'strong-arms': 'Strikes ×3',
-      'head-start': 'Each season starts with 10 Gatherer',
+      'head-start': 'Each season starts with 10 Gatherers',
       'weather-wise': 'Weather lasts ×2 as long',
       thrift: 'Units cost 20% less',
       'golden-pile': 'Production ×2',
@@ -239,7 +239,7 @@ describe('the choice layers in words', () => {
   });
 
   it('puts an order in words with its progress, its reward and its rest', () => {
-    expect(orderWords({ type: 'own', unit: 'cart', target: 12 }, config, strings)).toBe('Own 12 Cart');
+    expect(orderWords({ type: 'own', unit: 'cart', target: 12 }, config, strings)).toBe('Own 12 Carts');
     expect(orderWords({ type: 'strikes', target: 30 }, config, strings)).toBe('Strike 30 times');
     expect(orderWords({ type: 'gather', target: 1200 }, config, strings)).toBe('Gather 1,200 dust');
     const base = { ...unlocked(createSim(config, 1), 2000), owned, elapsedSeconds: 100 };

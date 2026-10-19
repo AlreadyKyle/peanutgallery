@@ -797,6 +797,12 @@ a.target {
   main.card-page .hero > h1 {
     margin-bottom: var(--space-3);
   }
+
+  /* A text page's plate with only its heading (the not found page) gives the heading the whole row,
+     so a short title never wraps beside an empty column. */
+  main:not(.wide, .sheet) .hero:not(.hero-home):has(> h1:only-child) {
+    display: block;
+  }
 }
 
 /* A card's plate is short: its title at the section size (a card title runs long) and the plate's
@@ -1554,14 +1560,8 @@ button.link:hover:not(:disabled) {
   border-radius: var(--radius-card);
 }
 
-.game-text > h2 {
-  margin-top: 0;
-}
-
-/* Headings that title a part, not a section, keep the part size (the production pass): the first
-   game's heading sits in a column between the box art and the video, and the Machine card's title is
-   a card's, so at the section size either would stack a word to a line. */
-.game-text > h2,
+/* A heading that titles a card, not a section, keeps the part size (the production pass): the Machine
+   card's title at the section size would stack a word to a line. */
 .machine-card h2 {
   font-size: var(--size-h2);
 }
@@ -1577,8 +1577,9 @@ button.link:hover:not(:disabled) {
 }
 
 @media (min-width: 48rem) {
+  /* The box art's column keeps it within the layout audit's balance beside the name, line and Play. */
   .game-tile {
-    grid-template-columns: 18rem minmax(0, 1fr);
+    grid-template-columns: 15rem minmax(0, 1fr);
     align-items: center;
     column-gap: var(--space-5);
   }
@@ -1940,9 +1941,8 @@ button.link:hover:not(:disabled) {
   object-fit: cover;
 }
 
-/* The play label: an ink pill with a paper edge, so it reads on the loop's white scene and on the
-   still's black plate alike. It takes the bottom-left corner, which the loop's scene and the still
-   both leave empty. */
+/* The play label: an ink pill with a paper edge, so it reads on the loop's scene and on the still
+   alike. It takes the bottom-left corner, which the loop's scene and the still both leave empty. */
 .explainer-play {
   position: absolute;
   left: var(--space-3);
@@ -2017,8 +2017,8 @@ button.link:hover:not(:disabled) {
 }
 
 /* The pill keeps one size while home's frame shrinks: from 64rem the showcase shares its row with the
-   first game, the frame is under 720px wide, and the labelled pill reaches the poster's own lines
-   ("Watch AI agents build it."). There it becomes the 44px play mark alone, and the label stays for a
+   first game, the frame is under 720px wide, and the labelled pill could reach the poster's picture.
+   There it becomes the 44px play mark alone, and the label stays for a
    screen reader. e2e/explainer-poster.spec.ts reads the poster's
    pixels under the pill at every width, on both pages that draw the video. */
 @media (min-width: 64rem) {
@@ -2890,23 +2890,37 @@ input[type='radio'] {
   padding-bottom: var(--space-5);
 }
 
-/* The first game and the explainer, side by side from 80rem, where the floor's parts column is wide
-   enough for the pair (the video alone takes the row); stacked below that. */
+/* The first game and the explainer under one heading at the section size, side by side from 80rem,
+   where the floor's parts column is wide enough for the pair (the video alone takes the row); stacked
+   below that, a section's step apart. */
 .showcase {
   display: grid;
-  gap: var(--band-pad) var(--space-5);
+  gap: var(--space-4) var(--space-5);
   align-items: center;
 }
 
+.showcase > h2 {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.showcase > .game-tile + .explainer {
+  margin-top: calc(var(--band-pad) - var(--space-4));
+}
+
 @media (min-width: 80rem) {
-  /* The game's half is the wider, so its heading keeps to one line beside the box art. */
+  /* The game's half is the wider, so its box art keeps a size worth looking at beside its lines. */
   .showcase:has(> .game-tile) {
     grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
   }
 
   .showcase > .game-tile {
-    grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 13rem) minmax(0, 1fr);
     column-gap: var(--space-4);
+  }
+
+  .showcase > .game-tile + .explainer {
+    margin-top: 0;
   }
 }
 
@@ -5278,6 +5292,35 @@ main.home > .band {
   scroll-margin-top: var(--space-5);
 }
 
+/* A quiet station (no cards to show) is set a step down: a part's heading size, its intro at body
+   size. Two quiet stations in a row share a row from 48rem (Floor.tsx StationPart). */
+.station-part[data-quiet] > h2[id] {
+  font-size: var(--size-h2);
+}
+
+main:not(.sheet) .section.station-part[data-quiet] > h2 + p {
+  font-size: var(--size-body);
+  line-height: var(--leading-body);
+}
+
+@media (min-width: 48rem) {
+  .floor-parts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-4);
+    align-items: start;
+  }
+
+  .floor-parts > * {
+    grid-column: 1 / -1;
+  }
+
+  .floor-parts > [data-quiet]:has(+ [data-quiet]),
+  .floor-parts > [data-quiet] + [data-quiet] {
+    grid-column: auto;
+  }
+}
+
 .station-cards {
   margin-top: 0;
 }
@@ -5339,10 +5382,22 @@ main.home > .band {
   gap: var(--space-3);
 }
 
-/* Two columns only where the panel itself is wide: a card's face column keeps them stacked. */
+/* Two columns only where the panel itself is wide: a card's face column keeps them stacked. With
+   sign-in closed the guest side is all there is, so its two lines sit side by side across the panel
+   instead of leaving the right half empty. */
 @container (min-width: 34rem) {
-  .perks-columns {
+  .perks[data-sign-in='open'] .perks-columns {
     grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  }
+
+  .perks[data-sign-in='closed'] .perks-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-4);
+  }
+
+  .perks[data-sign-in='closed'] .perks-list li + li {
+    margin-top: 0;
   }
 }
 

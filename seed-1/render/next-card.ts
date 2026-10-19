@@ -1,6 +1,6 @@
 import { countEvent } from './count';
 
-// The next card to fund that changes Dust, shown under the canvas beside the studio line. Phaser-free and read only: it reads
+// The next card to fund that changes Dust, shown under the canvas beside the studio line. Three-free and read only: it reads
 // the site's two public documents, /api/live and /api/cards, the same documents every figure on
 // mobmachine.games comes from (platform/site/netlify/functions/snapshot.mts). netlify.toml proxies
 // both paths to the site, so the fetch stays on this origin and connect-src 'self' holds. Any failure,

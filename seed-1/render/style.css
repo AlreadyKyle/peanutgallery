@@ -694,7 +694,9 @@ footer {
   overflow: hidden;
 }
 
+/* A span: without display block its width (set from the card's funding) is ignored and no fill draws. */
 #next-card-fill {
+  display: block;
   width: 0;
   height: 100%;
   background: var(--magenta);
@@ -1755,6 +1757,17 @@ footer {
     min-height: min(560px, 100vh);
     min-height: min(560px, 100svh);
   }
+
+  /* Room for the goal's label and a whole unlock name on one line (a phone stacks them, below). */
+  .hud-goal {
+    flex-basis: 248px;
+  }
+
+  /* The banner hangs just under the HUD, over the first steps and the weather chip: they fade out as
+     it fades in (render/hud.ts sets --banner-cover from the banner's own fade, every frame). */
+  .hud-below {
+    opacity: calc(1 - var(--banner-cover, 0));
+  }
 }
 
 /* The studio line on a narrow screen: the funding link takes its own line and the separator before it
@@ -1769,5 +1782,36 @@ footer {
     justify-content: center;
     width: fit-content;
     margin: 0 auto;
+  }
+}
+
+/* A phone narrower than 600px. */
+@media (max-width: 599.98px) {
+  /* No room for the goal's label and its name on one line: the label sits over the name, so the name
+     is read whole ("Sturdy broom", not "Sturdy bro..."). */
+  .hud-goal {
+    flex-basis: 176px;
+  }
+
+  .hud-goal-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  .hud-goal-name {
+    max-width: 100%;
+    text-align: left;
+  }
+
+  /* The order's words take their own line, with the bar and the count under them, so a large gather
+     order is read whole ("Gather 1,398 dust", not "Gather 1,398 du...") and its bar keeps its length. */
+  .order-body {
+    grid-template-columns: minmax(24px, 1fr) auto;
+    row-gap: 3px;
+  }
+
+  .order-text {
+    grid-column: 1 / -1;
   }
 }

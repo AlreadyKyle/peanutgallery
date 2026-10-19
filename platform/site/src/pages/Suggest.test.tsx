@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SuggestionSummary } from '../lib/community-types';
 import { copy } from '../lib/copy';
+import { resetSignInOpen } from '../lib/sign-in';
 import { Suggest, totalFrom } from './Suggest';
 
 // /suggest: an upvote shows the total the RPC answered with (the cached list cannot say whether this
@@ -46,6 +47,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  resetSignInOpen();
   window.localStorage.clear();
   vi.unstubAllGlobals();
 });
@@ -105,5 +107,63 @@ describe('/suggest', () => {
     expect(screen.getByText('Idea a')).toBeTruthy();
     expect(screen.getByText('Idea b')).toBeTruthy();
     expect(screen.queryByRole('button', { name: copy.suggest.more })).toBeNull();
+  });
+});
+
+describe('/suggest with an empty board', () => {
+  // The board answers no ideas; sign-in is open or closed as the studio says (lib/sign-in.ts).
+  function answer(signIn: boolean) {
+    window.localStorage.clear();
+    vi.stubEnv('VITE_PLAY_URL', 'https://play.example');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = String(input);
+        sent.push({ url, body: null });
+        if (url === '/api/community/auth/settings') return json(200, { signIn });
+        if (url.startsWith('/api/community/suggestions')) return json(200, { items: [], next: null });
+        return json(404, { error: 'unknown' });
+      }),
+    );
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('offers the game, not a pitch, while sign-in is closed, and draws no sort or area filter', async () => {
+    answer(false);
+    renderPage();
+    await settle();
+    expect(screen.getByText(copy.ideas.closed)).toBeTruthy();
+    expect(screen.getByText(copy.suggest.empty)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: copy.emptyState.sendFirst })).toBeNull();
+    expect(screen.getByRole('link', { name: copy.emptyState.playDust }).getAttribute('href')).toBe('https://play.example');
+    expect(screen.queryByRole('group', { name: copy.suggest.sortLabel })).toBeNull();
+    expect(screen.queryByLabelText(copy.suggest.areaFilter)).toBeNull();
+  });
+
+  it('offers the first pitch while sign-in is open, still with no sort over the empty board', async () => {
+    answer(true);
+    renderPage();
+    await settle();
+    expect(screen.getByRole('link', { name: copy.emptyState.sendFirst }).getAttribute('href')).toBe('#suggest-send');
+    expect(screen.queryByRole('link', { name: copy.emptyState.playDust })).toBeNull();
+    expect(screen.queryByRole('group', { name: copy.suggest.sortLabel })).toBeNull();
+  });
+});
+
+describe('/suggest sort and area filter', () => {
+  it('draw once the board lists an idea, and stay while another sort loads', async () => {
+    renderPage();
+    expect(screen.queryByRole('group', { name: copy.suggest.sortLabel })).toBeNull();
+    await settle();
+    const sorts = screen.getByRole('group', { name: copy.suggest.sortLabel });
+    // Signed in here, so the form has its own Area beside the filter's.
+    expect(screen.getAllByLabelText(copy.suggest.areaFilter)).toHaveLength(2);
+    // A new sort reads as loading until it answers, and the sorts hold still meanwhile.
+    fireEvent.click(within(sorts).getByRole('button', { name: copy.suggest.sorts.new }));
+    expect(screen.getByText(copy.suggest.loading)).toBeTruthy();
+    expect(screen.getByRole('group', { name: copy.suggest.sortLabel })).toBeTruthy();
   });
 });

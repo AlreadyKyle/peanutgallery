@@ -165,6 +165,34 @@ test('while sign-in is closed the site offers no profile, and paying still works
   expect(await overflowsHorizontally(page)).toBe(false);
 });
 
+test('while sign-in is closed the frame links nothing that needs a profile, and the empty lists offer the game', async ({ page }) => {
+  await answerCommunity(page, { signInOpen: false, ideas: [] });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/suggest');
+  const nav = page.getByRole('navigation', { name: 'Site' });
+  await expect(nav.getByRole('link', { name: 'Team', exact: true })).toBeVisible();
+  // Pitching needs a profile, so the top bar drops Ideas; the footer keeps the board, which anyone can
+  // read, and drops Your desk.
+  await expect(nav.getByRole('link', { name: 'Ideas', exact: true })).toHaveCount(0);
+  const footer = page.getByRole('contentinfo');
+  await expect(footer.getByRole('link', { name: 'Ideas', exact: true })).toHaveAttribute('href', '/suggest');
+  await expect(footer.getByRole('link', { name: 'Your desk', exact: true })).toHaveCount(0);
+  // The empty board offers Play Dust, not a pitch, and no sort or filter sits over it.
+  const board = page.locator('[aria-labelledby="suggest-list"]');
+  await expect(board.getByText('No ideas here yet.')).toBeVisible();
+  await expect(board.getByRole('link', { name: 'Play Dust' })).toBeVisible();
+  await expect(board.getByRole('link', { name: 'Pitch the first idea' })).toHaveCount(0);
+  await expect(board.getByRole('group', { name: 'Sort ideas' })).toHaveCount(0);
+  await expect(board.getByLabel('Area')).toHaveCount(0);
+  // /seeds asks no one to sign in, and says publishing a seed needs a profile.
+  await page.goto('/seeds');
+  const how = page.locator('[aria-labelledby="seeds-how"]');
+  await expect(how.getByText('Publishing a seed here needs a profile, and profiles are not open yet.', { exact: false })).toBeVisible();
+  await expect(how.getByText('joins your profile', { exact: false })).toHaveCount(0);
+  await expect(how.getByRole('link', { name: 'Sign in to upvote and publish' })).toHaveCount(0);
+  expect(await overflowsHorizontally(page)).toBe(false);
+});
+
 const SHOTS = process.env.E2E_PLACE_SHOTS ?? '';
 const PAGES: readonly [string, string, boolean][] = [
   ['home', '/', false],

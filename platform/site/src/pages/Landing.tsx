@@ -3,7 +3,7 @@ import { CardsStatus } from '../components/CardsStatus';
 import { EventList } from '../components/EventList';
 import { ExplainerVideo } from '../components/ExplainerVideo';
 import { FundNow } from '../components/Flow';
-import { BuildingStation, FloorRail, FLOOR_STATIONS, IdeasStation, NextStation, ShippedStation, StationPart, stationCounts, useLitStation, useSignedInPanel, WelcomePanel } from '../components/Floor';
+import { BuildingStation, FloorRail, FLOOR_STATIONS, IdeasStation, NextStation, ShippedStation, StationPart, stationCounts, useIdeasStation, useLitStation, useSignedInPanel, WelcomePanel } from '../components/Floor';
 import { Glyph } from '../components/Glyph';
 import { LiveStudio } from '../components/LiveStudio';
 import { MachineCard } from '../components/MachineCard';
@@ -108,31 +108,37 @@ function StudioStatus({ studio, live }: { studio: StudioState; live: ReturnType<
 }
 
 /**
- * The first game and the explainer, side by side from 64rem: the game's box art, its name, one line
- * and Play (decision 68), and the video that shows how a card becomes a change in it. Without a play
- * address the video takes the row alone.
+ * The first game and the explainer under one heading at the section size, side by side from 80rem: the
+ * game's box art, its name, one line and Play (decision 68), and the video that shows how a card
+ * becomes a change in it. Without a play address the video takes the row alone, with no heading.
  */
 function ShowcaseSection() {
   const env = siteEnv();
+  // The still, not the loop: at this size the loop's white scene read as a blank panel.
+  if (env.playUrl === '') {
+    return (
+      <div className="showcase">
+        <ExplainerVideo still />
+      </div>
+    );
+  }
+  // The heading stands over the game and the video; the game's own section takes its name from it.
   return (
     <div className="showcase">
-      {env.playUrl === '' ? null : (
-        <section className="section game-tile" aria-labelledby="game">
-          <img className="game-shot" src="/games/dust-box-art.svg" width={375} height={500} alt={copy.game.alt} />
-          <div className="game-text">
-            <h2 id="game">{copy.game.title}</h2>
-            <p className="game-name">{copy.game.name}</p>
-            <p>{copy.game.line}</p>
-            <p>
-              <a className="button" href={env.playUrl}>
-                <Glyph name="cartridge" />
-                {copy.game.play}
-              </a>
-            </p>
-          </div>
-        </section>
-      )}
-      {/* The still, not the loop: at this size the loop's white scene read as a blank panel. */}
+      <h2 id="game">{copy.game.title}</h2>
+      <section className="game-tile" aria-labelledby="game">
+        <img className="game-shot" src="/games/dust-box-art.svg" width={375} height={500} alt={copy.game.alt} />
+        <div className="game-text">
+          <p className="game-name">{copy.game.name}</p>
+          <p>{copy.game.line}</p>
+          <p>
+            <a className="button" href={env.playUrl}>
+              <Glyph name="cartridge" />
+              {copy.game.play}
+            </a>
+          </p>
+        </div>
+      </section>
       <ExplainerVideo still />
     </div>
   );
@@ -239,6 +245,7 @@ export function Landing() {
   const view = live.view;
   const since = useLastVisit();
   const player = useSignedInPanel();
+  const ideas = useIdeasStation();
   const lit = useLitStation(STATION_IDS, view !== null);
   const main = useRef<HTMLElement>(null);
   // From 64rem the plate's room shrinks onto the rail's map as the page scrolls (lib/studio-morph.ts).
@@ -265,14 +272,14 @@ export function Landing() {
         {/* Fund and the first game hold their place while the snapshot loads, so neither is drawn
             twice and a link to #fund lands where it stays. */}
         <div className="floor">
-          {view === null ? null : <FloorRail snapshot={view.snapshot} lit={lit} counts={stationCounts(view.snapshot, view.groups, null)} />}
+          {view === null ? null : <FloorRail snapshot={view.snapshot} lit={lit} counts={stationCounts(view.snapshot, view.groups, null)} ideas={ideas.shown} />}
           <div className="floor-parts">
             <FundSection studio={studio} live={live} index={1} />
             {/* The first game follows the cards to fund, above how the cards move (decision 70). */}
             <ShowcaseSection />
             {view === null ? null : (
               <>
-                <IdeasStation index={2} />
+                {ideas.shown ? <IdeasStation index={2} station={ideas} /> : null}
                 <NextStation snapshot={view.snapshot} groups={view.groups} index={3} />
                 <BuildingStation snapshot={view.snapshot} groups={view.groups} index={4} />
                 <ShippedStation snapshot={view.snapshot} groups={view.groups} index={5} />

@@ -63,6 +63,18 @@ export function formatPercent(multiplier: number): string {
   return `${groupThousands(Math.round((multiplier - 1) * 100))}%`;
 }
 
+/**
+ * A unit's name for a count of them: the name itself for one, else its last word in the plural by the
+ * common English rules ("Gatherer" to "Gatherers", "Foundry" to "Foundries", "Press" to "Presses"). Unit
+ * names are config data, so the rule is a regular one rather than a list.
+ */
+export function pluralName(name: string, count: number): string {
+  if (count === 1 || name.length === 0) return name;
+  if (/[^aeiou]y$/i.test(name)) return `${name.slice(0, -1)}ies`;
+  if (/(s|x|z|ch|sh)$/i.test(name)) return `${name}es`;
+  return `${name}s`;
+}
+
 export function fill(template: string, values: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match);
 }

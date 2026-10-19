@@ -15,7 +15,7 @@
 // Policy report. The landing's h2 order, read from the page: The studio, live (docs/specs/final-state.md), Pick a card to fund, Play the first game (decision 70), the stations Ideas,
 // Next up, Building and Shipped (docs/specs/place.md), the team (only when there is one) and Where the money goes. Home's cards to fund
 // (docs/specs/home-flow.md) as full faces, at most three, or the panel that funds the next card in
-// line; then the stations: Ideas with its ideas or tile, and Next up, Building and Shipped in order, each
+// line; then the stations: Ideas with its ideas or tile (left out while sign-in is closed and the board has none), and Next up, Building and Shipped in order, each
 // with at most three cards, its tile or (Next up) the Game Designer's line, never blank. The status
 // line, the pool figure, the shipped cards, the fund links and /contribute's choices. /how-it-works carries no Payment Link and no client_reference_id; /team
 // draws every agent in Running, Starts later and Planned, runs at least one, shows claude-opus-5-5 on
@@ -109,7 +109,8 @@ const FOOTER_LINKS = [
   ['Contact', '/contact'],
 ];
 const H2_ORDER = ['The studio, live', 'Pick a card to fund', 'Play the first game', 'Ideas', 'Next up', 'Building', 'Shipped', 'The team', 'Where the money goes'];
-const OPTIONAL_H2 = new Set(['The team']);
+// The team shows only while it has roles; Ideas only while players can pitch or the board has ideas.
+const OPTIONAL_H2 = new Set(['The team', 'Ideas']);
 // Home's floor (docs/specs/place.md): after the ideas, three stations in this order, each with at most
 // three cards, its tile saying what happens next or (Next up) the Game Designer's line, never blank. The
 // cards to fund sit above them, at most three.
@@ -128,7 +129,8 @@ const NEXT_IN_LINE = /^Next in line: (.+)$/;
 const WAITS_LINE = 'No card is open for funding right now. Your contribution waits for the next card to open, then funds it.';
 // The line naming no card, which /contribute shows while the first card in the order is not in /api/cards yet.
 const PICK_BODY = 'Your contribution funds whatever the agents build next.';
-const RECONCILE_LINE = /^(Reconciled with Stripe on \d{1,2} [A-Z][a-z]{2} \d{4}|Not yet reconciled with Stripe)\.$/;
+// A date (format.ts formatDate) holds together with no-break spaces, so \s, never a plain space, sits inside it.
+const RECONCILE_LINE = /^(Reconciled with Stripe on \d{1,2}\s[A-Z][a-z]{2}\s\d{4}|Not yet reconciled with Stripe)\.$/;
 const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const STRIPE_LINK = /^https:\/\/buy\.stripe\.com\/[A-Za-z0-9]+$/;
 const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
@@ -421,12 +423,21 @@ try {
       `home's cards to fund: ${homeFund.length > 0 ? `${homeFund.length} full faces` : homeFundPanel > 0 ? 'the fund-the-next-card panel' : 'BLANK'}`,
     );
 
-    // The ideas station is never blank: the players' ideas or its tile, once they have loaded.
+    // The ideas station is never blank: the players' ideas or its tile, once they have loaded. While
+    // sign-in is closed and the board has no ideas, home leaves it out (docs/specs/place.md).
     const ideasPart = main.locator('[data-station-part="ideas"]');
-    await ideasPart.locator('[aria-busy="true"]').waitFor({ state: 'detached', timeout: 15000 }).catch(() => undefined);
-    const ideas = await ideasPart.locator('ol.floor-ideas > li.suggestion').count();
-    const ideasTile = await ideasPart.locator('.flow-empty').count();
-    check(ideas + ideasTile > 0, `home ideas station is not blank (${ideas > 0 ? `${ideas} ideas` : ideasTile > 0 ? 'tile' : 'BLANK'})`);
+    if ((await ideasPart.count()) === 0) {
+      const listed = await fetch(`${BASE}/api/community/suggestions?sort=top`)
+        .then((response) => response.json())
+        .then((doc) => (Array.isArray(doc?.items) ? doc.items.length : -1))
+        .catch(() => -1);
+      check(listed === 0, `home ideas station left out while the ideas board is empty (${listed} ideas listed)`);
+    } else {
+      await ideasPart.locator('[aria-busy="true"]').waitFor({ state: 'detached', timeout: 15000 }).catch(() => undefined);
+      const ideas = await ideasPart.locator('ol.floor-ideas > li.suggestion').count();
+      const ideasTile = await ideasPart.locator('.flow-empty').count();
+      check(ideas + ideasTile > 0, `home ideas station is not blank (${ideas > 0 ? `${ideas} ideas` : ideasTile > 0 ? 'tile' : 'BLANK'})`);
+    }
 
     // The flow is never blank: three stations in order, each with its cards, its tile or the drafting line.
     const lanes = main.locator('.floor-parts > [data-station-part="next"], .floor-parts > [data-station-part="building"], .floor-parts > [data-station-part="shipped"]');
@@ -447,7 +458,7 @@ try {
       const metas = await shippedLane.locator('li.card .card-bottom .card-meta').allTextContents();
       const watch = await shippedLane.getByRole('link', { name: 'Watch how it was built' }).count();
       check(
-        metas.length >= shippedCards && metas.every((line) => /shipped \d{1,2} [A-Z][a-z]{2} \d{4}/.test(line)) && watch === shippedCards,
+        metas.length >= shippedCards && metas.every((line) => /shipped \d{1,2}\s[A-Z][a-z]{2}\s\d{4}/.test(line)) && watch === shippedCards,
         `${shippedCards} shipped cards carry the date and Watch how it was built`,
       );
     }

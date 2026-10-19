@@ -143,7 +143,10 @@ function roundedSquare(half: number, radius: number): Shape {
 
 // A slab of the island's outline shape, its top at y = 0, coloured top and side apart.
 function slab(half: number, radius: number, depth: number, top: number, side: number): BufferGeometry {
-  const geometry = new ExtrudeGeometry(roundedSquare(half, radius), { depth, bevelEnabled: false, curveSegments: 5 }).toNonIndexed();
+  // Flat faces so the top and the sides take their own normals. An extrusion is already non-indexed, and
+  // calling toNonIndexed on it anyway warned in the console three times a load.
+  const extruded = new ExtrudeGeometry(roundedSquare(half, radius), { depth, bevelEnabled: false, curveSegments: 5 });
+  const geometry = extruded.index === null ? extruded : extruded.toNonIndexed();
   geometry.rotateX(-Math.PI / 2);
   geometry.translate(0, -depth, 0);
   geometry.deleteAttribute('uv');
@@ -664,14 +667,13 @@ export class DustScene {
   }
 
   private placeCamera(): void {
+    // The camera holds still unless the player caused a moment: no ambient sway or breathing (the game
+    // quality bar, Camera), only the short punch an unlock or a big strike gives, off under reduced motion.
     const t = this.time;
-    const sway = this.calm ? 0 : Math.sin(t * 0.55) * 0.02;
     const punchK = Math.max(0, 1 - (t - this.punchAt) / 0.6);
     const punch = this.calm ? 0 : Math.sin(punchK * Math.PI) * 0.035 * punchK * this.punchPower;
-    const breathe = this.calm ? 0 : Math.sin(t * 0.8) * 0.006;
-    const zoom = 1 - punch - breathe;
-    const direction = this.direction.clone().applyAxisAngle(UP, sway);
-    this.camera.position.copy(direction).multiplyScalar(CAMERA_DISTANCE);
+    const zoom = 1 - punch;
+    this.camera.position.copy(this.direction).multiplyScalar(CAMERA_DISTANCE);
     this.camera.up.set(0, 1, 0);
     this.camera.lookAt(0, 0, 0);
     const f = this.frame0;

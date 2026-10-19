@@ -130,9 +130,14 @@ export function usePagedCommunity<T extends { readonly id: string }>(path: strin
   }, [path, doc, next]);
   const seen = new Set<string>();
   const items = doc === null ? [] : [...doc.items, ...(current?.items ?? [])].filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)));
+  // Whether the list has shown an item since the page opened: its sort and filters draw only then, so
+  // an empty list has none above it, and a new sort or filter that loads, or comes back empty, keeps them.
+  const [listed, setListed] = useState(false);
+  if (!listed && items.length > 0) setListed(true);
   return {
     state: head.state,
     items,
+    listed: listed || items.length > 0,
     hasMore: next !== null,
     loadMore,
     loadingMore: current?.loading ?? false,

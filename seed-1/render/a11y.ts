@@ -1,4 +1,4 @@
-// The accessible DOM layer's Phaser-free half: what the controls say and when the live region speaks.
+// The accessible DOM layer's Three-free half: what the controls say and when the live region speaks.
 // The canvas is hidden from assistive technology (index.html), so these strings are the game's text
 // alternative. render/controls.ts puts them in the DOM; tests/a11y.test.ts checks them here.
 import { costOf, findUnlock, isUnitAvailable, ownedCount, ratePerSecond } from '../sim/sim';

@@ -38,15 +38,18 @@ export const FLOOR_STATIONS: readonly { id: StationId; piece: StationPiece | nul
   { id: 'team', piece: 'sofa', glyph: 'team' },
 ];
 
-/** The stations this snapshot draws: the team's only while it has roles, as home's team band does. */
-export function floorStations(snapshot: Snapshot) {
+/**
+ * The stations this snapshot draws: the team's only while it has roles, as home's team band does, and
+ * Ideas only while home shows it (useIdeasStation).
+ */
+export function floorStations(snapshot: Snapshot, ideas = true) {
   const team = teamStrip(snapshot).length > 0;
-  return FLOOR_STATIONS.filter((station) => station.id !== 'team' || team);
+  return FLOOR_STATIONS.filter((station) => (station.id !== 'team' || team) && (station.id !== 'ideas' || ideas));
 }
 
 /** The stations that stand at a piece of the room, for the rail map's lit outline. */
-export function stationTags(snapshot: Snapshot): StationTag[] {
-  return floorStations(snapshot).flatMap(({ id, piece }) => (piece === null ? [] : [{ id, piece }]));
+export function stationTags(snapshot: Snapshot, ideas = true): StationTag[] {
+  return floorStations(snapshot, ideas).flatMap(({ id, piece }) => (piece === null ? [] : [{ id, piece }]));
 }
 
 /**
@@ -112,15 +115,15 @@ export function stationCounts(snapshot: Snapshot, groups: CardGroups, ideas: num
  * scroll past, so the page reads as walking round the studio. Under 64rem the map is not drawn and the
  * list is a strip of station links above the stations.
  */
-export function FloorRail({ snapshot, lit, counts }: { snapshot: Snapshot; lit: string | null; counts: Record<StationId, number | null> }) {
+export function FloorRail({ snapshot, lit, counts, ideas = true }: { snapshot: Snapshot; lit: string | null; counts: Record<StationId, number | null>; ideas?: boolean }) {
   const studio = useStudioDoc();
   return (
     <nav className="floor-rail" aria-label={copy.floor.railLabel} data-balance="ignore">
       <div className="floor-map">
-        <StudioRoom snapshot={snapshot} studio={studio} facts={false} interactive={false} stations={stationTags(snapshot)} lit={lit} />
+        <StudioRoom snapshot={snapshot} studio={studio} facts={false} interactive={false} stations={stationTags(snapshot, ideas)} lit={lit} />
       </div>
       <ol className="floor-stations">
-        {floorStations(snapshot).map(({ id, glyph }) => {
+        {floorStations(snapshot, ideas).map(({ id, glyph }) => {
           const words = copy.floor.stations[id];
           const n = counts[id];
           return (
@@ -144,12 +147,14 @@ export function FloorRail({ snapshot, lit, counts }: { snapshot: Snapshot; lit: 
 /**
  * A station's part of the floor: its head (glyph and where in the room), its heading and what it is,
  * then its body. No number is drawn (the board, 18 October 2026: no 01, 02 over sections); `index`
- * is the station's place on the walk, kept for the callers' order.
+ * is the station's place on the walk, kept for the callers' order. A quiet part has no cards to show:
+ * its heading is set a step smaller, and two quiet parts in a row sit side by side from 48rem, so an
+ * empty station never takes a screen of its own.
  */
-export function StationPart({ id, title, intro, children }: { id: StationId; index: number; title: string; intro?: ReactNode; children: ReactNode }) {
+export function StationPart({ id, title, intro, quiet = false, children }: { id: StationId; index: number; title: string; intro?: ReactNode; quiet?: boolean; children: ReactNode }) {
   const glyph = FLOOR_STATIONS.find((station) => station.id === id)?.glyph ?? 'gear';
   return (
-    <section className="section station-part" data-station-part={id} aria-labelledby={id}>
+    <section className="section station-part" data-station-part={id} data-quiet={quiet ? 'true' : undefined} aria-labelledby={id}>
       <p className="station-index" aria-hidden="true">
         <Glyph name={glyph} />
         <span>{copy.floor.stations[id].where}</span>
@@ -183,17 +188,28 @@ export function useTopIdeas() {
 }
 
 /**
+ * Whether home walks past the Ideas station: always while players can pitch, and while sign-in is
+ * closed only once the board has ideas to read, so a part of the floor, a rail row and a place on the
+ * map never advertise what nobody can do yet.
+ */
+export function useIdeasStation() {
+  const signedIn = useSignedIn();
+  const signInOpen = useSignInOpen();
+  const ideas = useTopIdeas();
+  const pitching = signedIn || signInOpen;
+  return { pitching, ideas, shown: pitching || (ideas.state === 'ready' && ideas.items.length > 0) };
+}
+
+/**
  * The Ideas station: the crowd's top ideas with their state and upvotes (a signed-in player can
  * upvote here), and the way to pitch one. The review agent that reads ideas has no tools; the agents
  * that build never see a player's words. The ideas' area is left out here: home names a game only in
  * its game tile (decision 68).
  */
-export function IdeasStation({ index }: { index: number }) {
+export function IdeasStation({ index, station }: { index: number; station: ReturnType<typeof useIdeasStation> }) {
   const signedIn = useSignedIn();
-  const signInOpen = useSignInOpen();
   // While sign-in is closed nobody can pitch, so the station reads the board and says why.
-  const pitching = signedIn || signInOpen;
-  const ideas = useTopIdeas();
+  const { pitching, ideas } = station;
   return (
     <StationPart id="ideas" index={index} title={copy.ideas.title} intro={copy.ideas.intro}>
       {ideas.state === 'loading' ? (
@@ -242,12 +258,13 @@ export function NextStation({ snapshot, groups, index }: { snapshot: Snapshot; g
   const drafts = flowLanes(groups).next;
   const designer = draftingLine(snapshot);
   return (
-    <StationPart id="next" index={index} title={copy.flow.lanes.next.title}>
+    <StationPart id="next" index={index} title={copy.flow.lanes.next.title} quiet={drafts.length === 0}>
       <p className="flow-who flow-agent" data-drafting={designer.drafting ? 'true' : undefined}>
         <Glyph name="pencil" />
         <span>{designer.text}</span>
       </p>
-      {drafts.length === 0 ? null : <StationCards cards={drafts} snapshot={snapshot} planned empty={null} />}
+      {/* With no draft waiting, the lane's empty tile says what waits here, as Building's does beside it. */}
+      <StationCards cards={drafts} snapshot={snapshot} planned empty={<p>{copy.flow.lanes.next.empty}</p>} />
     </StationPart>
   );
 }
@@ -256,7 +273,7 @@ export function BuildingStation({ snapshot, groups, index }: { snapshot: Snapsho
   const lanes = flowLanes(groups);
   const last = lanes.shipped[0];
   return (
-    <StationPart id="building" index={index} title={copy.flow.lanes.building.title} intro={copy.flow.lanes.building.who}>
+    <StationPart id="building" index={index} title={copy.flow.lanes.building.title} intro={copy.flow.lanes.building.who} quiet={lanes.building.length === 0}>
       <StationCards
         cards={lanes.building}
         snapshot={snapshot}

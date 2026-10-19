@@ -18,6 +18,18 @@ const FLOAT_SECONDS = 0.95;
 const STREAK_GAP = 0.75;
 const BANNER_SECONDS = 3.4;
 const WELCOME_SECONDS = 5.5;
+// How long the total takes to count up through the dust a welcome back credits.
+export const WELCOME_COUNT_SECONDS = 1.6;
+
+/**
+ * The total drawn `k` of the way (0 to 1) through a welcome back's count, from the total before the
+ * time away to the total now: it eases out, never passes the total and lands on it at the end.
+ */
+export function welcomeCount(from: number, target: number, k: number): number {
+  if (!(k < 1) || !(target > from)) return target;
+  const eased = 1 - Math.pow(1 - Math.max(0, k), 3);
+  return Math.min(target, from + (target - from) * eased);
+}
 
 interface Floater {
   node: HTMLElement;
@@ -73,7 +85,10 @@ export class Hud {
   private readonly goalFill: HTMLElement;
   private readonly floaterNodes: Floater[] = [];
   private readonly streakNode: HTMLElement;
+  private readonly hudNode: HTMLElement;
   private readonly bannerNode: HTMLElement;
+  // How much the banner shows (0 to 1), as last written to --banner-cover.
+  private bannerCover = 0;
   private readonly bannerKicker: HTMLElement;
   private readonly bannerTitle: HTMLElement;
   private readonly bannerBody: HTMLElement;
@@ -94,6 +109,9 @@ export class Hud {
   private flashAt = -10;
   // The dust total as drawn: it rises toward the real total over a few frames instead of jumping.
   private shownDust: number | null = null;
+  // A welcome back's gain, waiting for the first frame, and then the count up through it.
+  private welcomeGain = 0;
+  private welcomeFrom: { dust: number; k: number } | null = null;
   private lastFrame: number | null = null;
   private time = 0;
   private lastStrike = -10;
@@ -111,6 +129,7 @@ export class Hud {
   ) {
     const hud = div('hud', stage);
     hud.id = 'hud';
+    this.hudNode = hud;
     hud.setAttribute('aria-hidden', 'true');
     const totals = div('hud-totals', hud);
     this.total = div('hud-total', totals);
@@ -218,6 +237,7 @@ export class Hud {
   }
 
   welcome(gain: number, seconds: number): void {
+    this.welcomeGain = gain;
     this.queue.unshift({
       born: 0,
       until: 0,
@@ -239,6 +259,7 @@ export class Hud {
     this.queue.length = 0;
     this.banner = null;
     this.shownDust = null;
+    this.welcomeFrom = null;
     this.queue.push({ born: 0, until: 0, kicker: this.strings.depth.pressedKicker, title, body, tone: 'season' });
   }
 
@@ -254,9 +275,21 @@ export class Hud {
     const dt = this.lastFrame === null ? 0 : Math.max(0, t - this.lastFrame);
     this.lastFrame = t;
 
-    // Gains count up toward the total; spending (or a new season) drops it at once.
+    // Gains count up toward the total; spending (or a new season) drops it at once. A welcome back
+    // counts up from the total before the time away, beside its banner, so the gain is seen arriving;
+    // under reduced motion it is shown at once.
     const target = state.dust;
-    if (this.shownDust === null || this.calm || target <= this.shownDust) this.shownDust = target;
+    if (this.shownDust === null && this.welcomeGain > 0 && !this.calm) {
+      this.welcomeFrom = { dust: Math.max(0, target - this.welcomeGain), k: 0 };
+    }
+    this.welcomeGain = 0;
+    // The count moves at most a twentieth of a second a frame, so the slow first frames of a load
+    // (shaders compiling) never skip it: it is seen counting on any device.
+    if (this.welcomeFrom !== null) this.welcomeFrom.k += Math.min(dt, 0.05) / WELCOME_COUNT_SECONDS;
+    // Spending during the count ends it.
+    if (this.welcomeFrom !== null && (this.welcomeFrom.k >= 1 || (this.shownDust !== null && target < this.shownDust))) this.welcomeFrom = null;
+    if (this.welcomeFrom !== null) this.shownDust = welcomeCount(this.welcomeFrom.dust, target, this.welcomeFrom.k);
+    else if (this.shownDust === null || this.calm || target <= this.shownDust) this.shownDust = target;
     else {
       this.shownDust += (target - this.shownDust) * Math.min(1, dt * 12);
       if (target - this.shownDust < Math.max(0.5, target * 1e-6)) this.shownDust = target;
@@ -408,12 +441,24 @@ export class Hud {
     if (left <= 0) {
       this.banner = null;
       this.bannerNode.style.opacity = '0';
+      this.cover(0);
       return;
     }
     const enter = this.calm ? 1 : easeOutBack(Math.min(1, age / 0.45));
     const exit = Math.min(1, left / 0.35);
-    this.bannerNode.style.opacity = (Math.min(1, age / 0.12) * exit).toFixed(3);
+    const shown = Math.min(1, age / 0.12) * exit;
+    this.bannerNode.style.opacity = shown.toFixed(3);
+    this.cover(shown);
     this.bannerNode.style.transform = `translate(-50%, 0) scale(${(0.6 + 0.4 * enter).toFixed(3)}) rotate(${this.calm ? 0 : ((1 - enter) * -4).toFixed(2)}deg)`;
+  }
+
+  // On a phone the banner hangs over the first steps and the weather chip, so they fade out as it
+  // fades in (render/style.css reads --banner-cover there; a wide screen keeps them beside it).
+  private cover(shown: number): void {
+    const value = Math.round(shown * 100) / 100;
+    if (value === this.bannerCover) return;
+    this.bannerCover = value;
+    this.hudNode.style.setProperty('--banner-cover', String(value));
   }
 }
 

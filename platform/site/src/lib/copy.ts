@@ -537,6 +537,22 @@ export const copy = {
     unlockedBy: 'Unlocked by',
     stations: 'Stations',
     decor: 'Decor',
+    // The eras' station and decor ids (community.studio_eras) in words; an id not here reads with spaces.
+    parts: {
+      desks: 'desks',
+      whiteboard: 'whiteboard',
+      test_bench: 'test bench',
+      gate: 'gate',
+      shipping_dock: 'shipping dock',
+      art_corner: 'art corner',
+      sound_booth: 'sound booth',
+      broadcast_desk: 'broadcast desk',
+      arcade: 'arcade',
+      garden: 'garden',
+      trophy_shelf: 'trophy shelf',
+      legendary_wall: 'legendary wall',
+      statue: 'statue',
+    } as Record<string, string>,
     none: 'None yet',
     earlier: 'Earlier',
     later: 'Later',
@@ -629,6 +645,8 @@ export const copy = {
     playNamed: 'Play {title}',
     howTitle: 'Save your own seed',
     how: 'In the game, choose Save to gallery beside Save as seed. The seed joins your profile, and you can then publish it to this gallery with a short title.',
+    // While sign-in is closed (lib/sign-in.ts): a seed is kept on a profile, so none can be published yet.
+    howClosed: 'In the game, Save as seed gives you a link to share the run. Publishing a seed here needs a profile, and profiles are not open yet.',
     signIn: 'Sign in to upvote and publish',
     // /seeds?save=<code>: a seed the game linked here, saved to the player's profile.
     save: {
