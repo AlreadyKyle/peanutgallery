@@ -8,6 +8,7 @@ import type { DispatcherConfig } from '../config.js';
 import type { Db } from '../db.js';
 import type { Logger } from '../log.js';
 import type { PatchStore } from '../patch.js';
+import { cheapestModel } from '../credit-probe.js';
 import { ManagedAdapter } from './managed.js';
 import { sdkManagedClient, type ManagedClient } from './managed-client.js';
 import { loadManagedFiles } from './managed-config.js';
@@ -37,7 +38,10 @@ export function createAdapter(config: DispatcherConfig, deps: AdapterDeps): Mana
     githubRepo: config.githubRepo,
     readToken: managed.readToken,
     priceTable: config.priceTable,
-    probeModel: config.modelBuilder,
+    // The startup probe runs on the cheapest priced model, as the credit probe does: it costs the least
+    // and changes no role's model. The toolchain check stays on MODEL_BUILDER.
+    probeModel: cheapestModel(config.priceTable),
+    toolchainModel: config.modelBuilder,
     db: deps.db,
     patches: deps.patches,
     alert: deps.alert,

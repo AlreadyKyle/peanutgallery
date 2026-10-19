@@ -11,6 +11,7 @@ import { access, open, rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { AgentAdapter } from './adapters/types.js';
 import type { DispatcherConfig } from './config.js';
+import { cheapestModel } from './credit-probe.js';
 import type { Db } from './db.js';
 import { StartupError } from './exit-code.js';
 import { gitConfigViolations, originUrl } from './gitconfig.js';
@@ -78,7 +79,7 @@ export async function unattendedStartup(deps: StartupDeps): Promise<void> {
     throw new StartupError('the dispatcher runs only on the managed adapter, which this process did not build', true);
   }
   await managed.checkContainment();
-  deps.log.info('probe', 'running the startup probe', { mode: 'unattended', model: deps.config.modelBuilder, billed_to: 'overhead' });
+  deps.log.info('probe', 'running the startup probe', { mode: 'unattended', model: cheapestModel(deps.config.priceTable), billed_to: 'overhead' });
   await managed.probe();
 }
 

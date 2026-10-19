@@ -233,24 +233,52 @@ describe('Team', () => {
     }
   });
 
-  it('draws every section as the same team grid of agent boxes, never a card (the board, 26 Sep 2026)', async () => {
+  it('draws Running as a grid of agent boxes and the roles still to come as a compact list, never a card (the full pass, S25)', async () => {
     renderTeam(sourceOf(snapshot()));
-    await screen.findByRole('region', { name: team.running });
+    const running = await screen.findByRole('region', { name: team.running });
     expect(document.querySelectorAll('li.card')).toHaveLength(0);
-    expect(document.querySelectorAll('li.agent').length).toBe(ROLES.length);
     expect(document.querySelectorAll('.team-coming, .agent-coming')).toHaveLength(0);
-    for (const name of [team.running, team.startsLater, team.planned]) {
+    // Running: one team grid of boxes, one to a cell, and the only boxes on the page.
+    const grids = running.querySelectorAll('ul');
+    expect(grids).toHaveLength(1);
+    expect(grids[0]!.className).toBe('team-grid');
+    expect([...grids[0]!.children].every((li) => li.tagName === 'LI' && li.className === 'agent')).toBe(true);
+    expect(document.querySelectorAll('li.agent')).toHaveLength(names(running).length);
+    // Starts later and Planned: one compact list each, an entry per role and no box.
+    for (const name of [team.startsLater, team.planned]) {
       const lists = screen.getByRole('region', { name }).querySelectorAll('ul');
       expect(lists).toHaveLength(1);
-      expect(lists[0]!.className).toBe('team-grid');
-      expect([...lists[0]!.children].every((li) => li.tagName === 'LI' && li.className === 'agent')).toBe(true);
+      expect(lists[0]!.className).toBe('team-later');
+      expect([...lists[0]!.children].every((li) => li.tagName === 'LI' && li.className === 'later-role')).toBe(true);
     }
-    // A role still to come has the same parts as a running one: the avatar, the name, "AI agent",
-    // the description and its foot.
-    for (const name of ['Biz Dev', 'Host']) {
-      expect(within(box(name)).getByText(team.aiAgent)).toBeTruthy();
-      expect(box(name).querySelector(':scope > .agent-foot')).not.toBeNull();
+    expect(document.querySelectorAll('li.later-role')).toHaveLength(ROLES.length - names(running).length);
+    // An entry is the sleeping avatar, the name, what the role will do and when it starts: no "AI
+    // agent" line, no foot, no model and no cost. Its id is the one home's team strip links to.
+    for (const [name, when] of [
+      ['Biz Dev', 'Starts last, once every other role is built.'],
+      ['Host', 'No trigger is set yet; the Host waits on the stream.'],
+    ]) {
+      const entry = box(name!);
+      expect(entry.id).toBe(`agent-r-${name!.toLowerCase().replace(/\s+/g, '-')}`);
+      expect([...entry.children].map((child) => child.tagName.toLowerCase())).toEqual(['svg', 'h3', 'p', 'p']);
+      expect(entry.querySelector(':scope > svg.avatar')?.getAttribute('data-pose')).toBe('asleep');
+      expect(within(entry).getByText(`${name} does its job.`)).toBeTruthy();
+      expect(within(entry).getByText(when!).className).toBe('later-when');
+      expect(within(entry).queryByText(team.aiAgent)).toBeNull();
+      expect(entry.querySelector('.agent-foot, .card-meta, .agent-kind')).toBeNull();
     }
+  });
+
+  it("names a role still to come by its name and, when it differs, its title, and leaves out a blank description and a missing trigger", async () => {
+    const roles = [
+      ...ROLES.map(role).filter((r) => r.status === 'running'),
+      { ...role(['Biz Dev', false, 'claude-opus-5-5', 'starts', null]), name: 'Bix', description: '  ' },
+    ];
+    renderTeam(sourceOf(snapshot({ roles })));
+    const starts = await screen.findByRole('region', { name: team.startsLater });
+    const entry = within(starts).getByRole('heading', { level: 3, name: 'Bix · Biz Dev' }).closest('li')!;
+    expect([...entry.children].map((child) => child.tagName.toLowerCase())).toEqual(['svg', 'h3']);
+    expect(screen.queryByRole('region', { name: team.planned })).toBeNull();
   });
 
   it('says who runs the studio at its foot in one line and links the full block on /how-it-works (docs/specs/copy-pass.md)', async () => {

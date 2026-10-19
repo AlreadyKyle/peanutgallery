@@ -42,7 +42,8 @@
 // and /api/reports?x=1 400 (docs/specs/studio-reports.md), and one /assets/*.js is immutable.
 // Assets (the icons and version.json), og:image as an absolute URL, and
 // /og.png as a 200 image/png of 1200x630; the newest live card's page names its own preview, a
-// 1200x630 PNG (docs/specs/card-preview.md). /board is the not found page, a 404 from Netlify, with no
+// 1200x630 PNG (docs/specs/card-preview.md); /ledger and /team as served carry their own title,
+// og:url and canonical link (docs/specs/page-previews.md). /board is the not found page, a 404 from Netlify, with no
 // sign-in form and no netlify.app address but the game's (board-address.mjs); with BOARD_SITE_URL
 // set, no route names the board site's address. The www redirect, and the old domain's 301 to the same path, run only against production. The
 // security headers from netlify.toml, the enforced policy's full value included,
@@ -54,6 +55,9 @@
 //
 // The data checks need the site's /api documents. A local `vite preview` has no Netlify Function, so
 // it has none; --allow-no-data turns those checks into SKIP lines instead of failures.
+//
+// The run is not a visit: every page it opens answers the counters' /api/count beacons in the browser
+// (newPage below), so the daily counts hold no live-check loads, and the run checks that none got out.
 //
 // The first line is PASS or FAIL with the counts; one line per check follows. Exit 0 pass, 1 fail.
 
@@ -285,6 +289,24 @@ function checkPolicy(reports, label) {
   check(reports.length === 0, `${label} no Content Security Policy reports${reports.length === 0 ? '' : `: ${reports.slice(0, 3).join(' | ')}`}`);
 }
 
+// This check is the studio's own robot, not a visitor (docs/specs/counter-senders.md): every page it
+// opens answers the counters' beacons to /api/count itself with a 204, so a run adds nothing to
+// home_load or any other daily count. No check here reads a count, so none is skipped. `beacons`
+// tallies every count request a page made and how many the route answered; the two must match.
+const COUNT_ROUTE = '**/api/count';
+const beacons = { sent: 0, held: 0 };
+async function newPage(browser, viewport) {
+  const page = await browser.newPage({ viewport });
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.startsWith('/api/count')) beacons.sent += 1;
+  });
+  await page.route(COUNT_ROUTE, (route) => {
+    beacons.held += 1;
+    return route.fulfill({ status: 204 });
+  });
+  return page;
+}
+
 async function open(page, path) {
   const response = await page.goto(BASE + path, { waitUntil: 'load' });
   // The page polls /api/live each minute, so give the first load a moment either way.
@@ -299,7 +321,7 @@ try {
     [375, 812],
     [1440, 1000],
   ]) {
-    const page = await browser.newPage({ viewport: { width, height } });
+    const page = await newPage(browser, { width, height });
     const reports = await watchPolicy(page);
     const errors = [];
     page.on('console', (message) => {
@@ -355,7 +377,7 @@ try {
   // 404 status from Netlify, no sign-in form and no address for the board. vite preview has no
   // redirect rules, so a local server answers it 200.
   {
-    const board = await browser.newPage({ viewport: { width: 375, height: 812 } });
+    const board = await newPage(browser, { width: 375, height: 812 });
     const response = await open(board, '/board');
     const status = response?.status() ?? 0;
     if (LOCAL.test(BASE)) skip(`/board status ${status}: a local server has no redirect rules`);
@@ -372,7 +394,7 @@ try {
     await board.close();
   }
 
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const page = await newPage(browser, { width: 1440, height: 1000 });
   const reports = await watchPolicy(page);
   await open(page, '/');
   const homeTitle = await page.title();
@@ -685,6 +707,7 @@ try {
   await page.waitForTimeout(500);
   checkPolicy(reports, 'landing, contribute, how it works, team, roadmap and terms interactions');
   await page.close();
+  check(beacons.held === beacons.sent, `every count beacon answered in the browser, none sent to ${BASE}: ${beacons.held} of ${beacons.sent}`);
 
   // The site's own documents and their caching (docs/specs/site-snapshot.md).
   {
@@ -740,6 +763,21 @@ try {
       check(
         feedAnswer.status === 200 && feedType.includes('application/atom+xml') && feedBody.includes('<feed xmlns="http://www.w3.org/2005/Atom">'),
         `/feed.xml ${feedAnswer.status} ${feedType}, ${(feedBody.match(/<entry>/g) ?? []).length} entr(ies)`,
+      );
+      // The sitemap (docs/specs/robots-sitemap.md): served by its function as XML, with the fixed pages
+      // and every live card's page with a lastmod. The CDN keeps it 70 minutes at most, so a card that
+      // shipped more recently may not be listed yet and is not looked for.
+      const mapAnswer = await fetch(`${BASE}/sitemap.xml`);
+      const mapType = mapAnswer.headers.get('content-type') ?? '';
+      const mapBody = await mapAnswer.text();
+      const settled = Date.now() - 70 * 60_000;
+      const liveIds = Object.entries((await livePart('cards')) ?? {})
+        .filter(([, card]) => card?.stage === 'live' && typeof card.live_at === 'string' && Date.parse(card.live_at) < settled)
+        .map(([id]) => id);
+      const missingCards = liveIds.filter((id) => !mapBody.includes(`<loc>${PRODUCTION}/card/${id}</loc><lastmod>`));
+      check(
+        mapAnswer.status === 200 && mapType.includes('xml') && mapBody.includes(`<loc>${PRODUCTION}/ledger</loc>`) && missingCards.length === 0,
+        `/sitemap.xml ${mapAnswer.status} ${mapType}, ${(mapBody.match(/<url>/g) ?? []).length} address(es)${missingCards.length === 0 ? `, every live card shipped over 70 minutes ago with its lastmod (${liveIds.length})` : `: no lastmod entry for ${missingCards.slice(0, 3).join(', ')}`}`,
       );
       // The card function (docs/specs/supporter-pages.md): a malformed id is a 400 before any read, and
       // /api/thanks answers a made-up session exactly pending, never cached.
@@ -810,6 +848,27 @@ try {
     await checkPng(ogImage, 'og:image');
   } else if (absolute) {
     skip(`og:image points at ${new URL(ogImage).origin}, not ${BASE}; ${BASE}/og.png was checked instead`);
+  }
+  // A fixed page's link preview (docs/specs/page-previews.md): the page as served, before any script,
+  // has its own title, og:url and canonical link, from the page-meta edge function.
+  if (LOCAL.test(BASE)) {
+    skip('/ledger and /team as served name themselves: a local server runs no edge function');
+  } else {
+    for (const [path, title] of [
+      ['/ledger', `Ledger · ${STUDIO_NAME}`],
+      ['/team', `The team · ${STUDIO_NAME}`],
+    ]) {
+      const served = await (await fetch(`${BASE}${path}`)).text();
+      const named = {
+        title: served.match(/<title>([^<]*)<\/title>/)?.[1] ?? null,
+        ogUrl: served.match(/<meta property="og:url" content="([^"]+)"/)?.[1] ?? null,
+        canonical: served.match(/<link rel="canonical" href="([^"]+)"/)?.[1] ?? null,
+      };
+      check(
+        named.title === title && named.ogUrl === `${PRODUCTION}${path}` && named.canonical === `${PRODUCTION}${path}`,
+        `${path} as served names itself: title ${named.title}, og:url ${named.ogUrl}, canonical ${named.canonical}`,
+      );
+    }
   }
 
   const probe = await fetch(`${BASE}/`);

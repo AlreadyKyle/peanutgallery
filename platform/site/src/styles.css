@@ -300,12 +300,15 @@ main:not(.wide, .sheet, .card-page) > .band > * {
   max-width: var(--measure);
 }
 
-/* flow-root, so no child margin opens a strip of page ground between two grounds. */
+/* flow-root, so no child margin opens a strip of page ground between two grounds. A band's content
+   sits on the top bar's and the footer's frame (--wrap-floor, the gutter inside it), so every page
+   has one left edge from the wordmark down to the footer (the full pass: inner pages at 1440 started
+   48px in from the bar). */
 main > .band {
   display: flow-root;
   max-width: none;
   padding-block: var(--band-pad);
-  padding-inline: max(var(--gutter), calc((100% - var(--wrap)) / 2));
+  padding-inline: calc(var(--gutter) + max(0px, (100% - var(--wrap-floor)) / 2));
 }
 
 .band > * + * {
@@ -485,7 +488,9 @@ nav a.active {
   }
 }
 
-/* Below 32rem the name is read out but not drawn: the mark stands for it. */
+/* Below 32rem the name is read out but not drawn: the mark stands for it. The mark alone is 24px
+   wide, so its press area reaches 20px into the side margin on its left (the gutter is never under
+   20px), a 44px square target, while the row and the focus ring stay as drawn (the full pass, S30). */
 @media (max-width: 31.99rem) {
   .wordmark-text {
     position: absolute;
@@ -494,6 +499,17 @@ nav a.active {
     overflow: hidden;
     clip: rect(0 0 0 0);
     white-space: nowrap;
+  }
+
+  .wordmark {
+    position: relative;
+  }
+
+  .wordmark::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: var(--target);
   }
 }
 
@@ -521,6 +537,18 @@ nav a.active {
     border-top: 0;
   }
 
+  /* A short page link in the row (FAQ, Team) keeps its width, and its press area reaches into the gap
+     on each side to 44px (the full pass, S30). The gap is never under 16px, so two never meet. */
+  .nav-links a {
+    position: relative;
+  }
+
+  .nav-links a::before {
+    content: '';
+    position: absolute;
+    inset: 0 min(0px, calc(50% - var(--target) / 2));
+  }
+
   .topbar-row .menu-button,
   .menu-play {
     display: none;
@@ -540,6 +568,12 @@ nav a.active {
    30rem, the slot leaves the row and Your desk sits in the Menu list instead, so the row fits 360px. */
 .you-slot {
   display: inline-flex;
+}
+
+/* While sign-in is closed the slot holds nothing; it takes no gap in the row either, so the bar stays
+   one row at 360px. */
+.you-slot:empty {
+  display: none;
 }
 
 .you-chip {
@@ -638,11 +672,9 @@ main:not(.sheet) .section > h2 + p:not(.muted, .small, .card-state):has(+ :not(p
   line-height: var(--leading-title);
 }
 
-/* A sheet's headings label its reading column (from 64rem they stand in its left five twelfths), and
-   a framed panel's heading titles a part: both take the part size, so a clause never breaks into a
-   word a line. */
-main.sheet h2,
-.how-rules > h2 {
+/* A sheet's headings label its reading column (from 64rem they stand in its left five twelfths), so
+   they take the part size, and a clause never breaks into a word a line. */
+main.sheet h2 {
   font-size: var(--size-h2);
 }
 
@@ -686,8 +718,13 @@ main.sheet > .band:not(:first-child) > .section > h2:first-child + .faq-item {
     padding-top: 0;
   }
 
-  /* The text column is the measure itself (about 80 characters at 1440px), so its paragraphs fill it. */
-  main.sheet > .band:not(:first-child) > .section p,
+  /* The text column holds the reading line: its paragraphs and lists of sentences fill it up to the
+     page's measure (44rem, about 80 characters), so the wider frame from 1440px never stretches a
+     line, while its rows, figures and tiles still run to the column's edge, the frame's. */
+  main.sheet > .band:not(:first-child) > .section :is(p, .rules, .plain-list, .steps-list) {
+    max-width: var(--measure);
+  }
+
   main.sheet > .band:not(:first-child) > .section .faq-item {
     max-width: none;
   }
@@ -712,6 +749,32 @@ main.sheet > .band:not(:first-child) > .section > h2:first-child + .faq-item {
 @media (min-width: 64rem) {
   .section:has(> #funding) > p[aria-busy='true'] {
     min-height: calc(58rem - 32vw);
+  }
+}
+
+/* A community list's loading line holds the room of the answer that takes its place, so the sections
+   under it do not jump when it arrives (the full pass: /suggest and /seeds moved 104px at 768px,
+   /goals 48px). The ideas board and the seed gallery hold their empty tile (its dashed edges, padding,
+   line and button), the least a first answer draws; the goals track holds the total and the line
+   under it. The line ends its section as the answer does, with no lede's margin under it (on the
+   sheet's grid that margin does not collapse and would hold 40px more than the answer). */
+.section:has(> #suggest-list, > #seeds-gallery) > p[aria-busy='true'] {
+  min-height: calc(4px + 2 * var(--space-3) + 1lh + var(--space-1) + var(--target));
+  margin-bottom: 0;
+}
+
+.section:has(> #goals-track) > p[aria-busy='true'] {
+  min-height: calc(var(--size-lead) * var(--leading-body) + var(--space-2) + 1lh);
+  margin-bottom: 0;
+}
+
+/* The Terms' and the Refunds' version line ("Version n, in force since ...", about 28rem of text)
+   takes two lines in a phone's column: there the loading line under the lede holds those two, so the
+   page under the plate does not drop a line when the line arrives (the full pass: /terms and /refunds
+   moved 27px at 375px). */
+@media (max-width: 30.99rem) {
+  main.text-page .hero > p[aria-busy='true'] {
+    min-height: 2lh;
   }
 }
 
@@ -1839,8 +1902,8 @@ button.link:hover:not(:disabled) {
 
 /* How it works: six steps, each a short text with the real component that shows it under it, held
    to the reading measure. Stacked at every width, so a short text never floats beside a tall
-   example. The visual sits in a dashed frame with its Example label, so it never reads as something
-   to act on. */
+   example. The visual sits on the page under its Example label, with no frame (text sits on the
+   page; a dashed edge means an empty slot), and the label says it is not something to act on. */
 /* The explainer video above the six steps: on the steps' measure on a phone, the full width from 64rem. */
 .how-watch {
   max-width: var(--measure);
@@ -1872,15 +1935,12 @@ button.link:hover:not(:disabled) {
 
 .example {
   margin: 0;
-  padding: var(--space-2);
-  border: 1px dashed var(--field);
-  border-radius: var(--radius);
 }
 
 .example-label {
   display: flex;
   flex-direction: column;
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
   color: var(--text-muted);
   font-size: var(--size-small);
   font-weight: var(--weight-strong);
@@ -2075,6 +2135,16 @@ button.link:hover:not(:disabled) {
   gap: var(--space-1);
 }
 
+/* A link pressed on its own that sits in a line of text (a more link such as "How the studio is
+   run", a report's first cards in line): a 44px target that keeps its line (the full pass, S30).
+   Padding grows the box to the target and the same negative margin gives the room back, so nothing
+   moves, however many lines the words wrap to. */
+.more-link,
+.rows > li > a {
+  padding-block: max(0px, calc((var(--target) - 1lh) / 2));
+  margin-block: calc(-1 * max(0px, calc((var(--target) - 1lh) / 2)));
+}
+
 /* The avatar sits beside the name and the "AI agent" line; the description and the foot run the
    full width of the box. The third row takes the spare height, so the foot ends at the box's bottom. */
 .agent {
@@ -2139,6 +2209,69 @@ button.link:hover:not(:disabled) {
 .agent[data-status='starts'] .avatar,
 .agent[data-status='planned'] .avatar {
   width: 3.5rem;
+}
+
+/* The roles still to come (Starts later, Planned): a compact list under the running team's boxes
+   (the full pass, S25), never boxes. Each entry is a row between hairlines, like a list of rows: the
+   sleeping avatar beside the name at the body size, what the role will do, and when it starts, small
+   and muted. One column on a phone; two from 48rem, one entry to a cell, the rows' hairlines lining
+   up across the pair. */
+.team-later {
+  display: grid;
+  column-gap: var(--space-4);
+  margin: 0 0 var(--space-2);
+}
+
+.later-role {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr;
+  column-gap: var(--space-2);
+  align-content: start;
+  padding-block: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+
+.later-role:last-child {
+  border-bottom: 1px solid var(--hairline);
+}
+
+.later-role > * {
+  grid-column: 2;
+  margin: 0;
+}
+
+.later-role > .avatar {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  width: 2.5rem;
+  height: auto;
+}
+
+.later-role > h3 {
+  font-size: var(--size-body);
+}
+
+.later-role > h3 + p {
+  margin-top: 0.25rem;
+}
+
+.later-when {
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--size-small);
+}
+
+@media (min-width: 48rem) {
+  .team-later {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* The last entry of each column closes it with a hairline: with an even count, the last row's
+     first entry; with an odd count, the right-hand entry of the row above the last. */
+  .later-role:nth-last-child(2) {
+    border-bottom: 1px solid var(--hairline);
+  }
 }
 
 /* The team strip: borderless links, avatar beside the name and job. */
@@ -2219,9 +2352,10 @@ main > .band:first-child .pipe .avatar {
 }
 
 /* Footer -----------------------------------------------------------------
-   A spec sheet (docs/specs/brand.md, Footer): the mark and the studio's line, then two labelled
+   A spec sheet (docs/specs/brand.md, Footer): the mark and the studio's line, then three labelled
    columns of links, one link to a line, then the credit under a hairline. Five columns from 64rem
-   (the brand block takes two), the three link columns side by side from 30rem, one under it. */
+   (the brand block takes two), the three link columns side by side from 30rem, two from 22.5rem
+   (below), one under that. */
 
 .site-footer {
   border-top: 1px solid var(--hairline);
@@ -2285,15 +2419,39 @@ main > .band:first-child .pipe .avatar {
   list-style: none;
 }
 
+/* Every footer link is a 44px target both ways: a short word (Ideas, Terms) takes the width, its
+   words still set from the left, so nothing moves. */
 .footer-row a {
   display: inline-flex;
   align-items: center;
+  min-width: var(--target);
   min-height: var(--target);
 }
 
 .footer-row > .credit {
   padding-top: var(--space-3);
   border-top: 1px solid var(--hairline);
+}
+
+/* A phone (the full pass, S28: the three columns stacked ran about 1,000px): Follow along and Take
+   part sit side by side, and The fine print spans both under them with its four links in the same
+   two columns, so every link lines up with a column above. Below 22.5rem (320px, or larger text) a
+   column is too narrow for the longest link, and the columns stack. */
+@media (min-width: 22.5rem) and (max-width: 29.99rem) {
+  .footer-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .footer-row > .footer-brand,
+  .footer-row > .footer-group:last-of-type,
+  .footer-row > .credit {
+    grid-column: 1 / -1;
+  }
+
+  .footer-group:last-of-type > .footer-links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-3);
+  }
 }
 
 @media (min-width: 30rem) {
@@ -2566,9 +2724,8 @@ input[type='radio'] {
   font-weight: var(--weight-bold);
 }
 
-/* Who runs it (WhoRuns.tsx), on ink: a large lede, two tiles side by side, then the board's duties as
-   a numbered checklist in two columns. Rules are hairlines in the text colour, so the block reads on
-   any band. */
+/* Who runs it (WhoRuns.tsx): a large lede, then the two ways it is run side by side. No frame: the
+   parts sit on the page and group by space (text sits on the page with no box; the full pass). */
 .who-runs .who-lede {
   max-width: 40rem;
   font-size: var(--size-lead);
@@ -2584,30 +2741,20 @@ input[type='radio'] {
 
 .who-tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-}
-
-.who-tile {
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
-  border-radius: var(--radius-card);
+  gap: var(--space-3) var(--space-5);
+  margin-top: var(--space-4);
 }
 
 .who-tile p:last-child {
   margin-bottom: 0;
 }
 
-/* /how-it-works' fixed rules: framed like Who runs it's tiles, on the ink band. */
-.how-rules {
-  padding: var(--space-3);
-  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
-  border-radius: var(--radius-card);
-}
-
-.how-rules > :last-child {
-  margin-bottom: 0;
+/* From 48rem the two ways it is run share two columns, so with no frame around them their left
+   edges still line up down the block. */
+@media (min-width: 48rem) {
+  .who-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* Motion ---------------------------------------------------------------------
@@ -3253,10 +3400,6 @@ input[type='radio'] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .example {
-    padding: var(--space-3);
-  }
-
   /* /how-it-works: the video takes the page's width, and each step's text sits beside its example. */
   .how-watch,
   .how-steps {
@@ -3274,7 +3417,7 @@ input[type='radio'] {
     top: calc(var(--bar) + var(--space-4));
   }
 
-  /* The money band's pair: the money on the left, the framed rules beside it, one width each. */
+  /* The money band's pair: the money on the left, the rules beside it, one width each. */
   .pair.how-pair {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3315,9 +3458,8 @@ input[type='radio'] {
 }
 
 /* A lone example card (/how-it-works and the guide's demos) is one three-column cell wide, and the
-   dashed frame around an example card hugs it, so its edge sits one padding outside the card and no
-   empty column runs down beside the card inside the frame. On a phone the frame is the full width
-   and the card fills it. */
+   example around it hugs it, so its label sits over the card's own width. On a phone the card takes
+   the full width. */
 .example .card-grid,
 .demo .card-grid {
   grid-template-columns: minmax(0, 23rem);
@@ -4548,14 +4690,13 @@ ol.timeline {
   accent-color: var(--ink);
 }
 
+/* A plain note (the suggestion form's safety line, /me's sign-in and claim notes): its glyph beside
+   the words, on the page with no box around it (the full pass). */
 .notice-plain {
   display: flex;
   gap: var(--space-1);
   align-items: flex-start;
   max-width: var(--measure-text);
-  padding: var(--space-2);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
   font-size: var(--size-small);
 }
 
@@ -5001,19 +5142,14 @@ main.broadcast > .band > * {
   fill: var(--ink);
 }
 
-/* The overlay's body: the room large on the left with the three cards to fund under it, the pipe a
-   ruled column down the right, as tall as both, so a short feed leaves no hollow. */
+/* The overlay's body: the room as large as the frame's height allows on the left; on the right one
+   ruled column, the cards open for funding over the pipe, so the column is full however short the
+   feed. The room fits by height: the drawing takes the stage's height and its own width from its
+   viewBox, centred, and its frame hugs it, so a role card still lands on its agent. */
 .broadcast-body {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) 34rem;
   gap: var(--space-4);
-  min-height: 0;
-}
-
-.broadcast-main {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: var(--space-3);
   min-height: 0;
 }
 
@@ -5031,28 +5167,73 @@ main.broadcast > .band > * {
 }
 
 .broadcast-room .studio-stage {
+  display: grid;
   flex: 1;
+  place-items: center;
+  min-height: 0;
+}
+
+.broadcast-room .studio-frame {
+  width: fit-content;
+  max-width: 100%;
+  height: 100%;
   min-height: 0;
 }
 
 .broadcast-room .room {
+  width: auto;
+  max-width: 100%;
   height: 100%;
 }
 
 .broadcast-side {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-4);
   min-height: 0;
   overflow: hidden;
   border-inline-start: 1px solid var(--hairline);
   padding-inline-start: var(--space-4);
 }
 
+/* The column places its two parts; the page's section stacking margin does not apply. */
+main.broadcast .broadcast-side > * {
+  margin: 0;
+}
+
+/* Two rows fit under three cards at 1080; a row that ever runs long is clipped at the frame's foot, not spilled past it. */
+.broadcast-side > .pipe {
+  overflow: hidden;
+}
+
 .broadcast-cards h2 {
   font-size: var(--size-lead);
 }
 
-.broadcast-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  margin-top: var(--space-2);
+/* While the snapshot loads, the line holds three rows' height, so the pipe under it never moves. */
+.broadcast-cards-wait {
+  min-height: 19rem;
+}
+
+.broadcast-fund-list {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.broadcast-fund-list > li {
+  display: grid;
+  gap: var(--space-1);
+  padding-block: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+
+.broadcast-fund-list > li > p {
+  margin: 0;
+}
+
+.broadcast-fund-title {
+  font-weight: var(--weight-bold);
 }
 
 /* Motion of the final state: transform and opacity only, under no-preference only. The legendary
@@ -5334,6 +5515,14 @@ main:not(.sheet) .section.station-part[data-quiet] > h2 + p {
 @media (min-width: 80rem) {
   .station-cards {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* In the two-column station grid a third card would sit alone, so a station whose link to the rest
+   follows its cards (Shipped) shows two; the rest are one press away, as in the Fund station. */
+@media (min-width: 48rem) and (max-width: 79.99rem) {
+  .station-cards:has(~ .more) > li:nth-child(n + 3) {
+    display: none;
   }
 }
 

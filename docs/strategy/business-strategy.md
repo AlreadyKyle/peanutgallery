@@ -12,7 +12,7 @@ Supporters pay for changes they want to see, and everyone gets them free. Each c
 
 | Input | Value | Source |
 |---|---|---|
-| Stripe fee on a contribution | 2.9% + about US$0.24 | Stripe Canada's published 2.9% + CA$0.30 (`docs/PLAN.md` §5 Rails), fitted to the production test payment: $1.00 paid, $0.7338 net (`docs/specs/money-logic.md`). **A:** cards issued outside Canada add 0.8% and a converted payment 2% more; not included below. |
+| Stripe fee on a contribution | 5.61% + about US$0.21 | Fitted to production's two payments (`contributions`, read 18 October 2026): $1.00 paid, $0.2662 fee; $5.00 paid, $0.4905 fee. It matches Stripe Canada's published 2.9% + CA$0.30 (`docs/PLAN.md` §5 Rails) plus 2% when a payment is converted (the site charges US dollars and the account settles in Canadian dollars) and 0.8% for a card issued outside Canada, which most supporters hold. **A:** two payments fit any line, so how the 5.61% divides between the conversion and the card's country is inferred; the Stripe Dashboard's fee breakdown on either payment shows it. |
 | Chargeback reserve | 10% of net | Kernel |
 | Default split | 80% agents, 20% studio, of what is left | Kernel; supporters may move it |
 | Incident reserve | 5% of the agents' share until it holds $500 | `docs/PLAN.md` §5 The split |
@@ -21,18 +21,23 @@ Supporters pay for changes they want to see, and everyone gets them free. Each c
 
 ### What one contribution becomes, at the default split
 
-| Paid | Stripe fee | Net | Reserve (10%) | Agents (72% of net) | Studio (18% of net) | Studio share of what was paid |
-|---|---|---|---|---|---|---|
-| $1 | $0.27 | $0.73 | $0.07 | $0.53 | $0.13 | 13% |
-| $5 | $0.39 | $4.62 | $0.46 | $3.32 | $0.83 | 17% |
-| $10 | $0.53 | $9.47 | $0.95 | $6.82 | $1.70 | 17% |
-| $25 | $0.97 | $24.04 | $2.40 | $17.31 | $4.33 | 17% |
-| $50 | $1.69 | $48.31 | $4.83 | $34.78 | $8.70 | 17% |
+At the measured fee. The agents' 72% of net includes the incident reserve's 5% of their share while it fills; the rest reaches card bars.
+
+| Paid | Stripe fee | Fee % | Net | Reserve (10%) | Agents (72% of net) | On card bars (68.4% of net) | Studio (18% of net) | Studio share of what was paid |
+|---|---|---|---|---|---|---|---|---|
+| $1 | $0.27 | 26.6% | $0.73 | $0.07 | $0.53 | $0.50 | $0.13 | 13.2% |
+| $2 | $0.32 | 16.1% | $1.68 | $0.17 | $1.21 | $1.15 | $0.30 | 15.1% |
+| $5 | $0.49 | 9.8% | $4.51 | $0.45 | $3.25 | $3.08 | $0.81 | 16.2% |
+| $10 | $0.77 | 7.7% | $9.23 | $0.92 | $6.64 | $6.31 | $1.66 | 16.6% |
+| $25 | $1.61 | 6.4% | $23.39 | $2.34 | $16.84 | $16.00 | $4.21 | 16.8% |
+| $50 | $3.01 | 6.0% | $46.98 | $4.70 | $33.83 | $32.14 | $8.46 | 16.9% |
+
+The $5 row matches production's $5 payment to the cent: studio $0.8117, card bars $3.0845 (`contributions`). The model this replaces, 2.9% + $0.24, was right at $1; the measured fee is 26% above it at $5, 45% at $10, 66% at $25 and 78% at $50.
 
 Lessons:
 
-- **Below $3 the fixed fee eats the studio.** At $1, 27% goes to Stripe. The preset amounts on the Machine card (5, 10, 25, 50, 100 USD) start at $5 for this reason, and suggested amounts on cards should round small top-ups up to a card's remainder or $5, whichever is larger. This is a display choice, not a money rule.
-- **One $10 contribution buys a lot of work.** $6.82 for the agents is about 13 shipped cards at the measured $0.51, or about 4 code cards at their $1.50 targets. Money, not compute price, is rarely the limit; the card supply and the caps are (`docs/BACKLOG.md`, A card supply that keeps pace with funding).
+- **Below $3 the fixed fee eats the studio.** At $1, 27% goes to Stripe, and below about $2.18 Stripe keeps more than the studio does. The preset amounts on the Machine card (5, 10, 25, 50, 100 USD) start at $5 for this reason, and suggested amounts on cards should round small top-ups up to a card's remainder or $5, whichever is larger. This is a display choice, not a money rule.
+- **One $10 contribution buys a lot of work.** $6.31 reaches the card bars, about 12 shipped cards at the measured $0.51, or about 4 code cards at their $1.50 targets. Money, not compute price, is rarely the limit; the card supply and the caps are (`docs/BACKLOG.md`, A card supply that keeps pace with funding).
 - **The split is trusted because it moves.** Humble Bundle's history shows taking a slider away costs more than never offering it (`docs/research/comparables.md`). The default stays 80/20.
 
 ## 3. What the studio costs to run
@@ -62,12 +67,12 @@ Profit is the studio's share minus the studio's own costs. Coverage is the studi
 | Stage | What it pays for | Monthly costs (**A**) | Gross contributions needed a month | Supporters a month at one $10 contribution each |
 |---|---|---|---|---|
 | 0. Self-funding | Fees on refunds and disputes | about $0 | any | any |
-| 1. Production stack | Email, database and hosting on paid plans | about $65 | about $380 | about 40 |
-| 2. Always-on stage | Stage 1 plus a streaming machine | about $100 | about $590 | about 60 |
-| 3. Human moderation | Stage 2 plus a part-time moderator at $1,500 | about $1,600 | about $9,400 | about 940 |
-| 4. A founder's wage | Stage 3 plus $5,000 a month for the operator | about $6,600 | about $38,800 | about 3,900 |
+| 1. Production stack | Email, database and hosting on paid plans | about $65 | about $390 | about 40 |
+| 2. Always-on stage | Stage 1 plus a streaming machine | about $100 | about $600 | about 60 |
+| 3. Human moderation | Stage 2 plus a part-time moderator at $1,500 | about $1,600 | about $9,600 | about 960 |
+| 4. A founder's wage | Stage 3 plus $5,000 a month for the operator | about $6,600 | about $39,700 | about 4,000 |
 
-How it is computed: the studio keeps 18% of net at the default split, and net is about 94.7% of a $10 contribution, so about 17% of gross is studio income. Gross needed = costs / 0.17.
+How it is computed: the studio keeps 18% of net at the default split, and at the measured fee net is about 92.3% of a $10 contribution, so about 16.6% of gross is studio income. Gross needed = costs / 0.166.
 
 For scale: the kick-off plan's Mid scenario was about $27,000 over its first three months, and its Pop scenario about $400,000 (`docs/research/comparables.md` and the kick-off plan). Stage 3 sits between them; stage 4 needs Pop-like traffic or a second revenue line.
 

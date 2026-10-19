@@ -181,8 +181,9 @@ describe('the public values', () => {
 });
 
 describe('the functions folder', () => {
-  // community-core adds community.mts (docs/specs/final-state.md, docs/specs/community-core.md).
-  it('holds the four functions alone, since Netlify deploys every file there as a function', () => {
-    expect(readdirSync(join(import.meta.dirname, 'functions')).sort()).toEqual(['card.mts', 'community.mts', 'feed.mts', 'snapshot.mts']);
+  // community-core adds community.mts (docs/specs/final-state.md, docs/specs/community-core.md), and
+  // the served sitemap sitemap.mts (docs/specs/robots-sitemap.md).
+  it('holds the five functions alone, since Netlify deploys every file there as a function', () => {
+    expect(readdirSync(join(import.meta.dirname, 'functions')).sort()).toEqual(['card.mts', 'community.mts', 'feed.mts', 'sitemap.mts', 'snapshot.mts']);
   });
 });
