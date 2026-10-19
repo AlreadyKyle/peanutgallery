@@ -25,7 +25,7 @@ export function actionsMinutes(report) {
 // What the board does about a billing usage read that failed, by the HTTP status GitHub returned.
 export function billingReadFix(status) {
   if (status === 403) return "add Account permissions, Plan: Read to the dispatcher's fine-grained token (GitHub, Settings, Developer settings, Fine-grained tokens); editing it keeps its value";
-  if (status === 401) return 'the token has expired or was revoked: regenerate VPS_GITHUB_TOKEN with Plan: Read and update QUOTA_ENV in the ops repository';
+  if (status === 401) return 'the token has expired or was revoked: regenerate VPS_GITHUB_TOKEN with Plan: Read and update QUOTA_ENV in the GitHub environment ops';
   if (status === 404) return 'GitHub has no billing usage for GITHUB_BILLING_USER: check it names the account that owns the repositories';
   return "check the dispatcher's token and its Plan: Read permission";
 }
@@ -47,7 +47,7 @@ export function evaluateQuota({ databaseBytes, minutesUsed, minutesError, minute
       name: 'actions_minutes',
       ok: left >= settings.ACTIONS_MINUTES_FLOOR,
       detail: `${minutesUsed} of ${settings.ACTIONS_MINUTES_INCLUDED} minutes used this month, ${left} left`,
-      items: left >= settings.ACTIONS_MINUTES_FLOOR ? [] : [{ minutes_used: minutesUsed, minutes_left: left, floor: settings.ACTIONS_MINUTES_FLOOR, fix: "the studio repository is public, so these are the ops repository's daily jobs: when they run out the Controller, quota and backup jobs stop running (docs/ROADMAP.md, Actions minutes)" }],
+      items: left >= settings.ACTIONS_MINUTES_FLOOR ? [] : [{ minutes_used: minutesUsed, minutes_left: left, floor: settings.ACTIONS_MINUTES_FLOOR, fix: "the studio repository is public and runs the daily jobs, so these are the ops repository's promotion workflows: when they run out promotion and the itch.io push stop until the minutes reset (docs/ROADMAP.md, Actions minutes)" }],
     };
   }
   const checks = [database, actions];

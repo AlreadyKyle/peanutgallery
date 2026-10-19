@@ -94,7 +94,6 @@ export const TIERS = {
     'platform/dispatcher/test/pipeline.test.ts',
     'platform/dispatcher/test/session.test.ts',
     'platform/ops/README.md',
-    'platform/ops/ops-repo/jobs.yml',
     'platform/ops/ops-repo/README.md',
     'platform/ops/dispatcher-alert.service',
     'platform/ops/dispatcher-env.mjs',

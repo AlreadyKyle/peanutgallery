@@ -17,7 +17,7 @@ Out: any other email (receipts stay Stripe's); storing an address anywhere; noti
 
 When a card goes live, each Stripe payment that still counts (`money.payment_counts`: not the board's test payment, not refunded or disputed in full) and reached that card (its money on the card, less a card release, above zero, the rule `public_card_supporters` uses) is due one notice. A payment that reached two shipped cards gets two notices; two payments on one card get one each.
 
-The notices job runs once a day in the ops repository (`platform/ops/ops-repo/jobs.yml`, 09:07 UTC), sends at most 50 a run (Resend's free plan sends 100 a day), and for each due pair:
+The notices job runs once a day on Actions (`.github/workflows/ops-jobs.yml`, 09:07 UTC; in the private ops repository until PLAN.md §10 decision 78), sends at most 50 a run (Resend's free plan sends 100 a day), and for each due pair:
 
 1. reads the payment's Checkout Session from Stripe with the restricted read key, GET only, for `customer_details.email`. The address stays in the job's memory for the one send; it is never written to the database, a log, ntfy or the output. A session Stripe does not answer is left unclaimed and tried the next day;
 2. claims the pair (`ship_notice_claim`), which answers true once only;

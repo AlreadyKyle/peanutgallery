@@ -1,5 +1,5 @@
 // The ship notices job (docs/specs/ship-notices.md): when a card a supporter's payment reached ships,
-// one email per payment and shipped card, run by the ops repository's jobs.yml. For each row of
+// one email per payment and shipped card, run by .github/workflows/ops-jobs.yml. For each row of
 // ship_notices_due() it:
 //   1. reads that payment's Checkout Session from Stripe with the restricted read key (GET only) for
 //      the receipt address Stripe already holds, customer_details.email. The address is held in this
