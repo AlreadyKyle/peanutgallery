@@ -729,7 +729,7 @@ describe('install.sh and deploy.sh on the Mac', () => {
     const written = readFileSync(out, 'utf8');
     const parsed = dispatcherDotenv.parse(written);
     assert.deepEqual(parsed, { ...parseEnvFile(written) }, 'dotenv reads every line as written');
-    // The Game Designer's claude-sonnet-5-5 row joins the table (docs/PLAN.md §10 decision 77).
+    // The Game Designer's default model's row joins the table (docs/PLAN.md §10 decision 77).
     assert.deepEqual(JSON.parse(parsed.PRICE_TABLE_JSON), { ...table, 'claude-sonnet-5-5': { input: 2, output: 10, cache_read: 0.2, cache_write_5m: 2.5, cache_write_1h: 4 } });
     assert.equal(parsed.MODEL_DESIGNER, 'claude-sonnet-5-5');
     const check = () => spawnSync(BASH, ['-c', '. "$1"; check_dotenv', 'x', path.join(MAC_DIR, 'lib.sh')], { env: { PATH: process.env.PATH, HOME: process.env.HOME, PEANUTGALLERY_HOST: host }, encoding: 'utf8' });

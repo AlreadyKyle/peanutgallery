@@ -140,7 +140,7 @@ describe('make-dispatcher-env.sh', () => {
     assert.match(run.stdout, /with 23 keys: STUDIO_ANTHROPIC_API_KEY, GITHUB_REPO/);
   });
 
-  // docs/PLAN.md §10 decision 77: the Game Designer drafts on claude-sonnet-5-5 unless .env names its model.
+  // docs/PLAN.md §10 decision 77: the Game Designer drafts on DEFAULT_DESIGNER_MODEL unless .env names its model.
   test('puts the Game Designer on claude-sonnet-5-5, priced at list, when .env leaves MODEL_DESIGNER unset', () => {
     assert.equal(DEFAULT_DESIGNER_MODEL, 'claude-sonnet-5-5');
     assert.deepEqual(DEFAULT_DESIGNER_PRICE, { input: 2, output: 10, cache_read: 0.2, cache_write_5m: 2.5, cache_write_1h: 4 });

@@ -710,7 +710,7 @@ $problems"
     }
   ' || die "$ENV_FILE: PRICE_TABLE_JSON failed the check above"
   say "env file: valid"
-  # make-dispatcher-env.sh writes MODEL_DESIGNER (claude-sonnet-5-5 when .env leaves it unset, docs/PLAN.md
+  # make-dispatcher-env.sh writes MODEL_DESIGNER (DEFAULT_DESIGNER_MODEL when .env leaves it unset, docs/PLAN.md
   # §10 decision 77); a file written before it has none, and the Game Designer then drafts on MODEL_DIRECTOR.
   if [ -z "$(env_value MODEL_DESIGNER)" ]; then
     say "note: $ENV_FILE sets no MODEL_DESIGNER, so the Game Designer drafts on MODEL_DIRECTOR; run make-dispatcher-env.sh again for its claude-sonnet-5-5 default"

@@ -19,7 +19,7 @@
 // with at most three cards, its tile or (Next up) the Game Designer's line, never blank. The status
 // line, the pool figure, the shipped cards, the fund links and /contribute's choices. /how-it-works carries no Payment Link and no client_reference_id; /team
 // draws every agent in Running, Starts later and Planned, runs at least one, shows claude-opus-5-5 on
-// each running or paused row (the Game Designer's may show claude-sonnet-5-5) and no model on the rest; /roadmap answers with home (there is no roadmap page). The
+// each running or paused row (the Game Designer's may show its own, team-models.mjs) and no model on the rest; /roadmap answers with home (there is no roadmap page). The
 // newest live card's own page has its title as the one h1, its commit and a Supporters section;
 // /thanks with no session is a plain thank-you and a made-up session reads as recording with the
 // query dropped; /api/card/<not a uuid> is a 400 and /api/thanks answers it exactly pending, no-store; /api/unsubscribe shows its button for a well-formed ship-notice or follow link and answers a bare one 400 (docs/specs/ship-notices.md, docs/specs/card-follows.md)
@@ -615,7 +615,7 @@ try {
     const named = await page.getByRole('main').locator('svg.avatar title').allTextContents();
     check(avatars > 0 && named.length === avatars && named.every((note) => note.trim() !== ''), `/team ${avatars} avatars, each named`);
     // At least one role runs and every role that runs shows claude-opus-5-5 (PLAN.md §10 decision
-    // 36), the Game Designer claude-sonnet-5-5 or that (decision 77; team-models.mjs); a role that
+    // 36), or the Game Designer its own (decision 77; team-models.mjs); a role that
     // does not run shows no model, since none runs it. /team's
     // sections come from the roster's columns (lib/roster.ts teamStatus, docs/specs/supporter-pages.md):
     // Running holds the running and paused rows, then Starts later and Planned; the board block,

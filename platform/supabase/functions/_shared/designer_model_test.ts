@@ -1,5 +1,5 @@
 // The designer-model migration on PGlite (docs/PLAN.md §10 decision 77, docs/specs/unattended-roles.md):
-// the Game Designer's roles.model, which /team shows, becomes claude-sonnet-5-5 and every other role keeps
+// the Game Designer's roles.model, which /team shows, becomes its default and every other role keeps
 // its model; it changes nothing on a second run. Every migration runs in order behind the same Supabase
 // shim as the other migration tests.
 
@@ -42,7 +42,7 @@ Deno.test("the Game Designer's roles.model becomes claude-sonnet-5-5, every othe
     names.sort();
     const sqlOf = async (name: string) => (await Deno.readTextFile(new URL(name, MIGRATIONS_DIR))).replaceAll(PGCRYPTO_LINE, "");
     for (const name of names) await db.exec(await sqlOf(name));
-    // The roles as the seed wrote them before: every role that runs on claude-opus-5-5.
+    // The roles as the seed wrote them before: every role that runs on the Directors' model.
     for (const [name, klass] of [["Game Designer", "planner"], ["Game Director", "reviewer"], ["Builder A", "writer"], ["Studio Head", "planner"]]) {
       await db.query(
         `insert into public.roles (name, title, species_note, model, budget_share, voice, prompt_path, write_access, agent_class)
