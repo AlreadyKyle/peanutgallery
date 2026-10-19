@@ -47,6 +47,7 @@ test.describe('a live card', () => {
     await expect(facts.locator('[data-fact="funded"] dd')).toHaveText('$2.00 of $2.00');
     await expect(facts.locator('[data-fact="contributors"] dd')).toHaveText('30');
     await expect(facts.locator('[data-fact="cost"] dd')).toHaveText('$1.24');
+    await expect(facts.locator('[data-fact="cost"] dt')).toHaveText('Cost from contributions');
     await expect(facts.locator('[data-fact="time"] dd')).toHaveText('40 minutes');
     await expect(facts.locator('[data-fact="gate"] dd')).toContainText('Passed');
     const commit = facts.locator('[data-fact="commit"]');
@@ -54,16 +55,13 @@ test.describe('a live card', () => {
     await expect(commit.locator('a')).toHaveCount(0);
   });
 
-  test('says what changed: known config paths in plain words, anything else raw or "changed"', async ({ page }) => {
+  test('says what changed: known config paths in plain words, and counts anything else', async ({ page }) => {
     const changed = page.getByRole('region', { name: 'What changed' });
-    await expect(changed.locator('li')).toHaveText([
-      'Gatherer is now called "Sweeper".',
-      'Gatherer costs 12 dust to build.',
-      'seed-1/config/game.json unlocks[0].labels: changed',
-    ]);
-    // The raw fallback keeps its code face; a plain line is prose (docs/specs/supporter-loop.md).
-    await expect(changed.locator('li[data-plain="true"] code')).toHaveCount(0);
-    await expect(changed.locator('li:not([data-plain]) code')).toHaveCount(1);
+    await expect(changed.locator('li')).toHaveText(['Gatherer is now called "Sweeper".', 'Gatherer costs 12 dust to build.']);
+    // A raw file path means nothing to a reader, so it is counted, never shown (the copy audit of 18 October 2026).
+    await expect(changed.locator('.what-changed-rest')).toHaveText("And 1 more value in the game's settings.");
+    await expect(changed.locator('code')).toHaveCount(0);
+    await expect(changed).not.toContainText('seed-1/config');
   });
 
   test('lists the supporters in number order, the first 24 then "and 6 more", with no amount', async ({ page }) => {
@@ -214,6 +212,8 @@ test('an open card says each figure once: the face has Funded and Contributors, 
   await expect(facts.locator('[data-fact="funded"]')).toHaveCount(0);
   await expect(facts.locator('[data-fact="contributors"]')).toHaveCount(0);
   await expect(facts.locator('[data-fact="cost"] dd')).toHaveText('$0.00');
+  // Before the build starts, the cost is what drafting the card cost, and its label says so.
+  await expect(facts.locator('[data-fact="cost"] dt')).toHaveText('Drafting cost from contributions');
 });
 
 test('the supporters line up in columns at every width', async ({ page }) => {

@@ -1,12 +1,11 @@
 import { legal } from '../lib/legal';
 import { copy } from '../lib/copy';
 import { MoreLink } from './MoreLink';
-import { LinkedText } from './TextPage';
 
 /**
- * Who runs the studio (docs/specs/copy-pass.md): the board by name, what it can do, what it files and
- * its standing duties, in legal.ts's words. On /how-it-works and at the foot of /team. It names no
- * public list of the board's actions, since none exists.
+ * Who runs the studio (docs/specs/copy-pass.md): the board by name, what it can do and what it
+ * files, in legal.ts's words (its standing duties stay in PLAN.md). On /how-it-works and at the foot
+ * of /team. It names no public list of the board's actions, since none exists.
  */
 export function WhoRuns({ id, brief = false }: { id: string; brief?: boolean }) {
   const who = legal.whoRuns;
@@ -20,8 +19,7 @@ export function WhoRuns({ id, brief = false }: { id: string; brief?: boolean }) 
         <MoreLink to="/how-it-works#how-who">{copy.team.whoRunsLink}</MoreLink>
       </section>
     );
-  // The lede, then two tiles side by side (who acts on their own, and when the board steps in), then
-  // the board's duties as a numbered checklist with what happens if none are done under it.
+  // The lede, then two tiles side by side: who acts on their own, and when the board steps in.
   return (
     <section className="section who-runs" aria-labelledby={id} data-who-runs="">
       <h2 id={id}>{who.heading}</h2>
@@ -35,17 +33,6 @@ export function WhoRuns({ id, brief = false }: { id: string; brief?: boolean }) 
           <p className="who-label">{who.boardLabel}</p>
           <p>{board}</p>
         </div>
-      </div>
-      <div className="who-duties">
-        <p className="who-label">{who.dutiesIntro}</p>
-        <ol>
-          {who.duties.map((duty) => (
-            <li key={duty}>
-              <LinkedText text={duty} />
-            </li>
-          ))}
-        </ol>
-        <p className="who-outro">{who.dutiesOutro}</p>
       </div>
     </section>
   );

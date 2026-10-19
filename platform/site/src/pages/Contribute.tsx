@@ -108,7 +108,7 @@ export function Contribute() {
                 <span className="choice-body">{pickForMeBody(studio)}</span>
               </a>
               <p className="muted small">
-                <LinkedText text={legal.contributeAgreement} />
+                <LinkedText text={legal.fundAgreement} />
               </p>
             </div>
 
@@ -150,8 +150,9 @@ export function Contribute() {
                 );
               }}
             </Guarded>
-            {/* The Machine card (docs/specs/final-state.md): the same checkout as Fund the next card in line. */}
-            <MachineCard studioPct={studioPct} headingLevel={2} />
+            {/* The Machine card (docs/specs/final-state.md): the same checkout as Fund the next card in
+                line, so the agreement under the first choice covers it. */}
+            <MachineCard studioPct={studioPct} headingLevel={2} agreement={false} />
             {/* What a contribution gets you (docs/specs/place.md): paying never needs an account. */}
             <Perks />
             <p className="muted small">{legal.split}</p>

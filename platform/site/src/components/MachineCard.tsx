@@ -14,7 +14,11 @@ import { Glyph, SuitTag } from './Glyph';
 
 export const MACHINE_AMOUNTS: readonly number[] = [5, 10, 25, 50, 100];
 
-export function MachineCard({ studioPct, headingLevel = 3 }: { studioPct?: number; headingLevel?: 2 | 3 }) {
+/**
+ * agreement: false where the page says the agreement once for every link to checkout in the same
+ * section (home's Fund station, /contribute's line under the first choice).
+ */
+export function MachineCard({ studioPct, headingLevel = 3, agreement = true }: { studioPct?: number; headingLevel?: 2 | 3; agreement?: boolean }) {
   const env = siteEnv();
   const id = useId();
   const [amount, setAmount] = useState(10);
@@ -50,8 +54,8 @@ export function MachineCard({ studioPct, headingLevel = 3 }: { studioPct?: numbe
       <p className="muted small" id={`${id}-note`}>
         {legal.pickForMeBody} {copy.machine.amountNote.replace('{amount}', `$${amount}`)}
       </p>
-      {/* The agreement sits with the link it binds, as under every fund grid (DESIGN.md, the card). */}
-      <FundAgreement />
+      {/* Alone, the agreement sits with the link it binds, as under every fund grid (DESIGN.md, the card). */}
+      {agreement ? <FundAgreement /> : null}
       </div>
     </div>
   );

@@ -312,6 +312,8 @@ Deno.test("migrations on PGlite", {
         "20261018110000_channel_counters.sql",
         // Suggested by (docs/specs/place.md): the ideas in the clusters linked to a card, a public read.
         "20261018120000_card_suggested_by.sql",
+        // The copy audit's plain role descriptions on /team (PLAN.md §10 decision 76).
+        "20261018130000_plain_role_descriptions.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);

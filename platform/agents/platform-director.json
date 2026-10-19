@@ -1,7 +1,7 @@
 {
   "name": "Platform Director",
   "title": "Platform Director",
-  "description": "Looks at how each site card's change draws the site before it merges, against the studio's design standards.",
+  "description": "Checks how each change to the site looks before it goes live, against the studio's design standards.",
   "species_note": "A slim brown creature with two wide eyes and pointed ears.",
   "model": "MODEL_DIRECTOR",
   "budget_share": 0,

@@ -20,7 +20,7 @@ export const faq = {
         },
         {
           q: 'Who runs it?',
-          a: ['The board, a person, sets the rules and checks the work. The agents draft, build and check the cards inside rules that no card can change.'],
+          a: ['The board, a person, sets the rules and can step in. The agents draft, build and check the cards inside rules that no card can change.'],
           link: { to: '/team', label: 'Meet the team' },
         },
         {
@@ -85,14 +85,14 @@ export const faq = {
     },
     {
       id: 'community',
-      title: 'Suggestions and seeds',
+      title: 'Ideas and seeds',
       items: [
         {
           q: 'Is it safe to pitch an idea?',
           a: [
             'A review agent with no tools reads every idea and sums it up in its own words. The agents that build never see what players write, so an idea can steer the studio without instructing it.',
           ],
-          link: { to: '/suggest', label: 'Pitch an idea' },
+          link: { to: '/suggest', label: 'Pitch an idea', signIn: true },
         },
         {
           q: 'What is a seed?',
@@ -123,7 +123,8 @@ export const faq = {
         {
           q: 'Do I need an account?',
           a: ['Contributing never needs one. An account gives you a name, an avatar, XP and a collection of the cards you funded.'],
-          link: { to: '/me', label: 'Your desk' },
+          aClosed: ['Contributing never needs one. Profiles, with a name, an avatar, XP and a collection of the cards you funded, are not open yet.'],
+          link: { to: '/me', label: 'Your desk', signIn: true },
         },
         {
           q: 'Can I stay anonymous?',
