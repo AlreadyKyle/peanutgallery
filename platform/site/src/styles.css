@@ -5102,9 +5102,9 @@ main.broadcast .broadcast-side > * {
   margin: 0;
 }
 
-/* The pipe runs to the frame's foot: a row that does not fit fades out there instead of being cut. */
+/* Two rows fit under three cards at 1080; a row that ever runs long is clipped at the frame's foot, not spilled past it. */
 .broadcast-side > .pipe {
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 4rem), transparent);
+  overflow: hidden;
 }
 
 .broadcast-cards h2 {

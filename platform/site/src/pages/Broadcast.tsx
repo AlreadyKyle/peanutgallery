@@ -115,7 +115,7 @@ export function Broadcast() {
             hasOlder={false}
             loadingOlder={false}
             onOlder={() => undefined}
-            pageSize={3}
+            pageSize={2}
             headingLevel={2}
             paging={false}
             linked={false}
