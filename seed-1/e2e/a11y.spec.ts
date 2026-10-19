@@ -46,6 +46,7 @@ test('the page has a main landmark, a level-one heading and a hidden canvas', as
     'href',
     'https://mobmachine.games/contribute',
   );
+  await expect(page.getByRole('link', { name: 'Who made this' })).toHaveAttribute('href', 'https://mobmachine.games/how-it-works');
 });
 
 test('plays with the keyboard only: strike, then buy a Gatherer', async ({ page }) => {

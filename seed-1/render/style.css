@@ -1,7 +1,12 @@
-/* Dust's page, in the studio's line style: paper ground, ink text and 2px ink edges with a hard
-   offset shadow, the creature fills, and the Dust suit magenta as the one accent. No CSS animation
-   or transition moves anything: the HUD moves from the frame clock (render/hud.ts), so the gate's
-   frames draw the same pixels twice. */
+/* Dust's page, drawn as part of the island (render/scene.ts, render/toon.ts): paper ground, ink text,
+   one ink line as thick as the diorama's outlines (2px on a phone, 3px beside the big island on a
+   wide screen, where the third pixel is drawn outside the border so no box moves), flat fills, corners cut a little unevenly by hand rather than web-round,
+   and the signpost's plank (render/scene-depth.ts) as the game's one tag shape. Nothing casts a hard
+   offset shadow: the side panel and the floating notes cast the island's own soft shadow, the same
+   light. Colours: paper, ink and their neutrals, the site's creature fills (platform/site/src/tokens.css)
+   and two accents of the game's own, the Dust suit magenta and the sand of the pile, each with its
+   shades. No CSS animation or transition moves anything: the HUD moves from the frame clock
+   (render/hud.ts), so the gate's frames draw the same pixels twice. */
 
 /* Atkinson Hyperlegible Next (SIL OFL 1.1, render/fonts/OFL.txt), the site's font, bundled here. */
 @font-face {
@@ -19,10 +24,27 @@
   --line: #d9d2c3;
   --sand: #f1d99c;
   --sand-light: #f8ecc9;
+  --paper-dot: #e6dfd0;
   --magenta: #b0226a;
   --magenta-down: #8c1a54;
+  /* Creature fills, as the site's tokens. */
   --blue: #8db9e8;
   --yellow: #f5dc7a;
+  --lavender: #cbbdee;
+  --green: #9bd3a6;
+  /* The line: a 2px border everywhere; --ink-draw is the line as drawn, as thick as the island's
+     outlines at this size (a wide screen adds a 1px outline round the border). */
+  --ink-w: 2px;
+  --ink-draw: 2px;
+  /* Corners cut by hand: a little uneven, never a web pill. */
+  --cut: 15px 10px 16px 11px / 11px 16px 10px 15px;
+  --cut-s: 10px 7px 11px 8px / 8px 11px 7px 10px;
+  /* The island's shadow on the paper (render/scene.ts): flat, faint and down to the left. */
+  --cast: -6px 8px 0 rgb(21 21 21 / 0.07);
+  /* The toon's one shade step, inside the line: flat, on the side away from the sun. */
+  --shade: inset -3px -4px 0 rgb(21 21 21 / 0.11);
+  /* The signpost's plank: square at the post, pointed at the far end. */
+  --plank-tip: 9px;
   --font: 'Atkinson Hyperlegible Next', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
@@ -39,7 +61,7 @@ body {
 body {
   display: flex;
   flex-direction: column;
-  background-image: radial-gradient(circle, #e6dfd0 1.1px, transparent 1.4px);
+  background-image: radial-gradient(circle, var(--paper-dot) 1.1px, transparent 1.4px);
   background-size: 22px 22px;
 }
 
@@ -66,6 +88,48 @@ a:focus-visible {
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* The game's tag: the signpost's plank, drawn as two layers behind the words, an ink plank and its
+   fill inset by one line, so its edge is the same ink line as everything else. A tag sets its fill
+   in --tag-fill. */
+.streak,
+.unit-new,
+.hud-hint,
+.fork-kicker,
+.hud-whirl {
+  isolation: isolate;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.streak::before,
+.unit-new::before,
+.hud-hint::before,
+.fork-kicker::before,
+.hud-whirl::before,
+.streak::after,
+.unit-new::after,
+.hud-hint::after,
+.fork-kicker::after,
+.hud-whirl::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--ink);
+  clip-path: polygon(0 0, calc(100% - var(--plank-tip)) 0, 100% 50%, calc(100% - var(--plank-tip)) 100%, 0 100%);
+}
+
+.streak::after,
+.unit-new::after,
+.hud-hint::after,
+.fork-kicker::after,
+.hud-whirl::after {
+  inset: var(--ink-draw);
+  background: var(--tag-fill, var(--yellow));
 }
 
 /* The stage: the canvas fills it, the HUD and the shop sit over it. */
@@ -145,9 +209,9 @@ a:focus-visible {
   min-width: 140px;
   padding: 6px 10px 7px;
   background: var(--paper);
-  border: 2px solid var(--ink);
-  border-radius: 12px;
-  box-shadow: 3px 3px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut);
+  box-shadow: var(--cast);
 }
 
 .hud-goal-row {
@@ -178,8 +242,8 @@ a:focus-visible {
 .hud-goal-track {
   height: 10px;
   margin-top: 5px;
-  border: 2px solid var(--ink);
-  border-radius: 7px;
+  border: var(--ink-w) solid var(--ink);
+  border-radius: 3px 4px 3px 2px;
   background: var(--sand-light);
   overflow: hidden;
 }
@@ -226,14 +290,11 @@ a:focus-visible {
   position: absolute;
   left: 0;
   top: 0;
-  padding: 2px 10px;
+  padding: 4px calc(8px + var(--plank-tip)) 4px 12px;
   font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
-  background: var(--yellow);
-  border: 2px solid var(--ink);
-  border-radius: 999px;
-  box-shadow: 2px 2px 0 var(--ink);
+  --tag-fill: var(--yellow);
   transform-origin: 0 100%;
 }
 
@@ -246,9 +307,9 @@ a:focus-visible {
   padding-bottom: 10px;
   text-align: center;
   background: var(--paper);
-  border: 2.5px solid var(--ink);
-  border-radius: 14px;
-  box-shadow: 4px 4px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut);
+  box-shadow: var(--cast);
   overflow: hidden;
   transform-origin: 50% 0;
 }
@@ -261,7 +322,7 @@ a:focus-visible {
   text-transform: uppercase;
   color: var(--paper);
   background: var(--magenta);
-  border-bottom: 2.5px solid var(--ink);
+  border-bottom: var(--ink-w) solid var(--ink);
 }
 
 .banner.welcome .banner-kicker {
@@ -333,9 +394,8 @@ a:focus-visible {
   letter-spacing: 0.02em;
   color: var(--paper);
   background: var(--magenta);
-  border: 2px solid var(--ink);
-  border-radius: 14px;
-  box-shadow: 3px 3px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut);
 }
 
 .strike:hover {
@@ -343,8 +403,7 @@ a:focus-visible {
 }
 
 .strike:active {
-  transform: translate(2px, 2px);
-  box-shadow: 1px 1px 0 var(--ink);
+  transform: translateY(2px);
 }
 
 .strike-hint {
@@ -365,9 +424,8 @@ a:focus-visible {
   padding: 0;
   text-align: left;
   background: var(--paper);
-  border: 2px solid var(--ink);
-  border-radius: 12px;
-  box-shadow: 2px 2px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut-s);
   overflow: hidden;
 }
 
@@ -377,8 +435,7 @@ a:focus-visible {
 
 .unit:active,
 .unit.bump {
-  transform: translate(2px, 2px);
-  box-shadow: 0 0 0 var(--ink);
+  transform: translateY(2px);
 }
 
 .unit-fill {
@@ -453,22 +510,26 @@ a:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+/* A unit not yet owned: the plank takes the count's place ("×0") at the bottom right, clear of the name. */
 .unit-new {
   position: absolute;
-  top: 4px;
   right: 4px;
-  padding: 0 6px;
+  bottom: 5px;
+  padding: 1px calc(3px + var(--plank-tip)) 1px 6px;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--paper);
-  background: var(--magenta);
-  border-radius: 999px;
+  --tag-fill: var(--magenta);
 }
 
 .unit-new[hidden] {
   display: none;
+}
+
+.unit-face:has(.unit-new:not([hidden])) .unit-owned {
+  visibility: hidden;
 }
 
 /* The unlock list shows in the side panel on a wide screen; on a phone it is read, not drawn. */
@@ -565,9 +626,8 @@ footer {
   font-weight: 700;
   color: var(--ink);
   background: var(--paper);
-  border: 2px solid var(--ink);
-  border-radius: 22px;
-  box-shadow: 2px 2px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut-s);
 }
 
 .share-row button:hover {
@@ -628,7 +688,7 @@ footer {
 .next-card-track {
   width: 120px;
   height: 6px;
-  border: 1.5px solid var(--ink);
+  border: var(--ink-w) solid var(--ink);
   border-radius: 4px;
   background: var(--paper);
   overflow: hidden;
@@ -646,9 +706,9 @@ footer {
   padding: 0;
   color: var(--ink);
   background: var(--paper);
-  border: 2.5px solid var(--ink);
-  border-radius: 16px;
-  box-shadow: 5px 5px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut);
+  box-shadow: var(--cast);
 }
 
 #seed-offer::backdrop {
@@ -664,7 +724,7 @@ footer {
   text-transform: uppercase;
   color: var(--paper);
   background: var(--magenta);
-  border-bottom: 2.5px solid var(--ink);
+  border-bottom: var(--ink-w) solid var(--ink);
 }
 
 #seed-offer h2 {
@@ -688,9 +748,8 @@ footer {
   padding: 8px 16px;
   font-weight: 700;
   background: var(--paper);
-  border: 2px solid var(--ink);
-  border-radius: 12px;
-  box-shadow: 2px 2px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut-s);
 }
 
 .seed-offer-actions button.primary {
@@ -710,9 +769,8 @@ footer {
   color: var(--paper);
   text-decoration: none;
   background: var(--magenta);
-  border: 2px solid var(--ink);
-  border-radius: 22px;
-  box-shadow: 2px 2px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut-s);
 }
 
 .share-row .daily-link:hover {
@@ -749,8 +807,8 @@ footer {
 .daily-track {
   width: 120px;
   height: 8px;
-  border: 1.5px solid var(--ink);
-  border-radius: 4px;
+  border: var(--ink-w) solid var(--ink);
+  border-radius: 3px 4px 3px 2px;
   background: var(--paper);
   overflow: hidden;
 }
@@ -770,9 +828,9 @@ footer {
   overflow: auto;
   color: var(--ink);
   background: var(--paper);
-  border: 2.5px solid var(--ink);
-  border-radius: 16px;
-  box-shadow: 5px 5px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut);
+  box-shadow: var(--cast);
 }
 
 #daily-result::backdrop {
@@ -788,7 +846,7 @@ footer {
   text-transform: uppercase;
   color: var(--paper);
   background: var(--magenta);
-  border-bottom: 2.5px solid var(--ink);
+  border-bottom: var(--ink-w) solid var(--ink);
 }
 
 #daily-result h2 {
@@ -802,8 +860,8 @@ footer {
   width: calc(100% - 32px);
   height: auto;
   margin: 0 16px;
-  border: 2px solid var(--ink);
-  border-radius: 10px;
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut-s);
 }
 
 #daily-result .daily-text {
@@ -816,8 +874,8 @@ footer {
   overflow-wrap: anywhere;
   letter-spacing: 0.02em;
   background: var(--sand-light);
-  border: 2px solid var(--ink);
-  border-radius: 10px;
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut-s);
 }
 
 .daily-actions {
@@ -838,9 +896,8 @@ footer {
   color: var(--ink);
   text-decoration: none;
   background: var(--paper);
-  border: 2px solid var(--ink);
-  border-radius: 12px;
-  box-shadow: 2px 2px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut-s);
 }
 
 .daily-actions button.primary {
@@ -873,20 +930,18 @@ footer {
 }
 
 .hud-hint {
+  position: relative;
   max-width: 62%;
-  padding: 4px 10px;
+  padding: 6px calc(8px + var(--plank-tip)) 6px 12px;
   font-size: 14px;
   font-weight: 700;
   color: var(--ink);
-  background: var(--yellow);
-  border: 2px solid var(--ink);
-  border-radius: 999px;
-  box-shadow: 2px 2px 0 var(--ink);
+  --tag-fill: var(--yellow);
   transform-origin: 0 50%;
 }
 
 .hud-hint.flash {
-  background: var(--paper);
+  --tag-fill: var(--paper);
 }
 
 .hud-weather {
@@ -897,9 +952,9 @@ footer {
   max-width: 64%;
   padding: 3px 10px 3px 6px;
   background: var(--paper);
-  border: 2px solid var(--ink);
-  border-radius: 12px;
-  box-shadow: 2px 2px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut-s);
+  box-shadow: var(--cast);
   transform-origin: 100% 0;
 }
 
@@ -936,7 +991,7 @@ footer {
 
 .banner.season .banner-kicker {
   color: var(--ink);
-  background: #cbbdee;
+  background: var(--lavender);
 }
 
 /* A unit's next milestone ("×2 at 25"). */
@@ -948,9 +1003,8 @@ footer {
 .gems {
   padding: 6px 8px 8px;
   background: var(--paper);
-  border: 2px solid var(--ink);
-  border-radius: 12px;
-  box-shadow: 2px 2px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut-s);
 }
 
 .gems[hidden],
@@ -988,16 +1042,15 @@ footer {
 .perk {
   min-height: 44px;
   font-weight: 700;
-  border: 2px solid var(--ink);
-  border-radius: 12px;
-  box-shadow: 2px 2px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut-s);
 }
 
 .press {
   width: 100%;
   padding: 6px 12px;
   font-size: 15px;
-  background: #cbbdee;
+  background: var(--lavender);
 }
 
 .press[aria-disabled='true'] {
@@ -1005,7 +1058,6 @@ footer {
   font-size: 13px;
   color: var(--muted);
   background: var(--paper);
-  box-shadow: none;
   border-style: dashed;
 }
 
@@ -1013,8 +1065,8 @@ footer {
   margin-top: 6px;
   padding: 6px 8px 8px;
   background: var(--sand-light);
-  border: 2px solid var(--ink);
-  border-radius: 12px;
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut-s);
 }
 
 .press-confirm-text {
@@ -1053,8 +1105,8 @@ footer {
   font-size: 13px;
   font-weight: 700;
   background: var(--paper);
-  border: 2px solid var(--ink);
-  border-radius: 12px;
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut-s);
 }
 
 .perks-toggle::after {
@@ -1094,7 +1146,7 @@ footer {
 }
 
 .perk.owned {
-  background: #e7f3e9;
+  background: var(--green);
   border-style: solid;
 }
 
@@ -1132,9 +1184,8 @@ footer {
   color: var(--ink);
   text-decoration: none;
   background: var(--paper);
-  border: 2px solid var(--ink);
-  border-radius: 22px;
-  box-shadow: 2px 2px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut-s);
 }
 
 .share-row .gallery-link::after {
@@ -1147,6 +1198,21 @@ footer {
 }
 
 @media (min-width: 860px) and (min-height: 520px) {
+  /* The island is drawn big here, and its outlines are 3px (render/scene.ts): each box's line takes
+     a third pixel as an outline outside its border, so no box grows. Zero specificity, so a focus
+     ring still wins; a dashed line (a control not available) stays as it is. */
+  :root {
+    --ink-draw: 3px;
+  }
+
+  :where(.controls, .hud-goal, .banner, .hud-weather, .strike, .unit, .fork, .fork-option, .order, .order-act, .gems, .press, .press-yes, .press-no, .press-confirm, .perk, .devil, .share-row button, .share-row .daily-link, .share-row .gallery-link) {
+    outline: 1px solid var(--ink);
+  }
+
+  :where(.press[aria-disabled='true'], .order-act[data-mode='swap']) {
+    outline: 0;
+  }
+
   .hud {
     top: 18px;
     left: 26px;
@@ -1189,9 +1255,9 @@ footer {
     gap: 10px;
     overflow-y: auto;
     background: var(--paper);
-    border: 2px solid var(--ink);
-    border-radius: 18px;
-    box-shadow: 4px 4px 0 var(--ink);
+    border: var(--ink-w) solid var(--ink);
+    border-radius: var(--cut);
+    box-shadow: var(--cast);
   }
 
   /* The side panel scrolls as one; the shop lays out in it as if it were not there. */
@@ -1254,9 +1320,8 @@ footer {
   }
 
   .unit-new {
-    top: auto;
-    bottom: 26px;
     right: 10px;
+    bottom: 8px;
   }
 
   .unlocks {
@@ -1371,9 +1436,9 @@ footer {
   font-weight: 700;
   color: var(--ink);
   background: var(--yellow);
-  border: 2.5px solid var(--ink);
-  border-radius: 14px;
-  box-shadow: 3px 3px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut);
+  box-shadow: var(--cast);
 }
 
 /* A swirl drawn in CSS borders: three nested rings, never an image. */
@@ -1382,7 +1447,7 @@ footer {
   flex: 0 0 auto;
   width: 14px;
   height: 14px;
-  border: 2.5px solid var(--ink);
+  border: var(--ink-w) solid var(--ink);
   border-radius: 50%;
   box-shadow: inset 0 0 0 2.5px var(--yellow), inset 0 0 0 5px var(--ink);
 }
@@ -1390,16 +1455,14 @@ footer {
 .devil:active,
 .fork-option:active,
 .order-act:active {
-  transform: translate(2px, 2px);
-  box-shadow: 0 0 0 var(--ink);
+  transform: translateY(2px);
 }
 
 .fork {
   padding: 0 8px 8px;
   background: var(--paper);
-  border: 2.5px solid var(--ink);
-  border-radius: 14px;
-  box-shadow: 4px 4px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut-s);
   overflow: hidden;
 }
 
@@ -1410,19 +1473,19 @@ footer {
   gap: 2px 8px;
   margin: 0 -8px 6px;
   padding: 4px 10px;
-  border-bottom: 2.5px solid var(--ink);
+  border-bottom: var(--ink-w) solid var(--ink);
   background: var(--sand-light);
 }
 
 .fork-kicker {
-  padding: 0 8px;
+  position: relative;
+  padding: 2px calc(4px + var(--plank-tip)) 2px 8px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--paper);
-  background: var(--magenta);
-  border-radius: 999px;
+  --tag-fill: var(--magenta);
 }
 
 .fork-title {
@@ -1450,10 +1513,9 @@ footer {
   padding: 6px 10px;
   text-align: left;
   background: var(--paper);
-  border: 2px solid var(--ink);
+  border: var(--ink-w) solid var(--ink);
   border-left-width: 7px;
-  border-radius: 12px;
-  box-shadow: 2px 2px 0 var(--ink);
+  border-radius: var(--cut-s);
 }
 
 .fork-option[data-side='0'] {
@@ -1461,7 +1523,7 @@ footer {
 }
 
 .fork-option[data-side='1'] {
-  border-left-color: #cbbdee;
+  border-left-color: var(--lavender);
 }
 
 .fork-option[data-side='2'] {
@@ -1503,9 +1565,8 @@ footer {
   column-gap: 8px;
   padding: 5px 6px 6px 10px;
   background: var(--paper);
-  border: 2px solid var(--ink);
-  border-radius: 12px;
-  box-shadow: 2px 2px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut-s);
 }
 
 .order-heading {
@@ -1547,8 +1608,8 @@ footer {
 
 .order-track {
   height: 8px;
-  border: 2px solid var(--ink);
-  border-radius: 6px;
+  border: var(--ink-w) solid var(--ink);
+  border-radius: 3px 4px 3px 2px;
   background: var(--sand-light);
   overflow: hidden;
 }
@@ -1576,15 +1637,13 @@ footer {
   font-size: 14px;
   font-weight: 700;
   background: var(--paper);
-  border: 2px solid var(--ink);
-  border-radius: 12px;
-  box-shadow: 2px 2px 0 var(--ink);
+  border: var(--ink-w) solid var(--ink);
+  border-radius: var(--cut-s);
 }
 
 .order-act[data-mode='swap'] {
   font-weight: 400;
   color: var(--muted);
-  box-shadow: none;
   border-style: dashed;
 }
 
@@ -1593,7 +1652,6 @@ footer {
   font-size: 13px;
   color: var(--muted);
   background: var(--sand-light);
-  box-shadow: none;
 }
 
 .order.ready .order-act {
@@ -1611,14 +1669,11 @@ footer {
   left: 0;
   top: 0;
   transform-origin: 100% 100%;
-  padding: 3px 10px;
+  padding: 5px calc(8px + var(--plank-tip)) 5px 12px;
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
-  background: var(--yellow);
-  border: 2px solid var(--ink);
-  border-radius: 999px;
-  box-shadow: 2px 2px 0 var(--ink);
+  --tag-fill: var(--yellow);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1636,6 +1691,53 @@ footer {
   .order-text {
     white-space: normal;
   }
+}
+
+/* The toon's one shade step (render/toon.ts): every button is a thing on the island, lit by the same
+   sun from the upper left, so its lower right edge takes one flat shade inside its ink line, as the
+   pile and the buildings do. A press flattens it. Panels are paper and stay flat; a control that is
+   not available stays flat too. A unit's shade sits over its affordability fill, under its words. */
+.strike,
+.unit::after,
+.share-row button,
+.share-row .daily-link,
+.share-row .gallery-link,
+.seed-offer-actions button,
+.daily-actions button,
+.daily-actions a,
+.press,
+.press-yes,
+.press-no,
+.perk,
+.perks-toggle,
+.devil,
+.fork-option,
+.order-act {
+  box-shadow: var(--shade);
+}
+
+.unit::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.unit-face {
+  z-index: 1;
+}
+
+.strike:active,
+.unit:active::after,
+.unit.bump::after,
+.devil:active,
+.fork-option:active,
+.order-act:active,
+.press[aria-disabled='true'],
+.order-act[data-mode='swap'],
+.order-act[data-mode='rest'] {
+  box-shadow: none;
 }
 
 /* A phone, or any screen too small for the side panel. A short screen keeps the stage at least 560px
