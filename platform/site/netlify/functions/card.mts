@@ -32,7 +32,9 @@ export const SESSION_PATTERN = /^cs_(live|test)_[A-Za-z0-9]{10,250}$/;
  * a seed saved or opened from a link, a home load and its dwell buckets, the broadcast's load and its
  * QR source, and a click on a Discord link. Then Daily Dust's three (docs/specs/daily-dust.md): a run
  * started, finished and shared. The from_ names are landings from a channel's tagged link
- * (docs/specs/channel-counters.md). Each is one daily total with nothing that names a person.
+ * (docs/specs/channel-counters.md). The last three are the funnel from interest to payment
+ * (docs/specs/counter-senders.md): /contribute shown, a Payment Link pressed and a press from home into
+ * the game. Each is one daily total with nothing that names a person.
  */
 export const PLAY_EVENTS = [
   'dust_load', 'dust_share', 'card_share', 'dust_next_card',
@@ -41,6 +43,7 @@ export const PLAY_EVENTS = [
   'dust_daily_start', 'dust_daily_finish', 'dust_daily_share',
   'from_x', 'from_bsky', 'from_threads', 'from_mastodon', 'from_discord', 'from_yt', 'from_tiktok', 'from_ig', 'from_linkedin',
   'from_reddit', 'from_hn', 'from_itch', 'from_ph', 'from_creator',
+  'contribute_load', 'checkout_open', 'home_play_click',
 ] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CARD_PATH = /^\/api\/card\/([^/]+)$/;

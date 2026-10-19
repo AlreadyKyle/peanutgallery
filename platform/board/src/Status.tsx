@@ -17,6 +17,11 @@ import { errorMessage } from './lib/supabase';
 
 const CLOCK_TICK_MS = 1_000;
 export const CAPS_BY_SQL = 'The caps are read-only here: they change by SQL.';
+/** Asked before the board's Resume: one press lifts the kill switch, whatever the pause's reason. */
+export const RESUME_CONFIRM =
+  'Resume the agents? This lifts the pause whatever its reason, an incident or a spend limit included, and funded cards can start again at the next dispatcher tick.';
+/** The moderator's line under Pause (docs/specs/moderator-pause-only.md). */
+export const BOARD_RESUMES = 'Only the board can resume them, at the second factor.';
 
 export type StudioLoad = { state: BoardStudioState | null; loadError: string; refresh: () => Promise<void> };
 
@@ -132,10 +137,21 @@ export function StudioStatus({ client, studio }: { client: SupabaseClient; studi
 }
 
 /**
- * Pause and Resume, the kill switch (set_paused). The moderator's only control, at the first factor;
- * the board's at the second, under Actions.
+ * Pause and Resume, the kill switch (set_paused). The moderator pauses only, at the first factor, and
+ * sees no Resume (docs/specs/moderator-pause-only.md); the board pauses and resumes at the second,
+ * under Actions, and Resume asks first, since one stray press would lift the kill switch.
  */
-export function PauseControls({ client, onChanged, nested = false }: { client: SupabaseClient; onChanged?: () => Promise<void>; nested?: boolean }) {
+export function PauseControls({
+  client,
+  onChanged,
+  nested = false,
+  canResume = true,
+}: {
+  client: SupabaseClient;
+  onChanged?: () => Promise<void>;
+  nested?: boolean;
+  canResume?: boolean;
+}) {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [reason, setReason] = useState<PauseReason>('board');
@@ -143,6 +159,7 @@ export function PauseControls({ client, onChanged, nested = false }: { client: S
 
   async function apply(paused: boolean) {
     if (busy) return;
+    if (!paused && !window.confirm(RESUME_CONFIRM)) return;
     setBusy(true);
     try {
       await setPaused(client, paused, reason);
@@ -156,9 +173,12 @@ export function PauseControls({ client, onChanged, nested = false }: { client: S
   }
 
   return (
-    <section aria-label="Pause and resume">
+    <section aria-label={canResume ? 'Pause and resume' : 'Pause'}>
       <Heading>Pause the agents</Heading>
-      <p>While the agents are paused no card session starts, and the public site says so with the reason. Funded cards keep their money.</p>
+      <p>
+        While the agents are paused no card session starts, and funded cards keep their money.
+        {canResume ? null : ` ${BOARD_RESUMES}`}
+      </p>
       <label>
         Pause reason
         <select value={reason} aria-disabled={busy} onChange={(event) => setReason(event.target.value as PauseReason)}>
@@ -173,9 +193,11 @@ export function PauseControls({ client, onChanged, nested = false }: { client: S
         <button type="button" aria-disabled={busy} onClick={() => void apply(true)}>
           Pause agents
         </button>
-        <button type="button" aria-disabled={busy} onClick={() => void apply(false)}>
-          Resume agents
-        </button>
+        {canResume ? (
+          <button type="button" aria-disabled={busy} onClick={() => void apply(false)}>
+            Resume agents
+          </button>
+        ) : null}
       </div>
       {message === '' ? null : <p role="status">{message}</p>}
     </section>

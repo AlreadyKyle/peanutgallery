@@ -88,7 +88,7 @@ function SignIn({ client }: { client: SupabaseClient | null }) {
 
 /**
  * Routes a signed-in session: no membership shows a line and calls nothing more; the moderator gets
- * Pause at the first factor; a board member sees only the code step until aal2, then the panel.
+ * Pause, and no Resume, at the first factor; a board member sees only the code step until aal2, then the panel.
  *
  * Every new session token (a sign-in in another tab, a refresh, a verified code) asks again for the
  * role and, for a board member, the assurance level, so an aal1 session never keeps the panel: it goes
@@ -142,7 +142,7 @@ function SignedIn({ client, email, token }: { client: SupabaseClient; email: str
       </p>
       {role === 'pending' ? <p>Checking board membership.</p> : null}
       {role === null ? <p role="status">{roleError === '' ? NOT_ON_BOARD : roleError}</p> : null}
-      {role === 'moderator' ? <PauseControls client={client} /> : null}
+      {role === 'moderator' ? <PauseControls client={client} canResume={false} /> : null}
       {role === 'board' ? secondFactor ? <Panel client={client} /> : <TwoFactor client={client} onVerified={setSecondFactor} /> : null}
     </>
   );

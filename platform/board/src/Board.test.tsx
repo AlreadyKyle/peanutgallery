@@ -14,7 +14,7 @@ import {
 } from './lib/board';
 import { formatDateTime } from './lib/format';
 import { PLAY_COUNT_HEADS, PLAY_COUNTS_LINE } from './PlayCounts';
-import { CAPS_BY_SQL } from './Status';
+import { BOARD_RESUMES, CAPS_BY_SQL, RESUME_CONFIRM } from './Status';
 import { REASON_FIRST } from './Community';
 import { confirmText } from './lib/community';
 import { GAME_REASON_NEEDED, ROLE_REASON_NEEDED } from './Roster';
@@ -509,12 +509,12 @@ describe('a new session in another tab', () => {
     expect(studioReads()).toEqual(after);
   });
 
-  it("for the moderator replacing the board's session shows only Pause and resume, and reads no studio state", async () => {
+  it("for the moderator replacing the board's session shows only Pause, and reads no studio state", async () => {
     await renderBoard();
     fake.role = 'moderator';
     fake.aal = 'aal1';
     await signInElsewhere('u-moderator', 'moderator@mobmachine.games', 'token-4');
-    expect(regions()).toEqual(['Pause and resume']);
+    expect(regions()).toEqual(['Pause']);
     const after = studioReads();
     await flush(STUDIO_STATE_POLL_MS * 3);
     expect(studioReads()).toEqual(after);
@@ -522,21 +522,24 @@ describe('a new session in another tab', () => {
 });
 
 describe('the moderator', () => {
-  it('pauses and resumes at aal1 with no two-factor step, reads no studio state and sees nothing else', async () => {
+  it('pauses at aal1 with no two-factor step, has no Resume, reads no studio state and sees nothing else', async () => {
     fake.role = 'moderator';
     fake.aal = 'aal1';
     fake.factors = [];
     await renderBoard();
-    expect(regions()).toEqual(['Pause and resume']);
+    expect(regions()).toEqual(['Pause']);
+    const pause = within(screen.getByRole('region', { name: 'Pause' }));
+    // Only the board resumes the studio (docs/specs/moderator-pause-only.md).
+    expect(pause.getAllByRole('button').map((b) => b.textContent)).toEqual(['Pause agents']);
+    expect(pause.getByText(BOARD_RESUMES, { exact: false })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Pause reason'), { target: { value: 'incident' } });
     fireEvent.click(screen.getByRole('button', { name: 'Pause agents' }));
     await flush();
-    fireEvent.click(screen.getByRole('button', { name: 'Resume agents' }));
-    await flush();
     await flush(STUDIO_STATE_POLL_MS * 2);
-    expect(named('set_paused').map((call) => call.args)).toEqual([{ p_paused: true, p_reason: 'incident' }, { p_paused: false }]);
-    expect(screen.getByText('Agents resumed.')).toBeTruthy();
-    expect(fake.calls.map((call) => call.name)).toEqual(['board_role', 'set_paused', 'set_paused']);
+    expect(named('set_paused').map((call) => call.args)).toEqual([{ p_paused: true, p_reason: 'incident' }]);
+    expect(screen.getByText('Agents paused.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Resume agents' })).toBeNull();
+    expect(fake.calls.map((call) => call.name)).toEqual(['board_role', 'set_paused']);
     expect(fake.selects).toEqual([]);
     expect(fake.mfaCalls).toEqual([]);
   });
@@ -735,7 +738,8 @@ describe('Activity', () => {
 });
 
 describe('Actions', () => {
-  it('pauses with a reason, resumes without one, and rereads the status', async () => {
+  it('pauses with a reason, resumes without one only after the confirm, and rereads the status', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     await renderBoard();
     const before = named('board_studio_state').length;
     const pause = within(screen.getByRole('region', { name: 'Pause and resume' }));
@@ -745,9 +749,18 @@ describe('Actions', () => {
     fireEvent.change(pause.getByLabelText('Pause reason'), { target: { value: 'board' } });
     fireEvent.click(pause.getByRole('button', { name: 'Pause agents' }));
     await flush();
+    // Pause never asks; a stray Resume, dismissed, sends nothing.
+    expect(confirm).not.toHaveBeenCalled();
     fireEvent.click(pause.getByRole('button', { name: 'Resume agents' }));
     await flush();
+    expect(confirm).toHaveBeenCalledWith(RESUME_CONFIRM);
+    expect(named('set_paused')).toHaveLength(2);
+    confirm.mockReturnValue(true);
+    fireEvent.click(pause.getByRole('button', { name: 'Resume agents' }));
+    await flush();
+    expect(confirm).toHaveBeenCalledTimes(2);
     expect(named('set_paused').map((call) => call.args)).toEqual([{ p_paused: true, p_reason: 'spend_limit' }, { p_paused: true }, { p_paused: false }]);
+    expect(pause.getByRole('status').textContent).toBe('Agents resumed.');
     expect(named('board_studio_state').length).toBe(before + 3);
   });
 
