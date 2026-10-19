@@ -20,7 +20,8 @@ import { SOURCE_PARAM } from '../lib/count';
 import { siteEnv } from '../lib/env';
 import { formatClock, formatDateTime, formatInteger, shortSha } from '../lib/format';
 import { legal } from '../lib/legal';
-import { agentsOffline, type Snapshot } from '../lib/source';
+import { agentsOffline } from '../lib/offline';
+import type { Snapshot } from '../lib/source';
 import { useStudio } from '../lib/studio';
 
 // A card's own page, /card/:id (docs/specs/supporter-pages.md), in the card lane: its money shows only

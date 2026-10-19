@@ -5,7 +5,8 @@ import { formatDate, formatInteger, formatUsd, percent } from '../lib/format';
 import { legal } from '../lib/legal';
 import { canFund, DEFAULT_STUDIO_PCT, exampleFromPaid, fundingPlace, fundLink, inFundingOrder, RESERVE_PCT } from '../lib/payment';
 import type { CardDetail } from '../lib/card-source';
-import { agentsOffline, type Card, type Snapshot } from '../lib/source';
+import { agentsOffline } from '../lib/offline';
+import type { Card, Snapshot } from '../lib/source';
 import { Stat } from './Stat';
 import { LinkedText } from './TextPage';
 

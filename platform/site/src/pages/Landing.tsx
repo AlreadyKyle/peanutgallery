@@ -18,7 +18,7 @@ import { siteEnv } from '../lib/env';
 import { useLastVisit } from '../lib/last-visit';
 import { legal } from '../lib/legal';
 import { useLiveHome, type HomeView } from '../lib/live';
-import { agentsOffline } from '../lib/source';
+import { agentsOffline } from '../lib/offline';
 import { useStudioMorph } from '../lib/studio-morph';
 import { teamStrip } from '../lib/roster';
 import { unavailableLine, useStudio, type StudioState } from '../lib/studio';

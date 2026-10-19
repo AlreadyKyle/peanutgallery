@@ -543,11 +543,6 @@ export function supplyFrom(value: unknown): Supply | null {
   };
 }
 
-/** Whether the agents are offline (Supply.offline); a snapshot without a supply reads as not offline. */
-export function agentsOffline(snapshot: Pick<Snapshot, 'supply'>): boolean {
-  return snapshot.supply?.offline === true;
-}
-
 /** The Snapshot the pages read, from the two documents. Throws on a missing key, a wrong type or a malformed figure. */
 export function snapshotFrom(liveDoc: unknown, cardsDoc: unknown): Snapshot {
   const live = checked('/api/live', liveDoc, REQUIRED_KEYS.live);

@@ -8,7 +8,8 @@ import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { formatDay, formatInteger } from '../lib/format';
 import { legal } from '../lib/legal';
-import { agentsOffline, type Card, type Snapshot } from '../lib/source';
+import { agentsOffline } from '../lib/offline';
+import type { Card, Snapshot } from '../lib/source';
 import { useStudio } from '../lib/studio';
 import { useThanks, type ThanksAnswer } from '../lib/thanks';
 

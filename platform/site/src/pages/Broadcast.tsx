@@ -9,7 +9,7 @@ import { copy } from '../lib/copy';
 import { withQrSource } from '../lib/count';
 import { groupCards, fundingPlace } from '../lib/cards';
 import { qrModules, qrPath } from '../lib/qr';
-import { agentsOffline } from '../lib/source';
+import { agentsOffline } from '../lib/offline';
 import { useStudio } from '../lib/studio';
 
 // /broadcast (docs/specs/final-state.md, Channels): a 1920 by 1080 overlay that OBS or any streaming

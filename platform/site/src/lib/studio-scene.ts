@@ -1,7 +1,8 @@
 import type { StudioEra } from './community-types';
 import { copy } from './copy';
 import { onTheTeam, teamStatus } from './roster';
-import { agentsOffline, type Card, type Role, type Snapshot } from './source';
+import { agentsOffline } from './offline';
+import type { Card, Role, Snapshot } from './source';
 
 // The live studio's plan (docs/specs/final-state.md, The live studio): the room an era gives, its
 // stations, and where each agent stands from the live data. Drafting is at the whiteboard, building
