@@ -485,7 +485,9 @@ nav a.active {
   }
 }
 
-/* Below 32rem the name is read out but not drawn: the mark stands for it. */
+/* Below 32rem the name is read out but not drawn: the mark stands for it. The mark alone is 24px
+   wide, so its press area reaches 20px into the side margin on its left (the gutter is never under
+   20px), a 44px square target, while the row and the focus ring stay as drawn (the full pass, S30). */
 @media (max-width: 31.99rem) {
   .wordmark-text {
     position: absolute;
@@ -494,6 +496,17 @@ nav a.active {
     overflow: hidden;
     clip: rect(0 0 0 0);
     white-space: nowrap;
+  }
+
+  .wordmark {
+    position: relative;
+  }
+
+  .wordmark::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: var(--target);
   }
 }
 
@@ -519,6 +532,18 @@ nav a.active {
 
   .nav-links li + li {
     border-top: 0;
+  }
+
+  /* A short page link in the row (FAQ, Team) keeps its width, and its press area reaches into the gap
+     on each side to 44px (the full pass, S30). The gap is never under 16px, so two never meet. */
+  .nav-links a {
+    position: relative;
+  }
+
+  .nav-links a::before {
+    content: '';
+    position: absolute;
+    inset: 0 min(0px, calc(50% - var(--target) / 2));
   }
 
   .topbar-row .menu-button,
@@ -2013,6 +2038,16 @@ button.link:hover:not(:disabled) {
   gap: var(--space-1);
 }
 
+/* A link pressed on its own that sits in a line of text (a more link such as "How the studio is
+   run", a report's first cards in line): a 44px target that keeps its line (the full pass, S30).
+   Padding grows the box to the target and the same negative margin gives the room back, so nothing
+   moves, however many lines the words wrap to. */
+.more-link,
+.rows > li > a {
+  padding-block: max(0px, calc((var(--target) - 1lh) / 2));
+  margin-block: calc(-1 * max(0px, calc((var(--target) - 1lh) / 2)));
+}
+
 /* The avatar sits beside the name and the "AI agent" line; the description and the foot run the
    full width of the box. The third row takes the spare height, so the foot ends at the box's bottom. */
 .agent {
@@ -2219,9 +2254,10 @@ main > .band:first-child .pipe .avatar {
 }
 
 /* Footer -----------------------------------------------------------------
-   A spec sheet (docs/specs/brand.md, Footer): the mark and the studio's line, then two labelled
+   A spec sheet (docs/specs/brand.md, Footer): the mark and the studio's line, then three labelled
    columns of links, one link to a line, then the credit under a hairline. Five columns from 64rem
-   (the brand block takes two), the three link columns side by side from 30rem, one under it. */
+   (the brand block takes two), the three link columns side by side from 30rem, two from 22.5rem
+   (below), one under that. */
 
 .site-footer {
   border-top: 1px solid var(--hairline);
@@ -2285,15 +2321,39 @@ main > .band:first-child .pipe .avatar {
   list-style: none;
 }
 
+/* Every footer link is a 44px target both ways: a short word (Ideas, Terms) takes the width, its
+   words still set from the left, so nothing moves. */
 .footer-row a {
   display: inline-flex;
   align-items: center;
+  min-width: var(--target);
   min-height: var(--target);
 }
 
 .footer-row > .credit {
   padding-top: var(--space-3);
   border-top: 1px solid var(--hairline);
+}
+
+/* A phone (the full pass, S28: the three columns stacked ran about 1,000px): Follow along and Take
+   part sit side by side, and The fine print spans both under them with its four links in the same
+   two columns, so every link lines up with a column above. Below 22.5rem (320px, or larger text) a
+   column is too narrow for the longest link, and the columns stack. */
+@media (min-width: 22.5rem) and (max-width: 29.99rem) {
+  .footer-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .footer-row > .footer-brand,
+  .footer-row > .footer-group:last-of-type,
+  .footer-row > .credit {
+    grid-column: 1 / -1;
+  }
+
+  .footer-group:last-of-type > .footer-links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-3);
+  }
 }
 
 @media (min-width: 30rem) {
