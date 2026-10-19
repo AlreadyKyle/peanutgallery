@@ -200,9 +200,9 @@ describe('/me', () => {
     renderMe();
     await settle();
     fireEvent.change(screen.getByLabelText(copy.me.emailLabel), { target: { value: 'player@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: copy.me.send }));
+    fireEvent.click(screen.getByRole('button', { name: copy.auth.magicLink }));
     await settle();
-    expect(screen.getByText(copy.me.tooMany)).toBeTruthy();
-    expect(screen.queryByText(copy.me.closed)).toBeNull();
+    expect(screen.getByText(copy.auth.limit)).toBeTruthy();
+    expect(screen.queryByText(copy.auth.failed)).toBeNull();
   });
 });

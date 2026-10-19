@@ -126,7 +126,7 @@ describe('/seeds?save=', () => {
     expect(sent.filter((s) => s.url.includes('save_seed'))).toEqual([]);
     expect(pendingSeed()).toBe('dust:v3:abc');
     fireEvent.change(screen.getByLabelText(copy.me.emailLabel), { target: { value: 'player@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: copy.me.send }));
+    fireEvent.click(screen.getByRole('button', { name: copy.auth.magicLink }));
     await settle();
     expect(sent.find((s) => s.url === '/api/community/auth/otp')?.body).toEqual({ email: 'player@example.com', redirectTo: `${window.location.origin}/me` });
     cleanup();
@@ -170,9 +170,9 @@ describe('/seeds?save= publishing', () => {
     renderAt('/seeds?save=dust%3Av3%3Aabc');
     await settle();
     fireEvent.change(screen.getByLabelText(copy.me.emailLabel), { target: { value: 'player@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: copy.me.send }));
+    fireEvent.click(screen.getByRole('button', { name: copy.auth.magicLink }));
     await settle();
-    expect(screen.getByText(copy.me.tooMany)).toBeTruthy();
+    expect(screen.getByText(copy.auth.limit)).toBeTruthy();
   });
 });
 
@@ -238,7 +238,7 @@ describe('the gallery sorts and saving your own seed', () => {
     expect(screen.getByText(copy.seeds.empty)).toBeTruthy();
     expect(screen.queryByRole('group', { name: copy.seeds.sortLabel })).toBeNull();
     expect(screen.getByText(copy.seeds.how)).toBeTruthy();
-    expect(screen.getByRole('link', { name: copy.seeds.signIn }).getAttribute('href')).toBe('/me');
+    expect(screen.getByRole('link', { name: copy.seeds.signIn }).getAttribute('href')).toBe('/sign-in');
     cleanup();
 
     resetSignInOpen();

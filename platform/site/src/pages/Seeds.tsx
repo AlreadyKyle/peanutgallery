@@ -5,7 +5,9 @@ import { Glyph } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
 import { PersonLink } from '../components/Person';
 import { ShowMore } from '../components/ShowMore';
-import { adoptSessionFromLocation, rpc, sendMagicLink, useSignedIn } from '../lib/account';
+import { AuthForm } from '../components/AuthForm';
+import { adoptSessionFromLocation, rememberReturn, rpc, useSignedIn } from '../lib/account';
+import { claimInBackground } from '../lib/arrive';
 import { CommunityError, relativeTime, usePagedCommunity } from '../lib/community';
 import type { SeedSummary } from '../lib/community-types';
 import { copy } from '../lib/copy';
@@ -110,30 +112,11 @@ export function SeedTile({ seed, signedIn }: { seed: SeedSummary; signedIn: bool
 type SaveState = { kind: 'idle' } | { kind: 'saving' } | { kind: 'saved'; id: string } | { kind: 'failed' };
 
 function SaveSignIn() {
-  const id = useId();
-  const [email, setEmail] = useState('');
-  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error' | 'limit'>('idle');
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    setState('sending');
-    // The link lands on /me, the address sign-in is set up for; /me sends the player back here.
-    sendMagicLink(email.trim(), `${window.location.origin}/me`)
-      .then(() => setState('sent'))
-      .catch((error: unknown) => setState(error instanceof CommunityError && error.status === 429 ? 'limit' : 'error'));
-  };
+  // The seed is already kept in this browser (SaveFromLink); signed in here, it saves at once.
   return (
-    <form className="form" onSubmit={submit}>
-      <label htmlFor={`${id}-email`}>{copy.me.emailLabel}</label>
-      <input id={`${id}-email`} type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.currentTarget.value)} />
-      <p>
-        <button type="submit" className="button" disabled={state === 'sending'}>
-          {state === 'sending' ? copy.me.sending : copy.me.send}
-        </button>
-      </p>
-      <p role="status" className="small">
-        {state === 'sent' ? copy.me.sent : state === 'limit' ? copy.me.tooMany : state === 'error' ? copy.me.closed : ''}
-      </p>
-    </form>
+    <div className="auth-panel">
+      <AuthForm title="h3" onSignedIn={claimInBackground} />
+    </div>
   );
 }
 
@@ -341,7 +324,7 @@ export function Seeds() {
           <p>{signedIn || signInOpen ? copy.seeds.how : copy.seeds.howClosed}</p>
           {signedIn || !signInOpen ? null : (
             <p>
-              <Link to="/me">{copy.seeds.signIn}</Link>
+              <Link to="/sign-in" onClick={() => rememberReturn('/seeds')}>{copy.seeds.signIn}</Link>
             </p>
           )}
         </section>

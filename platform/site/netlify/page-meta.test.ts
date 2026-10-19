@@ -55,7 +55,7 @@ describe('the page table', () => {
 
   it('covers every indexed page in the kernel route list, and the edge function runs on exactly those paths', () => {
     // As the sitemap: no versioned legal page, not-found page, design guide, player's page or overlay.
-    const unlisted = ['/no-such-page', GUIDE, '/u/sample-player', '/me', '/broadcast'];
+    const unlisted = ['/no-such-page', GUIDE, '/u/sample-player', '/me', '/broadcast', '/sign-in', '/sign-up', '/forgot-password', '/reset-password'];
     const indexed = PAGE_PATHS.filter((path) => !/\/\d+$/.test(path) && !unlisted.includes(path));
     expect(Object.keys(PAGE_META)).toEqual(indexed);
     expect(config.path).toEqual(Object.keys(PAGE_META));

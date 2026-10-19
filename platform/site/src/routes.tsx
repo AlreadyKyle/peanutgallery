@@ -4,6 +4,7 @@ import { Broadcast, BROADCAST_PATH } from './pages/Broadcast';
 import { CardPage } from './pages/CardPage';
 import { Faq } from './pages/Faq';
 import { Goals } from './pages/Goals';
+import { ForgotPasswordPage, ResetPasswordPage, SignInPage, SignUpPage } from './pages/Auth';
 import { Me } from './pages/Me';
 import { Profile } from './pages/Profile';
 import { Seeds } from './pages/Seeds';
@@ -44,6 +45,11 @@ export const pageRoutes: readonly PageRoute[] = [
   { path: '/seeds', element: <Seeds /> },
   { path: '/u/:handle', element: <Profile /> },
   { path: '/me', element: <Me /> },
+  // The account pages (docs/specs/accounts.md): sign in, sign up and reset a password.
+  { path: '/sign-in', element: <SignInPage /> },
+  { path: '/sign-up', element: <SignUpPage /> },
+  { path: '/forgot-password', element: <ForgotPasswordPage /> },
+  { path: '/reset-password', element: <ResetPasswordPage /> },
   { path: '/faq', element: <Faq /> },
   // The broadcast overlay for streaming tools: unlisted, not indexed, drawn without the top bar and footer.
   { path: BROADCAST_PATH, element: <Broadcast /> },

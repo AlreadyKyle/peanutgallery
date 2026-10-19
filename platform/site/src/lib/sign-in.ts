@@ -4,14 +4,34 @@ import { useEffect, useState } from 'react';
 // Supabase Auth's public settings (/api/community/auth/settings). While email sign-in is off, the
 // site drops its profile prompts (Sign in, Make a free profile, Keep this card, Pitch an idea)
 // rather than send people to a form that then says it is closed. Paying never needs an account, so
-// nothing about money waits on this. Kernel, so the perks panel on /contribute and /thanks may read
-// it: it imports only React and reads only the site's own origin.
+// nothing about money waits on this. The same answer names the sign-in providers that are switched on
+// (docs/specs/accounts.md), so a Continue with button shows only once its provider works. Kernel, so
+// the perks panel on /contribute and /thanks may read it: it imports only React and reads only the
+// site's own origin.
 
 const URL = '/api/community/auth/settings';
 const KEY = 'mm:sign-in-open';
+const PROVIDERS_KEY = 'mm:sign-in-providers';
+
+/** The providers a button may be drawn for; any other name in the answer is ignored. */
+const KNOWN_PROVIDERS = ['google', 'apple', 'github', 'discord'];
 
 let known: boolean | null = null;
+let knownProviders: string[] | null = null;
 let asking: Promise<boolean | null> | null = null;
+
+function providersFrom(value: unknown): string[] | null {
+  return Array.isArray(value) ? KNOWN_PROVIDERS.filter((name) => value.includes(name)) : null;
+}
+
+function storedProviders(): string[] | null {
+  try {
+    const value = window.localStorage.getItem(PROVIDERS_KEY);
+    return value === null ? null : providersFrom(JSON.parse(value));
+  } catch {
+    return null;
+  }
+}
 
 function stored(): boolean | null {
   try {
@@ -27,7 +47,16 @@ function ask(): Promise<boolean | null> {
     .then(async (response) => {
       const type = response.headers.get('content-type') ?? '';
       if (!response.ok || !type.includes('application/json')) return null;
-      const body = (await response.json()) as { signIn?: unknown };
+      const body = (await response.json()) as { signIn?: unknown; providers?: unknown };
+      const providers = providersFrom(body.providers);
+      if (providers !== null) {
+        knownProviders = providers;
+        try {
+          window.localStorage.setItem(PROVIDERS_KEY, JSON.stringify(providers));
+        } catch {
+          // Without storage the next page asks again.
+        }
+      }
       return typeof body.signIn === 'boolean' ? body.signIn : null;
     })
     .catch(() => null)
@@ -65,8 +94,28 @@ export function useSignInOpen(): boolean {
   return open;
 }
 
+/**
+ * The sign-in providers switched on in Supabase Auth, in the order the buttons are drawn. Starts from
+ * this tab's answer or the last one stored, and is empty until an answer says otherwise, so a button
+ * never shows for a provider that is off.
+ */
+export function useSignInProviders(): readonly string[] {
+  const [providers, setProviders] = useState<readonly string[]>(() => knownProviders ?? storedProviders() ?? []);
+  useEffect(() => {
+    let live = true;
+    void ask().then(() => {
+      if (live && knownProviders !== null) setProviders(knownProviders);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  return providers;
+}
+
 /** For tests: forget this tab's answer. */
 export function resetSignInOpen(): void {
   known = null;
+  knownProviders = null;
   asking = null;
 }

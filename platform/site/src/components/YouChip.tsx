@@ -5,7 +5,7 @@ import { useSignInOpen } from '../lib/sign-in';
 import { PersonAvatar } from './Person';
 
 // The top bar's you slot (docs/specs/place.md): the frame knows who is here. Signed out, a quiet
-// Sign in link to /me; signed in, the player's avatar in its frame and their level, a link to their
+// Sign in link to /sign-in; signed in, the player's avatar in its frame and their level, a link to their
 // desk. It never asks for anything and never stands between a visitor and Contribute: paying needs
 // no account. While the profile loads, or when it cannot be read, the slot keeps its place with the
 // plain link, so the bar never jumps. While sign-in is closed a visitor sees no slot at all.
@@ -16,7 +16,7 @@ export function YouChip() {
   if (me.state === 'signed-out' && !open) return null;
   if (me.state !== 'ready') {
     return (
-      <Link className="you-chip" to="/me" data-you={me.state === 'signed-out' ? 'out' : 'loading'}>
+      <Link className="you-chip" to={me.state === 'signed-out' ? '/sign-in' : '/me'} data-you={me.state === 'signed-out' ? 'out' : 'loading'}>
         {me.state === 'signed-out' ? copy.you.signIn : copy.nav.me}
       </Link>
     );

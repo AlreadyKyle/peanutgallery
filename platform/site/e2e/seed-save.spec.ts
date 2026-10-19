@@ -74,8 +74,8 @@ test('a signed-out player signs in by email and the save completes when the link
   const save = page.getByRole('region', { name: 'Save this seed' });
   await expect(save).toContainText('Sign in to keep this seed on your profile.');
   await save.getByLabel('Email').fill('player@example.com');
-  await save.getByRole('button', { name: 'Send the link' }).click();
-  await expect(save.getByRole('status')).toHaveText('Check your email for the link. It works once.');
+  await save.getByRole('button', { name: 'Email me a sign-in link instead' }).click();
+  await expect(save.getByRole('status')).toContainText('We sent a sign-in link to player@example.com. It works once.');
   const origin = new URL(page.url()).origin;
   expect(posts).toEqual([{ path: '/api/community/auth/otp', body: { email: 'player@example.com', redirectTo: `${origin}/me` }, auth: null }]);
 

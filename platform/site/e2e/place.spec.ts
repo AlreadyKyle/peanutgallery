@@ -15,7 +15,7 @@ test('signed out, the top bar offers Sign in and the floor names every station',
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
   await expect(page.locator('.you-chip')).toHaveText('Sign in');
-  await expect(page.locator('.you-chip')).toHaveAttribute('href', '/me');
+  await expect(page.locator('.you-chip')).toHaveAttribute('href', '/sign-in');
   // The room is one clean scene with no labels floating over it (the board, 18 October 2026); the rail
   // lists the six stations, Fund first.
   await expect(page.locator('.floor-plate .station-tags, .floor-plate .station-pill')).toHaveCount(0);
@@ -96,7 +96,7 @@ test('Pitch an idea sends a signed-out visitor to sign in and back to the form, 
   const posts = await answerCommunity(page);
   await page.goto('/suggest');
   await page.locator('[aria-labelledby="suggest-send"]').getByRole('link', { name: 'Sign in', exact: true }).click();
-  await expect(page).toHaveURL(/\/me$/);
+  await expect(page).toHaveURL(/\/sign-in$/);
   // The link opens in a fresh load, as an email link does.
   await page.goto('about:blank');
   await page.goto('/me#access_token=e2e-link-access&refresh_token=e2e-link-refresh&expires_in=3600');

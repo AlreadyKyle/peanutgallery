@@ -122,7 +122,7 @@ for (const viewport of WIDTHS) {
       // The you slot (docs/specs/place.md): Sign in beside the wordmark, or on a phone the menu's
       // Your desk.
       if (viewport.width < 480) await expect(nav.getByRole('link', { name: 'Your desk', exact: true })).toHaveAttribute('href', '/me');
-      else await expect(nav.getByRole('link', { name: 'Sign in', exact: true })).toHaveAttribute('href', '/me');
+      else await expect(nav.getByRole('link', { name: 'Sign in', exact: true })).toHaveAttribute('href', '/sign-in');
       // Discord, goals and seeds are in the footer, not the top bar (docs/specs/brand.md).
       await expect(nav.getByRole('link', { name: 'Discord' })).toHaveCount(0);
       await expect(nav.getByRole('link', { name: 'Home' })).toHaveCount(0);

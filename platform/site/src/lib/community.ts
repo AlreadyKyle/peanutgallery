@@ -17,6 +17,8 @@ export class CommunityError extends Error {
   constructor(
     message: string,
     readonly status: number | null,
+    /** An auth refusal's code (weak, wrong, unconfirmed, limit, closed, exists, same, signed-out). */
+    readonly code: string | null = null,
   ) {
     super(message);
   }

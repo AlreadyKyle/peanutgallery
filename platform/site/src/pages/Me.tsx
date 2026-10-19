@@ -1,5 +1,5 @@
-import { useEffect, useId, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { CREATURE_COLOURS } from '../components/Avatar';
 import { stageWords } from '../components/Floor';
 import { Glyph, RarityTag } from '../components/Glyph';
@@ -7,30 +7,31 @@ import { PageHeader } from '../components/PageHeader';
 import { Perks } from '../components/Perks';
 import { noteFromSpec, PersonAvatar } from '../components/Person';
 import { ProfileHead } from '../components/ProfileView';
+import { AuthForm, NewPasswordForm } from '../components/AuthForm';
 import {
   adoptLinkErrorFromLocation,
   adoptSessionFromLocation,
   rememberClaim,
   rpc,
-  sendMagicLink,
   signOut,
+  takeArrival,
   takeClaim,
-  takeReturn,
   useMyProfile,
   type LinkError,
 } from '../lib/account';
+import { arrival, claimInBackground } from '../lib/arrive';
 import { CommunityError, relativeTime } from '../lib/community';
 import type { AvatarSpec, Profile } from '../lib/community-types';
 import { copy } from '../lib/copy';
-import { pendingFollowPath, unfollowCard, useFollows } from '../lib/follows';
+import { unfollowCard, useFollows } from '../lib/follows';
 import { legal } from '../lib/legal';
-import { pendingSeedPath } from '../lib/seed-link';
 import { useSignInOpen } from '../lib/sign-in';
 import { useStudio } from '../lib/studio';
 import { TIERS } from '../lib/xp';
 
-// /me (docs/specs/final-state.md, Identity and anonymity; docs/specs/place.md, Your desk): sign in by
-// a magic link, then the player's desk: who they are here (avatar, level, XP and what the next level
+// /me (docs/specs/final-state.md, Identity and anonymity; docs/specs/place.md, Your desk;
+// docs/specs/accounts.md): signed out, the sign-in form, and where every emailed link and provider
+// sign-in lands; then the player's desk: who they are here (avatar, level, XP and what the next level
 // unlocks), their cards and where each one is now, the cards they follow, the ideas they pitched and
 // how far each got, and their badges. Under that, editing the profile (the name shown on the site, the
 // avatar from the parts their level has unlocked, the frame, the flair, whether contributions show
@@ -74,41 +75,39 @@ export function framesFor(profile: Profile): string[] {
   return [...tiers, ...rarities];
 }
 
-function SignIn({ linkError }: { linkError: LinkError | null }) {
-  const id = useId();
-  const [email, setEmail] = useState('');
-  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error' | 'limit'>('idle');
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    setState('sending');
-    sendMagicLink(email.trim(), `${window.location.origin}/me`)
-      .then(() => setState('sent'))
-      .catch((error: unknown) => setState(error instanceof CommunityError && error.status === 429 ? 'limit' : 'error'));
-  };
+function SignIn({ linkError, onSignedIn }: { linkError: LinkError | null; onSignedIn: () => void }) {
   return (
-    <section className="section" aria-labelledby="me-sign-in">
-      <h2 id="me-sign-in">{copy.me.signInTitle}</h2>
+    <section className="section" aria-label={copy.auth.signIn}>
       {/* A link that expired or was used already lands here with the error in the fragment. */}
-      {linkError === null || state !== 'idle' ? null : (
+      {linkError === null ? null : (
         <p className="notice-plain" role="alert">
           <Glyph name="clock" />
           <span>{linkError === 'expired' ? copy.me.linkExpired : copy.me.linkFailed}</span>
         </p>
       )}
-      <p>{copy.me.signInBody}</p>
-      <form className="form" onSubmit={submit}>
-        <label htmlFor={`${id}-email`}>{copy.me.emailLabel}</label>
-        <input id={`${id}-email`} type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.currentTarget.value)} />
-        <p>
-          <button type="submit" className="button" disabled={state === 'sending'}>
-            {state === 'sending' ? copy.me.sending : copy.me.send}
-          </button>
+      <div className="auth-panel">
+        <AuthForm title="h2" onSignedIn={onSignedIn} />
+      </div>
+    </section>
+  );
+}
+
+/** The desk's password: set one (a player who signed in by link or a provider) or change it. */
+function PasswordSection() {
+  const [saved, setSaved] = useState(0);
+  return (
+    <section className="section" aria-labelledby="me-password">
+      <h2 id="me-password">{copy.auth.passwordTitle}</h2>
+      <p>{copy.auth.passwordBody}</p>
+      <div className="auth-panel auth-panel-plain">
+        <NewPasswordForm key={saved} onDone={() => setSaved((n) => n + 1)} />
+      </div>
+      {saved > 0 ? (
+        <p className="notice-plain" role="status">
+          <Glyph name="check" />
+          <span>{copy.auth.passwordSaved}</span>
         </p>
-        <p role="status" className="small">
-          {state === 'sent' ? copy.me.sent : state === 'limit' ? copy.me.tooMany : state === 'error' ? copy.me.closed : ''}
-        </p>
-      </form>
-      <p className="small muted">{copy.me.optional}</p>
+      ) : null}
     </section>
   );
 }
@@ -445,6 +444,7 @@ function KeepNote() {
 
 export function Me() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [params] = useSearchParams();
   const keep = params.get('keep') === '1';
   const [linkError, setLinkError] = useState<LinkError | null>(null);
@@ -476,29 +476,38 @@ export function Me() {
       })
       .catch(() => setClaim('none'));
   }, [claim, me.state, reload, keep, navigate]);
+  // A player who signed in to save a seed (/seeds?save=) goes back to finish the save; one who signed
+  // in to follow a card goes back to the card (docs/specs/card-follows.md); one who signed in from
+  // another page (Pitch an idea) goes back to it. Otherwise they stay on the desk, which claims.
+  const arrive = useCallback(() => {
+    const next = arrival();
+    if (next.to === 'desk') {
+      setClaim('wanted');
+      return;
+    }
+    claimInBackground();
+    navigate(next.path, { replace: true });
+  }, [navigate]);
   useEffect(() => {
     // A link that expired or was used already says so, and the error leaves the address.
     const failed = adoptLinkErrorFromLocation();
     if (failed !== null) setLinkError(failed);
-    // A player who signed in to save a seed (/seeds?save=) goes back to finish the save; one who
-    // signed in to follow a card goes back to the card (docs/specs/card-follows.md); one who signed in
-    // from another page (Pitch an idea) goes back to it.
-    if (!adoptSessionFromLocation()) return;
-    // Keep this card stays on the desk to show the card arrive; an older return path is dropped.
-    if (takeClaim()) {
-      takeReturn();
-      setClaim('wanted');
+    if (adoptSessionFromLocation()) {
+      // A password reset link signs the player in to choose a new password.
+      if (takeArrival() === 'recovery') {
+        navigate('/reset-password', { replace: true });
+        return;
+      }
+      arrive();
       return;
     }
-    const back = pendingSeedPath() ?? pendingFollowPath() ?? takeReturn();
-    if (back === null) {
+    // A password sign-in on /sign-in that had nowhere else to go.
+    if ((location.state as { arrived?: unknown } | null)?.arrived === true) {
+      navigate('/me', { replace: true, state: null });
       setClaim('wanted');
-      return;
     }
-    // Leaving the desk at once: claim the guest payments now rather than waiting for it to draw.
-    rpc<{ claimed: number }>('claim_contributions').catch(() => undefined);
-    navigate(back, { replace: true });
-  }, [navigate]);
+    // Once, on landing: the address is read as it arrived.
+  }, []);
   return (
     <main className="wide">
       <div className="band">
@@ -510,22 +519,30 @@ export function Me() {
             {open ? (
               <>
                 {keep ? <KeepNote /> : null}
-                <SignIn linkError={linkError} />
+                {/* The form, and beside it what a profile adds over paying as a guest. */}
+                <div className="auth-layout" data-aside="">
+                  <SignIn linkError={linkError} onSignedIn={arrive} />
+                  <div className="section">
+                    <Perks />
+                  </div>
+                </div>
               </>
             ) : (
-              <section className="section" aria-labelledby="me-closed">
-                <h2 id="me-closed">{copy.me.closedTitle}</h2>
-                <p>{copy.me.closedBody}</p>
-                <p>
-                  <Link className="button" to="/#fund">
-                    {copy.desk.fundOne}
-                  </Link>
-                </p>
-              </section>
+              <>
+                <section className="section" aria-labelledby="me-closed">
+                  <h2 id="me-closed">{copy.me.closedTitle}</h2>
+                  <p>{copy.me.closedBody}</p>
+                  <p>
+                    <Link className="button" to="/#fund">
+                      {copy.desk.fundOne}
+                    </Link>
+                  </p>
+                </section>
+                <div className="section">
+                  <Perks />
+                </div>
+              </>
             )}
-            <div className="section">
-              <Perks />
-            </div>
           </>
         ) : me.state === 'loading' ? (
           <p className="muted" aria-busy="true">
@@ -558,6 +575,7 @@ export function Me() {
               <Editor profile={me.profile} onSaved={me.reload} />
             </section>
             <Claim onClaimed={me.reload} />
+            <PasswordSection />
           </>
         )}
       </div>

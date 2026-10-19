@@ -229,7 +229,7 @@ describe('Site chrome', () => {
     ).toEqual([
       [copy.studioName, '/'],
       // The you slot (docs/specs/place.md): Sign in for a visitor, the player's desk once signed in.
-      [copy.you.signIn, '/me'],
+      [copy.you.signIn, '/sign-in'],
       // The top bar keeps to what a first visit needs, Ideas first in the links since players pitch there;
       // goals and seeds are in the footer (docs/specs/brand.md, the second review).
       [copy.nav.suggest, '/suggest'],
@@ -262,7 +262,7 @@ describe('Site chrome', () => {
       await waitFor(() => expect(window.localStorage.getItem('mm:sign-in-open')).toBe('0'));
       const hrefs = (root: HTMLElement) => within(root).getAllByRole('link').map((link) => link.getAttribute('href'));
       expect(hrefs(nav())).toContain('/suggest');
-      expect(hrefs(nav())).not.toContain('/me');
+      expect(hrefs(nav())).not.toContain('/sign-in');
       expect(hrefs(nav())).toContain('/team');
       const footer = screen.getByRole('contentinfo');
       expect(hrefs(footer)).toContain('/suggest');

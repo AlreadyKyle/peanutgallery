@@ -246,7 +246,7 @@ export function Suggest() {
                 <span>{copy.suggest.safety}</span>
               </p>
               <p>
-                <Link className="button" to="/me" onClick={() => rememberReturn('/suggest#suggest-send')}>
+                <Link className="button" to="/sign-in" onClick={() => rememberReturn('/suggest#suggest-send')}>
                   {copy.suggest.signIn}
                 </Link>
               </p>

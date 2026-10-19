@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { COMMUNITY_API, type Profile } from './community-types';
 import { CommunityError } from './community';
 
-// A player's account (docs/specs/final-state.md, Identity and anonymity). An account is optional;
-// contributing never needs one. Sign-in is a magic link. The page holds no Supabase client and
-// talks only to its own origin (the CSP's connect-src is 'self'): the community function sends the
-// link, refreshes the session and runs the player's RPCs under their token. The link lands on /me
-// with the session in the address's fragment, which this module reads once and clears.
+// A player's account (docs/specs/final-state.md, Identity and anonymity; docs/specs/accounts.md). An
+// account is optional; contributing never needs one. A player signs up with an email and a password
+// (confirmed by a link), or continues with a provider (Google, Apple, GitHub, Discord) once it is on,
+// or asks for a one-time sign-in link. The page holds no Supabase client and talks only to its own
+// origin (the CSP's connect-src is 'self'): the community function signs in, sends the emails,
+// refreshes the session and runs the player's RPCs under their token. A link or a provider lands on
+// /me with the session in the address's fragment, which this module reads once and clears.
 
 const KEY = 'mm:player-session';
 
@@ -52,33 +54,52 @@ export function sessionFromHash(hash: string, now = Date.now()): Session | null 
   return { accessToken, refreshToken, expiresAt: now + (Number.isFinite(expiresIn) ? expiresIn : 3600) * 1000 };
 }
 
-/** Takes a session from the address bar, if the magic link put one there, and clears it from history. */
+/** What a fragment's session came from: a password reset link (recovery), else any other sign-in. */
+export type Arrival = 'recovery' | 'sign-in';
+
+let arrived: Arrival | null = null;
+
+/** Takes a session from the address bar, if a link or a provider put one there, and clears it from history. */
 export function adoptSessionFromLocation(): boolean {
   if (typeof window === 'undefined' || !window.location.hash.includes('access_token')) return false;
   const session = sessionFromHash(window.location.hash);
+  const type = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('type');
   history.replaceState(null, '', window.location.pathname + window.location.search);
   if (session === null) return false;
+  arrived = type === 'recovery' ? 'recovery' : 'sign-in';
   writeSession(session);
   return true;
+}
+
+/** How the last adopted session arrived, read once (a reset link sends the player to choose a password). */
+export function takeArrival(): Arrival | null {
+  const was = arrived;
+  arrived = null;
+  return was;
 }
 
 /** Why a magic link did not sign the player in: it expired (or was used already), or it failed. */
 export type LinkError = 'expired' | 'failed';
 
-/** Reads a failed magic link's fragment (#error=access_denied&error_code=otp_expired&error_description=…). */
+/** Reads a failed link's or provider's answer (#error=access_denied&error_code=otp_expired&error_description=…). */
 export function linkErrorFromHash(hash: string): LinkError | null {
-  const params = new URLSearchParams(hash.replace(/^#/, ''));
+  const params = new URLSearchParams(hash.replace(/^[#?]/, ''));
   const code = params.get('error_code');
   if (params.get('error') === null && code === null) return null;
   return code === 'otp_expired' ? 'expired' : 'failed';
 }
 
-/** Takes a failed magic link's error from the address bar, if there is one, and clears it from history. */
+/**
+ * Takes a failed link's error from the address bar, if there is one, and clears it from history. A
+ * provider may put it in the query rather than the fragment.
+ */
 export function adoptLinkErrorFromLocation(): LinkError | null {
   if (typeof window === 'undefined') return null;
-  const error = linkErrorFromHash(window.location.hash);
-  if (error !== null) history.replaceState(null, '', window.location.pathname + window.location.search);
-  return error;
+  const inHash = linkErrorFromHash(window.location.hash);
+  const inQuery = inHash === null ? linkErrorFromHash(window.location.search) : null;
+  if (inHash !== null) history.replaceState(null, '', window.location.pathname + window.location.search);
+  else if (inQuery !== null) history.replaceState(null, '', window.location.pathname);
+  return inHash ?? inQuery;
 }
 
 const RETURN = 'mm:return-to';
@@ -125,8 +146,12 @@ export function takeClaim(): boolean {
   }
 }
 
+/** Signs out here at once, and ends the session on the server too (best effort). */
 export function signOut(): void {
+  const session = readSession();
+  held = null;
   writeSession(null);
+  if (session !== null) void post('/auth/signout', {}, session.accessToken).catch(() => undefined);
 }
 
 async function post<T>(path: string, body: unknown, token?: string): Promise<T> {
@@ -141,13 +166,78 @@ async function post<T>(path: string, body: unknown, token?: string): Promise<T> 
     throw new CommunityError('offline', null);
   }
   const type = response.headers.get('content-type') ?? '';
-  if (!response.ok || !type.includes('application/json')) throw new CommunityError(`status ${response.status}`, response.status);
+  if (!response.ok || !type.includes('application/json')) {
+    let code: string | null = null;
+    if (type.includes('application/json')) {
+      const body = (await response.json().catch(() => null)) as { code?: unknown } | null;
+      code = typeof body?.code === 'string' ? body.code : null;
+    }
+    throw new CommunityError(`status ${response.status}`, response.status, code);
+  }
   return (await response.json()) as T;
 }
 
-export async function sendMagicLink(email: string, redirectTo: string): Promise<void> {
+/** Where every emailed link and provider sign-in lands: /me, which reads the session and sends the player on. */
+export function landingUrl(): string {
+  return `${window.location.origin}/me`;
+}
+
+export async function sendMagicLink(email: string, redirectTo: string = landingUrl()): Promise<void> {
   await post('/auth/otp', { email, redirectTo });
 }
+
+type TokenAnswer = { access_token: string; refresh_token: string; expires_in: number };
+
+function keep(answer: TokenAnswer): void {
+  writeSession({ accessToken: answer.access_token, refreshToken: answer.refresh_token, expiresAt: Date.now() + answer.expires_in * 1000 });
+}
+
+/** Signs in with an email and password; the session is kept at once. */
+export async function signInWithPassword(email: string, password: string): Promise<void> {
+  keep(await post<TokenAnswer>('/auth/password', { email, password }));
+}
+
+/**
+ * Makes an account. 'confirm' while the studio asks for the email to be confirmed (the link in the
+ * email signs the player in on /me), else the player is signed in at once.
+ */
+export async function signUp(email: string, password: string): Promise<'confirm' | 'signed-in'> {
+  const answer = await post<Partial<TokenAnswer> & { confirm?: boolean }>('/auth/signup', { email, password, redirectTo: landingUrl() });
+  if (typeof answer.access_token === 'string' && typeof answer.refresh_token === 'string') {
+    keep({ access_token: answer.access_token, refresh_token: answer.refresh_token, expires_in: Number(answer.expires_in) || 3600 });
+    return 'signed-in';
+  }
+  return 'confirm';
+}
+
+/** Emails a link that signs the player in to choose a new password. */
+export async function sendPasswordReset(email: string): Promise<void> {
+  await post('/auth/recover', { email, redirectTo: landingUrl() });
+}
+
+/** Emails the account's confirmation link again. */
+export async function resendConfirmation(email: string): Promise<void> {
+  await post('/auth/resend', { email, redirectTo: landingUrl() });
+}
+
+/** Sets the signed-in player's password (after a reset link, or from their desk). */
+export async function setNewPassword(password: string): Promise<void> {
+  const token = await freshToken();
+  if (token === null) throw new CommunityError('signed out', 401, 'signed-out');
+  await post('/auth/new-password', { password }, token);
+}
+
+/** The sign-in providers the site has a button for. */
+export const PROVIDERS = ['google', 'apple', 'github', 'discord'] as const;
+export type Provider = (typeof PROVIDERS)[number];
+
+/** Continue with a provider: the community function sends the player on to it, and it comes back to /me. */
+export function providerUrl(provider: Provider): string {
+  return `${COMMUNITY_API}/auth/authorize?provider=${provider}&redirectTo=${encodeURIComponent(landingUrl())}`;
+}
+
+/** The shortest password sign-up takes (the function and Supabase hold the same floor). */
+export const PASSWORD_MIN = 8;
 
 /** The refresh in flight, so readers that ask at once spend the refresh token once, not in a race. */
 let refreshing: Promise<string | null> | null = null;
