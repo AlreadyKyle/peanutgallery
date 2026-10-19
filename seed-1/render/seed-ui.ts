@@ -158,4 +158,7 @@ export function offerSeed(
   dialog.addEventListener('cancel', () => dismiss(), { once: true });
   if (typeof dialog.showModal === 'function') dialog.showModal();
   else dialog.setAttribute('open', '');
+  // A modal dialog focuses its first button, Start from this seed. When the player has a game of their
+  // own to replace, the focus starts on Keep my game instead, so a stray Enter or Space never swaps it.
+  if (own !== null) keep.focus();
 }

@@ -1,8 +1,15 @@
 import { Link } from 'react-router-dom';
 import { copy } from '../lib/copy';
+import { siteEnv } from '../lib/env';
 
 /** Where an empty list sends the reader next: a page of the site, or the game's own address. */
 export type EmptyNext = { readonly to: string; readonly label: string };
+
+/** The next step when the page's own is not open: play the game, or the cards to fund without a play address. */
+export function playNext(): EmptyNext {
+  const play = siteEnv().playUrl;
+  return play === '' ? { to: '/', label: copy.roadmapLink } : { to: play, label: copy.emptyState.playDust };
+}
 
 /**
  * What a list says when it has nothing to show (docs/specs/brand.md, the second review): a dashed

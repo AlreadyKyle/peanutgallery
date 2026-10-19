@@ -135,15 +135,19 @@ export function Goals() {
                   </>
                 )}
               </p>
-              <Track doc={{ ...doc.data, goals }} />
+              {/* With no milestone the track would measure the total against itself and draw full, as
+                  if a goal were reached, so it waits for the first milestone. */}
               {goals.length === 0 ? (
                 <p className="muted">{copy.goals.none}</p>
               ) : (
-                <ol className="goals-list">
-                  {goals.map((goal) => (
-                    <Milestone key={goal.id} goal={goal} />
-                  ))}
-                </ol>
+                <>
+                  <Track doc={{ ...doc.data, goals }} />
+                  <ol className="goals-list">
+                    {goals.map((goal) => (
+                      <Milestone key={goal.id} goal={goal} />
+                    ))}
+                  </ol>
+                </>
               )}
             </>
           )}

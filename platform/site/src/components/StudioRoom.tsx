@@ -192,8 +192,11 @@ function AgentFigure({ place }: { place: AgentPlace }) {
   );
 }
 
-function doingLine(place: AgentPlace): string {
-  return `${place.role.name}, ${place.role.title}. ${place.doing}`;
+/** An agent's accessible name: the role, then what it is doing. */
+export function doingLine(place: AgentPlace): string {
+  // A role whose name is its title is named once, as the facts under the room name it.
+  const who = place.role.title === place.role.name ? place.role.name : `${place.role.name}, ${place.role.title}`;
+  return `${who}. ${place.doing}`;
 }
 
 /** The role card an agent shows on hover, focus or tap: its name, role, what it is doing, the link. */

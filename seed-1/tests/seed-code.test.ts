@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { loadConfigFromDir } from '../bots/config';
 import { greedyTick } from '../bots/greedy';
@@ -5,8 +7,9 @@ import { serializeState } from '../sim/save';
 import { createSim } from '../sim/sim';
 import { decodeSeed, encodeSeed, MAX_SEED_LENGTH, SEED_LIMITS, seedFromSearch, seedIsPlausible, seedLink } from '../render/seed-code';
 import { BACKUP_KEY, SAVE_KEY, SEED_RUN_KEY } from '../render/game';
-import { keepBackup } from '../render/seed-ui';
-import { FIXTURE_CONFIG_DIR } from './paths';
+import { keepBackup, offerSeed, type SeedOfferElements } from '../render/seed-ui';
+import { parseStrings } from '../render/strings';
+import { FIXTURE_CONFIG_DIR, LIVE_CONTENT_DIR } from './paths';
 
 // Seeds (docs/specs/final-state.md, Seeds and instances): dust:v<saveVersion>:<base64url(save JSON)>.
 const config = loadConfigFromDir(FIXTURE_CONFIG_DIR);
@@ -104,5 +107,34 @@ describe('the backup before a seed', () => {
     const empty = store({});
     keepBackup(empty);
     expect(empty.map.size).toBe(0);
+  });
+});
+
+describe('the seed offer', () => {
+  const strings = parseStrings(JSON.parse(readFileSync(join(LIVE_CONTENT_DIR, 'strings.json'), 'utf8')));
+
+  function offer(own: ReturnType<typeof createSim> | null) {
+    const focused: string[] = [];
+    const node = (name: string) => ({
+      textContent: '',
+      hidden: false,
+      addEventListener() {},
+      focus: () => focused.push(name),
+    });
+    const dialog = { open: false, addEventListener() {}, showModal() { this.open = true; }, close() { this.open = false; } };
+    const elements = { dialog, title: node('title'), body: node('body'), replace: node('replace'), start: node('start'), keep: node('keep') };
+    const store = { getItem: () => null, setItem() {} };
+    offerSeed(elements as unknown as SeedOfferElements, played(60), own, config, strings, store, () => {}, () => {});
+    return { focused, dialog };
+  }
+
+  it('starts on Keep my game when the player has a game to lose, so Enter never replaces it', () => {
+    const { focused, dialog } = offer(played(30));
+    expect(dialog.open).toBe(true);
+    expect(focused).toEqual(['keep']);
+  });
+
+  it('leaves the focus where the dialog puts it when there is no game to lose', () => {
+    expect(offer(null).focused).toEqual([]);
   });
 });

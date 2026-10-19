@@ -9,7 +9,7 @@ import { createDailyGame, DAILY_KEY, DAILY_PARAM, dailyFromSearch, freshDaily, p
 import { attachDailyEntry, DailyRun } from './daily-ui';
 import { describeForkEffect, describePerk, devilCaughtWords, milestoneWords, orderWords, weatherView } from './depth';
 import { fill, formatDust, formatDuration, formatPercent } from './format';
-import { Game, SAVE_INTERVAL_MS, SAVE_KEY } from './game';
+import { Game, keepUnreadable, SAVE_INTERVAL_MS, SAVE_KEY } from './game';
 import { Hud } from './hud';
 import { loadGameData, type GameData } from './load';
 import { loadNextCard, showNextCard } from './next-card';
@@ -43,12 +43,14 @@ function storage(): Storage | null {
 }
 
 // Storage errors (a disabled or unavailable store) leave the save unread, so
-// the game starts fresh rather than throwing before it can render.
+// the game starts fresh rather than throwing before it can render. A save that does not parse is kept
+// under its own key first, since the fresh game saves over it within seconds.
 function readSave(): { state: SimState; savedAt: number | null } | null {
   try {
     const raw = storage()?.getItem(SAVE_KEY) ?? null;
     if (raw === null) return null;
     const state = parseSavedState(raw);
+    if (state === null) keepUnreadable(storage(), raw);
     return state === null ? null : { state, savedAt: parseSavedAt(raw) };
   } catch {
     return null;

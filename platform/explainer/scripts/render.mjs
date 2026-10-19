@@ -33,8 +33,13 @@ const value = (name) => {
 };
 
 const CUTS = ['wide', 'tall'];
-/** The poster: the closing plate, the mark over the wordmark and the closing line, a second before the end. */
-const posterFrame = (composition) => composition.durationInFrames - 60;
+/**
+ * The poster: the team scene, the agents under the line that says what they do. The wide cut waits for
+ * the whole roster (16 s); the phone cut stops at its first two rows (12.5 s), so its bottom stays
+ * empty for the play pill (e2e/explainer-poster.spec.ts). Frames at 60 fps.
+ */
+const POSTER_FRAME = { 'explainer-wide': 960, 'explainer-tall': 750 };
+const posterFrame = (composition) => POSTER_FRAME[composition.id];
 
 function chrome() {
   if (process.env.REMOTION_CHROME) return process.env.REMOTION_CHROME;

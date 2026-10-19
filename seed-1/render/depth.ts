@@ -25,7 +25,7 @@ import {
 } from '../sim/sim';
 import type { ForkEffect, ForkOption, OrderState, PerkRow, SimConfig, SimState, UnlockRow, WeatherKind } from '../sim/types';
 import { formatTimes } from './a11y';
-import { fill, formatDust, formatPercent, groupThousands } from './format';
+import { fill, formatDust, formatPercent, groupThousands, pluralName } from './format';
 import type { Strings } from './strings';
 
 function unitName(config: SimConfig, unit: string): string {
@@ -63,7 +63,7 @@ export function weatherView(state: SimState, config: SimConfig, strings: Strings
   return { kind, effect: describeWeather(kind, config, strings), secondsLeft: left };
 }
 
-/** What a perk does, from its effect: "Strikes ×3", "Each season starts with 10 Gatherer". */
+/** What a perk does, from its effect: "Strikes ×3", "Each season starts with 10 Gatherers". */
 export function describePerk(perk: PerkRow, config: SimConfig, strings: Strings): string {
   const effect = perk.effect;
   switch (effect.type) {
@@ -76,7 +76,7 @@ export function describePerk(perk: PerkRow, config: SimConfig, strings: Strings)
     case 'thrift':
       return fill(strings.depth.perkThrift, { percent: formatPercent(2 - effect.value) });
     case 'start':
-      return fill(strings.depth.perkStart, { count: String(effect.count), unit: unitName(config, effect.unit) });
+      return fill(strings.depth.perkStart, { count: String(effect.count), unit: pluralName(unitName(config, effect.unit), effect.count) });
   }
 }
 
@@ -230,9 +230,9 @@ export function forkOpenWords(row: UnlockRow, config: SimConfig, strings: String
 
 // ---- Orders -----------------------------------------------------------------------------------
 
-/** An order in words: "Own 4 Cart", "Gather 1,200 dust", "Strike 30 times". */
+/** An order in words: "Own 4 Carts", "Gather 1,200 dust", "Strike 30 times". */
 export function orderWords(order: OrderState, config: SimConfig, strings: Strings): string {
-  if (order.type === 'own') return fill(strings.depth.orderOwn, { count: groupThousands(order.target), unit: unitName(config, order.unit ?? '') });
+  if (order.type === 'own') return fill(strings.depth.orderOwn, { count: groupThousands(order.target), unit: pluralName(unitName(config, order.unit ?? ''), order.target) });
   if (order.type === 'strikes') return fill(strings.depth.orderStrikes, { count: groupThousands(order.target) });
   return fill(strings.depth.orderGather, { amount: formatDust(order.target) });
 }

@@ -16,6 +16,11 @@ import { eraKey, roomPlan } from '../lib/studio-scene';
 // /api/community/studio; when it does not answer, the page says so and draws the garage the live
 // studio falls back to, named as that and nothing more.
 
+/** An era's stations or decor in words: "test bench", never the id test_bench. */
+function partsLine(ids: readonly string[]): string {
+  return ids.length === 0 ? copy.history.none : ids.map((id) => copy.history.parts[id] ?? id.replaceAll('_', ' ')).join(', ');
+}
+
 function Blueprint({ era }: { era: StudioEra | null }) {
   const plan = roomPlan(eraKey(era), era !== null && era.decor.length > 0 ? era.decor : undefined);
   const vb = viewBoxOf(plan);
@@ -72,11 +77,11 @@ export function StudioHistory() {
                 </div>
                 <div>
                   <dt>{copy.history.stations}</dt>
-                  <dd>{era.stations.length === 0 ? copy.history.none : era.stations.join(', ')}</dd>
+                  <dd>{partsLine(era.stations)}</dd>
                 </div>
                 <div>
                   <dt>{copy.history.decor}</dt>
-                  <dd>{era.decor.length === 0 ? copy.history.none : era.decor.join(', ')}</dd>
+                  <dd>{partsLine(era.decor)}</dd>
                 </div>
               </dl>
             )}

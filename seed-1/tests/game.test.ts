@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { loadConfigFromDir } from '../bots/config';
-import { Game, SAVE_KEY } from '../render/game';
-import { parseSavedAt, parseSavedState } from '../sim/save';
+import { Game, keepUnreadable, SAVE_KEY, UNREADABLE_KEY } from '../render/game';
+import { awaySeconds, parseSavedAt, parseSavedState } from '../sim/save';
 import { createSim, step } from '../sim/sim';
 import type { UnlockRow } from '../sim/types';
 import { FIXTURE_CONFIG_DIR } from './paths';
@@ -54,5 +54,37 @@ describe('the running game', () => {
     game.act({ type: 'strike' });
     game.save(5678);
     expect(parseSavedAt(store.items.get(SAVE_KEY)!)).toBe(1234);
+  });
+
+  it('keeps a save that does not read before a fresh game replaces it, and never writes over the first one kept', () => {
+    const items = new Map<string, string>();
+    const store = { getItem: (key: string) => items.get(key) ?? null, setItem: (key: string, value: string) => void items.set(key, value) };
+    const future = JSON.stringify({ version: 2, savedAt: 1, state: { dust: 5 } });
+    expect(parseSavedState(future)).toBeNull();
+    expect(keepUnreadable(store, future)).toBe(true);
+    expect(items.get(UNREADABLE_KEY)).toBe(future);
+    expect(keepUnreadable(store, 'not json {')).toBe(false);
+    expect(items.get(UNREADABLE_KEY)).toBe(future);
+    expect(keepUnreadable(null, future)).toBe(false);
+    const refusing = { getItem: () => null, setItem: () => { throw new Error('full'); } };
+    expect(keepUnreadable(refusing, future)).toBe(false);
+  });
+
+  it('stamps a save with the time its state was stepped to, so a tab closed while hidden is still credited', () => {
+    const store = memoryStore();
+    const game = new Game(config, createSim(config, 1), store);
+    game.tick(10_000);
+    game.tick(12_000);
+    // The tab is hidden from 12 s: no more frames, so no ticks, but the 5 s timer and pagehide still
+    // save, two hours later.
+    const hiddenAt = 12_000;
+    const closedAt = hiddenAt + 2 * 3600 * 1000;
+    game.save(hiddenAt + 5_000);
+    game.save(closedAt);
+    const raw = store.items.get(SAVE_KEY)!;
+    expect(parseSavedAt(raw)).toBe(hiddenAt);
+    expect(parseSavedState(raw)!.elapsedSeconds).toBe(2);
+    // The next load credits the whole time since the state was last stepped: 2 hours.
+    expect(awaySeconds(parseSavedAt(raw)!, closedAt)).toBe(2 * 3600);
   });
 });

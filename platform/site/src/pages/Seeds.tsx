@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { EmptyState, type EmptyNext } from '../components/EmptyState';
+import { EmptyState, playNext } from '../components/EmptyState';
 import { Glyph } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
 import { PersonLink } from '../components/Person';
@@ -9,9 +9,9 @@ import { adoptSessionFromLocation, rpc, sendMagicLink, useSignedIn } from '../li
 import { CommunityError, relativeTime, usePagedCommunity } from '../lib/community';
 import type { SeedSummary } from '../lib/community-types';
 import { copy } from '../lib/copy';
-import { siteEnv } from '../lib/env';
 import { legal } from '../lib/legal';
 import { clearPendingSeed, parseSeedCode, rememberPendingSeed } from '../lib/seed-link';
+import { useSignInOpen } from '../lib/sign-in';
 
 // /seeds (docs/specs/final-state.md, Seeds and instances): the gallery of saved runs anyone can open.
 // Sorted by Trending (a gravity score the server computes), Top this week, Top all time or New; one
@@ -269,12 +269,6 @@ export function SaveFromLink({ raw }: { raw: string }) {
   );
 }
 
-/** An empty gallery's next step: play the game and save a run, or the cards to fund without a play address. */
-function playNext(): EmptyNext {
-  const play = siteEnv().playUrl;
-  return play === '' ? { to: '/', label: copy.roadmapLink } : { to: play, label: copy.emptyState.playDust };
-}
-
 export function Seeds() {
   const signedIn = useSignedIn();
   const [params, setParams] = useSearchParams();
@@ -292,6 +286,7 @@ export function Seeds() {
   }, [saveCode, signedIn, params, setParams]);
   const [sort, setSort] = useState<SeedSort>('trending');
   const list = usePagedCommunity<SeedSummary>(`/seeds?sort=${sort}`);
+  const signInOpen = useSignInOpen();
   return (
     <main className="wide sheet">
       <div className="band">
@@ -301,8 +296,8 @@ export function Seeds() {
         {saveCode === null ? null : <SaveFromLink raw={saveCode} />}
         <section className="section" aria-labelledby="seeds-gallery">
           <h2 id="seeds-gallery">{copy.seeds.galleryTitle}</h2>
-          {/* The sorts show only while there is a list to sort. */}
-          {list.state === 'unavailable' ? null : (
+          {/* The sorts show only once there is a list to sort. */}
+          {list.state === 'unavailable' || !list.listed ? null : (
             <div role="group" aria-label={copy.seeds.sortLabel} className="filters">
               {SORTS.map((key) => (
                 <button key={key} type="button" className="filter" aria-pressed={sort === key} onClick={() => setSort(key)}>
@@ -342,8 +337,9 @@ export function Seeds() {
         </section>
         <section className="section" aria-labelledby="seeds-how">
           <h2 id="seeds-how">{copy.seeds.howTitle}</h2>
-          <p>{copy.seeds.how}</p>
-          {signedIn ? null : (
+          {/* A seed is kept on a profile, so while sign-in is closed the section says so and asks no one to sign in. */}
+          <p>{signedIn || signInOpen ? copy.seeds.how : copy.seeds.howClosed}</p>
+          {signedIn || !signInOpen ? null : (
             <p>
               <Link to="/me">{copy.seeds.signIn}</Link>
             </p>

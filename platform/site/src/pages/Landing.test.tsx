@@ -7,6 +7,7 @@ import { formatDate } from '../lib/format';
 import { RESERVE_PCT } from '../lib/payment';
 import { books } from '../lib/books.test-fixture';
 import type { Role, Snapshot, StudioSource, Supply } from '../lib/source';
+import { resetSignInOpen } from '../lib/sign-in';
 import { SourceProvider } from '../lib/studio';
 import { HOME_ACTIONS, Landing } from './Landing';
 
@@ -502,6 +503,31 @@ describe('Landing', () => {
     expect(within(lane('next')).queryByRole('progressbar')).toBeNull();
   });
 
+  it('leaves Ideas off the floor and the rail while sign-in is closed and the board has no ideas', async () => {
+    resetSignInOpen();
+    window.localStorage.clear();
+    const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } }));
+    const fetch = vi.fn((url: string) => {
+      if (url.includes('/auth/settings')) return json({ signIn: false });
+      if (url.includes('/suggestions')) return json({ items: [], next: null });
+      return Promise.reject(new TypeError('offline'));
+    });
+    vi.stubGlobal('fetch', fetch);
+    try {
+      const { container } = renderLanding(fakeSource());
+      await waitFor(() => expect(document.querySelectorAll('.floor-parts > [data-station-part]')).toHaveLength(4));
+      await waitFor(() => expect(fetch.mock.calls.map(([url]) => url).some((url) => url.includes('/suggestions'))).toBe(true));
+      await waitFor(() => expect(window.localStorage.getItem('mm:sign-in-open')).toBe('0'));
+      expect(container.querySelector('[data-station-part="ideas"]')).toBeNull();
+      expect(screen.queryByRole('heading', { level: 2, name: copy.ideas.title })).toBeNull();
+      expect([...container.querySelectorAll('.floor-stations a')].map((a) => a.getAttribute('href'))).not.toContain('#ideas');
+    } finally {
+      vi.unstubAllGlobals();
+      resetSignInOpen();
+      window.localStorage.clear();
+    }
+  });
+
   it('leaves a held card out of Next up', async () => {
     const soon = { ...snapshot.cards[7]!, id: 'soon1', title: 'An approved draft', opens_at: '2026-10-12T00:00:00Z' };
     const held = { ...snapshot.cards[7]!, id: 'held1', title: 'A held card', rank: 1, opens_at: '2026-10-11T00:00:00Z', board_vetoed: true, board_veto_reason: 'Not now.' };
@@ -515,7 +541,7 @@ describe('Landing', () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', 'https://buy.stripe.com/test-link');
     const { container } = renderLanding(fakeSource({ cards: [], funding: {}, money: books([]) }));
     expect((await statusLine()).textContent).toBe(copy.status.openNone);
-    for (const name of ['building', 'shipped'] as const) {
+    for (const name of ['next', 'building', 'shipped'] as const) {
       const tile = lane(name).querySelector('.flow-empty');
       expect(tile, name).not.toBeNull();
       expect(tile!.textContent!.trim(), name).not.toBe('');
@@ -534,6 +560,7 @@ describe('Landing', () => {
     // Ideas holds no drafted card, and says what the Game Designer is doing instead.
     expect(lane('next').querySelector('li.card')).toBeNull();
     expect(lane('next').querySelector('.flow-who')?.textContent).toBe(copy.flow.draftingIdle);
+    expect(lane('next').querySelector('.flow-empty')?.textContent).toBe(copy.flow.lanes.next.empty);
     expect(lane('shipped').querySelector('.flow-empty')?.textContent).toBe(copy.flow.lanes.shipped.empty);
     expect(screen.queryByRole('progressbar')).toBeNull();
     expect(container.querySelectorAll('main > .band')).toHaveLength(4);
