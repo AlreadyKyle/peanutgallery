@@ -4,8 +4,10 @@
 // dispatcher changes the model without re-seeding the roles. roles.model, which the seed writes from
 // the same env and /team displays, is used only for a role with no spec or a token the env leaves
 // unset, and then MODEL_BUILDER. The specs are read from the dispatcher's own code root, which no card
-// can write to. MODEL_DESIGNER, the Game Designer's token, falls back to MODEL_DIRECTOR when unset,
-// so the Designer runs on the Director's model until the board sets its own.
+// can write to. MODEL_DESIGNER, the Game Designer's token, is set in every env file
+// make-dispatcher-env.sh writes, to the cheaper DEFAULT_DESIGNER_MODEL (platform/ops/dispatcher-env.mjs)
+// unless .env names another (docs/PLAN.md §10 decision 77); in a file written before that it is unset, and the Designer falls
+// back to MODEL_DIRECTOR.
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import type { DispatcherConfig } from './config.js';

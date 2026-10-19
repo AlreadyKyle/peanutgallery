@@ -47,6 +47,13 @@ export const DISCORD_WEBHOOK = /^https:\/\/((ptb|canary)[.])?discord(app)?[.]com
 // Optional models that, when set, need a row in PRICE_TABLE_JSON, as loadConfig requires.
 export const PRICED_OPTIONAL_MODELS = ['MODEL_DIRECTOR', 'MODEL_DESIGNER', 'MODEL_HOST'];
 
+// The Game Designer drafts on a cheaper model (docs/PLAN.md §10 decision 77): when .env leaves
+// MODEL_DESIGNER unset the file sets it to this, and PRICE_TABLE_JSON gains this row at list price (USD
+// per million tokens) when it has none. A MODEL_DESIGNER in .env still wins. The Supabase seed shows the
+// same default on /team (platform/supabase/lib/roles.ts).
+export const DEFAULT_DESIGNER_MODEL = 'claude-sonnet-5-5';
+export const DEFAULT_DESIGNER_PRICE = { input: 2, output: 10, cache_read: 0.2, cache_write_5m: 2.5, cache_write_1h: 4 };
+
 // Read by loadConfig but never copied from the Mac's .env, with the reason.
 export const NOT_COPIED = {
   ANTHROPIC_API_KEY: "the founder's key; the VPS bills the studio key only",
@@ -128,6 +135,7 @@ export function dispatcherEnvEntries(dotenvText, operator) {
       if (typeof parsed !== 'object' || Array.isArray(parsed) || Object.keys(parsed).length === 0) {
         problems.push('PRICE_TABLE_JSON must be an object keyed by model id');
       } else {
+        if (!Object.hasOwn(parsed, DEFAULT_DESIGNER_MODEL)) parsed[DEFAULT_DESIGNER_MODEL] = DEFAULT_DESIGNER_PRICE;
         priceTable = JSON.stringify(parsed);
         if (model && !Object.hasOwn(parsed, model)) problems.push('MODEL_BUILDER has no row in PRICE_TABLE_JSON; the startup probe could not be metered');
         for (const key of PRICED_OPTIONAL_MODELS) {
@@ -161,7 +169,7 @@ export function dispatcherEnvEntries(dotenvText, operator) {
     ['NTFY_TOPIC_URL', alertUrl('NTFY_TOPIC_URL')],
   ];
   for (const key of OPTIONAL_KEYS) {
-    const value = fromDotenv(key);
+    const value = fromDotenv(key) || (key === 'MODEL_DESIGNER' ? DEFAULT_DESIGNER_MODEL : '');
     if (value) entries.push([key, value]);
   }
   for (const key of DISCORD_KEYS) {

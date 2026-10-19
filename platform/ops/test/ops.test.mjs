@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { DISCORD_KEYS, DISCORD_WEBHOOK, FORBIDDEN_KEYS, MANAGED_KEYS, NOT_COPIED, OPERATOR_KEYS, OPTIONAL_KEYS } from '../dispatcher-env.mjs';
+import { DEFAULT_DESIGNER_MODEL, DEFAULT_DESIGNER_PRICE, DISCORD_KEYS, DISCORD_WEBHOOK, FORBIDDEN_KEYS, MANAGED_KEYS, NOT_COPIED, OPERATOR_KEYS, OPTIONAL_KEYS } from '../dispatcher-env.mjs';
 import { VPS_JOBS } from '../jobs/lib.mjs';
 // The jobs' own tests (the Controller, the quota check and their env rules) and the Mac host's
 // (docs/specs/mac-host.md) run with these.
@@ -121,7 +121,7 @@ describe('make-dispatcher-env.sh', () => {
       ['NETLIFY_SITE_ID_PLATFORM', 'fixture-site-platform'],
       ['SUPABASE_URL', 'https://fixture.supabase.local'],
       ['SUPABASE_SERVICE_ROLE_KEY', 'fixture-supabase-secret-key'],
-      ['PRICE_TABLE_JSON', JSON.stringify(PRICE_TABLE)],
+      ['PRICE_TABLE_JSON', JSON.stringify({ ...PRICE_TABLE, [DEFAULT_DESIGNER_MODEL]: DEFAULT_DESIGNER_PRICE })],
       ['MODEL_BUILDER', 'builder-class'],
       ['MANAGED_AGENT_ID', 'agent_fixture'],
       ['MANAGED_AGENT_VERSION', '3'],
@@ -134,9 +134,36 @@ describe('make-dispatcher-env.sh', () => {
       ['AGENT_HOURLY_RATE_USD', '5'],
       ['DISPATCHER_TICK_MS', '60000'],
       ['DISPATCHER_MAX_CONCURRENCY', '1'],
+      ['MODEL_DESIGNER', 'claude-sonnet-5-5'],
     ]);
     for (const value of SECRET_VALUES) assert.ok(!run.output.includes(value), 'the output names keys only');
-    assert.match(run.stdout, /with 22 keys: STUDIO_ANTHROPIC_API_KEY, GITHUB_REPO/);
+    assert.match(run.stdout, /with 23 keys: STUDIO_ANTHROPIC_API_KEY, GITHUB_REPO/);
+  });
+
+  // docs/PLAN.md §10 decision 77: the Game Designer drafts on claude-sonnet-5-5 unless .env names its model.
+  test('puts the Game Designer on claude-sonnet-5-5, priced at list, when .env leaves MODEL_DESIGNER unset', () => {
+    assert.equal(DEFAULT_DESIGNER_MODEL, 'claude-sonnet-5-5');
+    assert.deepEqual(DEFAULT_DESIGNER_PRICE, { input: 2, output: 10, cache_read: 0.2, cache_write_5m: 2.5, cache_write_1h: 4 });
+    const run = makeEnv({ dotenv: dotenvText({ ...MAC_DOTENV, MODEL_DIRECTOR: 'builder-class' }) });
+    assert.equal(run.status, 0, run.output);
+    const written = new Map(parseEnvFile(readFileSync(run.out, 'utf8')));
+    assert.equal(written.get('MODEL_DESIGNER'), 'claude-sonnet-5-5');
+    assert.equal(written.get('MODEL_DIRECTOR'), 'builder-class');
+    assert.equal(written.get('MODEL_BUILDER'), 'builder-class');
+    assert.deepEqual(JSON.parse(written.get('PRICE_TABLE_JSON')), { ...PRICE_TABLE, 'claude-sonnet-5-5': DEFAULT_DESIGNER_PRICE });
+  });
+
+  test("keeps a MODEL_DESIGNER .env sets, and a claude-sonnet-5-5 row the table already has", () => {
+    const table = { ...PRICE_TABLE, 'claude-sonnet-5-5': { input: 1, output: 5, cache_read: 0.1, cache_write_5m: 1.25, cache_write_1h: 2 } };
+    const run = makeEnv({ dotenv: dotenvText({ ...MAC_DOTENV, MODEL_DESIGNER: 'builder-class' }, `'${JSON.stringify(table)}'`) });
+    assert.equal(run.status, 0, run.output);
+    const written = new Map(parseEnvFile(readFileSync(run.out, 'utf8')));
+    assert.equal(written.get('MODEL_DESIGNER'), 'builder-class');
+    assert.deepEqual(JSON.parse(written.get('PRICE_TABLE_JSON')), table);
+    // An unpriced model .env names is still refused, as loadConfig would refuse it.
+    const refused = makeEnv({ dotenv: dotenvText({ ...MAC_DOTENV, MODEL_DESIGNER: 'unpriced-model' }) });
+    assert.equal(refused.status, 1);
+    assert.ok(refused.stderr.includes('MODEL_DESIGNER has no row in PRICE_TABLE_JSON'), refused.output);
   });
 
   test('copies the director and host models and the session wall clock when .env sets them', () => {

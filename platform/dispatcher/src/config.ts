@@ -25,7 +25,8 @@ export interface DispatcherConfig {
   // The director and host models, when set. Nothing in the dispatcher runs them yet; they are
   // checked against the price table so a role seeded with one can be metered.
   modelDirector: string | null;
-  // The Game Designer's model, when set (MODEL_DESIGNER); unset, the Designer runs on MODEL_DIRECTOR.
+  // The Game Designer's model, when set (MODEL_DESIGNER, which make-dispatcher-env.sh always writes,
+  // docs/PLAN.md §10 decision 77); unset, the Designer runs on MODEL_DIRECTOR.
   modelDesigner: string | null;
   modelHost: string | null;
   priceTable: PriceTable;

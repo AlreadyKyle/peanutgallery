@@ -73,7 +73,7 @@ The write set is `["Read", "Edit", "Write", "Glob", "Grep", "Bash"]` and the rea
 | title | title | as is |
 | description | description | as is |
 | species_note | species_note | as is |
-| model | model | the value of the named environment variable (`MODEL_DIRECTOR`, `MODEL_DESIGNER`, `MODEL_BUILDER` or `MODEL_HOST`; an unset `MODEL_DESIGNER` reads `MODEL_DIRECTOR`) |
+| model | model | the value of the named environment variable (`MODEL_DIRECTOR`, `MODEL_DESIGNER`, `MODEL_BUILDER` or `MODEL_HOST`; an unset `MODEL_DESIGNER` is `claude-sonnet-5-5`, as `make-dispatcher-env.sh` writes it for the dispatcher, `docs/PLAN.md` §10 decision 77) |
 | budget_share | budget_share | numeric(6,4) |
 | voice | voice | as is |
 | prompt_path | prompt_path | as is |
