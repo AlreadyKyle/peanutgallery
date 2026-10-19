@@ -210,6 +210,7 @@ export const KERNEL_PATHS: readonly string[] = [
   'platform/site/src/lib/env.ts',
   'platform/site/src/lib/format.ts',
   'platform/site/src/lib/legal.ts',
+  'platform/site/src/lib/offline.ts',
   'platform/site/src/lib/payment.ts',
   'platform/site/src/lib/reports-source.ts',
   'platform/site/src/lib/snapshot-keys.json',
