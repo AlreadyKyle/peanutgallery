@@ -100,6 +100,10 @@ export const test = base.extend<{ studio: StudioFixture }>({
       if (new URL(request.url()).host === new URL(SUPABASE_URL).host) offOrigin.push(request.url());
     });
     page.on('websocket', (socket) => offOrigin.push(socket.url()));
+    // Playwright's browser says it is automated (navigator.webdriver), and the counters send nothing
+    // there (lib/count.ts). The suite plays a person's browser, so it reads false; counts.spec.ts sets
+    // it back to true to check that an automated browser counts nothing.
+    await page.addInitScript(() => Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false, configurable: true }));
     await mockStudio(page, studio);
     await use(page);
     expect(offOrigin, 'the public site requested the Supabase host or opened a WebSocket').toEqual([]);

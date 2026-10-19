@@ -51,6 +51,21 @@ test('home counts its view, then its dwell at 15 and 45 seconds, and stops on an
   expect(await page.evaluate(() => Object.keys(window.localStorage))).toEqual(['peanutgallery.home.lastVisit']);
 });
 
+// An automated browser (a check, a screenshot run) is not a visitor: it says so in
+// navigator.webdriver, and the site counts nothing there, however long it stays on home.
+test('an automated browser counts nothing: no home view, no dwell, no /contribute load', async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => true, configurable: true }));
+  await page.clock.install();
+  const seen = countsOf(page);
+  await page.goto('/');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await page.clock.runFor(50_000);
+  await page.goto('/contribute');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(seen.events).toEqual([]);
+});
+
 test('/broadcast counts its load, and its QR code carries the source tag', async ({ page }) => {
   const seen = countsOf(page);
   await page.goto('/broadcast');

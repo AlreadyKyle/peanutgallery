@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { NotFound } from '../components/NotFound';
 import { LinkedText, TextPage } from '../components/TextPage';
@@ -34,13 +35,42 @@ function Unconfirmed() {
  * While the versions read runs, the page is drawn whole with the words it expects (the newest bundled
  * version, or version n) and this line under the lede in place of the version line, so only this line
  * changes when the read answers. A short loading page would let the signal plate fill the window and
- * set the title at its foot, then jump when the words arrive.
+ * set the title at its foot, then jump when the words arrive. `reserve` is the status the page expects
+ * to show once the read answers, drawn hidden in the same place, so the line takes that status's room
+ * and nothing under it moves when it arrives.
  */
-function LoadingLine() {
-  return (
+function LoadingLine({ reserve }: { reserve?: ReactNode }) {
+  const line = (
     <p className="muted" role="status" aria-busy="true">
       {legal.termsLoading}
     </p>
+  );
+  if (reserve === undefined) return line;
+  return (
+    <div className="terms-loading">
+      {line}
+      <div className="terms-reserve" aria-hidden="true">
+        {reserve}
+      </div>
+    </div>
+  );
+}
+
+// A sample time for the room an earlier version's status line takes while the read runs: the dates
+// it shows are the same length whatever they are.
+const SAMPLE_POSTED_AT = '2026-09-14T13:05:00Z';
+
+/** An earlier version's status: when it was in force, and the link to the version in force now. */
+function PastLines({ kind, n, from, until }: { kind: Kind; n: string; from: string; until: string }) {
+  return (
+    <>
+      <p>{fill(legal.termsPastLine, { n, from: formatPostedAt(from), until: formatPostedAt(until) })}</p>
+      <p>
+        <Link className="target" to={`/${kind}`} tabIndex={-1}>
+          {legal.termsCurrentLink}
+        </Link>
+      </p>
+    </>
   );
 }
 
@@ -84,7 +114,12 @@ function OneVersion({ kind }: { kind: Kind }) {
   const page = view.entry[kind];
   const at = view.entry.version;
   const title = fill(legal.termsVersionTitle, { title: page.title, n: String(at) });
-  if (view.state === 'loading') return <TextPage name={kind} page={page} title={title} version={at} status={<LoadingLine />} />;
+  if (view.state === 'loading') {
+    // A version older than the newest in this build is most likely an earlier one: hold its two lines' room.
+    const past = at < NEWEST_TERMS.version;
+    const reserve = past ? <PastLines kind={kind} n={String(at)} from={SAMPLE_POSTED_AT} until={SAMPLE_POSTED_AT} /> : undefined;
+    return <TextPage name={kind} page={page} title={title} version={at} status={<LoadingLine reserve={reserve} />} />;
+  }
   if (view.state === 'unconfirmed') return <TextPage name={kind} page={page} title={title} version={at} status={<Unconfirmed />} />;
   const n = String(at);
   const status =

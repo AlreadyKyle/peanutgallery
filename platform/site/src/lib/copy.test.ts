@@ -383,8 +383,11 @@ describe('the card page state line and who made what', () => {
     for (const sentence of body) expect(sentence.split(/\s+/).length).toBeLessThanOrEqual(25);
     const text = body.join(' ');
     expect(text).toMatch(/AI agents/);
-    expect(text).toMatch(/drawn by code/);
+    expect(text).toMatch(/code they wrote draws the art/);
     expect(text).toMatch(/no image, sound or music model/);
+    // It sits under the art-policy line on /how-it-works, so it does not say that line again.
+    expect(text).not.toContain(legal.artPolicy);
+    expect(text).not.toMatch(/drawn by code/);
     expect(text).toMatch(/board/);
   });
 

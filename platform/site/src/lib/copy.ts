@@ -138,12 +138,13 @@ export const copy = {
   agentBrief: 'What the agents are told',
   // The card page's closed disclosure around the brief, which can name files and fields.
   agentBriefOpen: 'Read the brief the agents get',
-  // Who made what (/how-it-works, under the rules): a short block other pages can reuse.
+  // Who made what (/how-it-works, under the rules): a short block other pages can reuse. It follows the
+  // art-policy line (legal.artPolicy), so it adds what that line leaves out rather than saying it again.
   whoMadeWhat: {
     heading: 'Who made what',
     body: [
       "The AI agents write the games' code, numbers and text, and they make every change.",
-      'The art in the games and the agent avatars is drawn by code the agents wrote, and no image, sound or music model is used.',
+      'The code they wrote draws the art, and no image, sound or music model is used.',
       'The human board sets the rules and the checks and decides what can be built.',
     ],
   },

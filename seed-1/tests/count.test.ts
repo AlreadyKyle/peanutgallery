@@ -40,6 +40,17 @@ describe('countEvent', () => {
     ]);
   });
 
+  it('counts nothing in an automated browser, which says so in navigator.webdriver (docs/specs/counter-senders.md)', () => {
+    const sendBeacon = vi.fn().mockReturnValue(true);
+    const fetchFn = vi.fn();
+    countEvent('dust_load', { sendBeacon, webdriver: true }, fetchFn);
+    countEvent('dust_load', { webdriver: true }, fetchFn);
+    expect(sendBeacon).not.toHaveBeenCalled();
+    expect(fetchFn).not.toHaveBeenCalled();
+    countEvent('dust_load', { sendBeacon, webdriver: false }, fetchFn);
+    expect(sendBeacon).toHaveBeenCalledTimes(1);
+  });
+
   it('never throws: a failed or rejected count is dropped', async () => {
     expect(() => countEvent('dust_load', { sendBeacon: () => { throw new Error('no'); } }, vi.fn())).not.toThrow();
     const rejected = vi.fn().mockRejectedValue(new Error('offline'));

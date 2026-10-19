@@ -61,6 +61,17 @@ describe('countEvent', () => {
     });
     expect(() => countEvent('home_load', { sendBeacon: () => { throw new Error('no'); } }, fetchFn)).not.toThrow();
   });
+
+  it('counts nothing in an automated browser, which says so in navigator.webdriver (docs/specs/counter-senders.md)', () => {
+    const sendBeacon = vi.fn().mockReturnValue(true);
+    const fetchFn = vi.fn();
+    countEvent('home_load', { sendBeacon, webdriver: true }, fetchFn);
+    countEvent('home_load', { webdriver: true }, fetchFn);
+    expect(sendBeacon).not.toHaveBeenCalled();
+    expect(fetchFn).not.toHaveBeenCalled();
+    countEvent('home_load', { sendBeacon, webdriver: false }, fetchFn);
+    expect(sendBeacon).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('onceEach', () => {
