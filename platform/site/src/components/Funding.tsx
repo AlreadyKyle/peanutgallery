@@ -5,7 +5,7 @@ import { formatDate, formatInteger, formatUsd, percent } from '../lib/format';
 import { legal } from '../lib/legal';
 import { canFund, DEFAULT_STUDIO_PCT, exampleFromPaid, fundingPlace, fundLink, inFundingOrder, RESERVE_PCT } from '../lib/payment';
 import type { CardDetail } from '../lib/card-source';
-import type { Card, Snapshot } from '../lib/source';
+import { agentsOffline, type Card, type Snapshot } from '../lib/source';
 import { Stat } from './Stat';
 import { LinkedText } from './TextPage';
 
@@ -180,10 +180,11 @@ export function CardMoney({
       </>
     ) : null;
   if (card.stage === 'funded') {
+    // While the agents are offline nobody is coming for it yet, so the line says so (honest-status).
     return (
       <>
         {money}
-        <p className="card-waiting">{copy.waitingForAgents}</p>
+        <p className="card-waiting">{agentsOffline(snapshot) ? copy.agentsOffline : copy.waitingForAgents}</p>
       </>
     );
   }

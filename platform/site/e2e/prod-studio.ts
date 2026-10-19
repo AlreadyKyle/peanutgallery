@@ -1,4 +1,4 @@
-import { moneyRow, type StudioFixture } from './fixtures';
+import { DEFAULT_STUDIO, moneyRow, type StudioFixture } from './fixtures';
 import { LIVE_STUDIO } from './live-studio';
 
 /**
@@ -41,13 +41,13 @@ export const PROD_STUDIO: StudioFixture = {
   pauseReason: null,
   cards: [...drafted, ...cards],
   money: moneyRow({ ...(LIVE_STUDIO.money ?? {}), funding_order: [] }),
-  supply: { drafting: false, short: true, reason: 'daily_limit', runs_today: 4, run_limit: 4, next_check_at: '2026-10-10T23:40:00+00:00' },
+  supply: { drafting: false, offline: false, short: true, reason: 'daily_limit', runs_today: 4, run_limit: 4, next_check_at: '2026-10-10T23:40:00+00:00' },
 };
 
 /** The same studio a moment later, while the Game Designer drafts a card. */
 export const DRAFTING_STUDIO: StudioFixture = {
   ...PROD_STUDIO,
-  supply: { drafting: true, short: true, reason: 'already_queued', runs_today: 1, run_limit: 4, next_check_at: '2026-10-11T04:20:00+00:00' },
+  supply: { drafting: true, offline: false, short: true, reason: 'already_queued', runs_today: 1, run_limit: 4, next_check_at: '2026-10-11T04:20:00+00:00' },
 };
 
 /** No card at all, anywhere: every lane says what happens next. */
@@ -55,5 +55,21 @@ export const EMPTY_STUDIO: StudioFixture = {
   ...PROD_STUDIO,
   cards: [],
   stopped: [],
-  supply: { drafting: false, short: true, reason: null, runs_today: 0, run_limit: 4, next_check_at: '2026-10-11T04:20:00+00:00' },
+  supply: { drafting: false, offline: false, short: true, reason: null, runs_today: 0, run_limit: 4, next_check_at: '2026-10-11T04:20:00+00:00' },
+};
+
+/**
+ * The agents offline (docs/specs/honest-status.md): production on 19 October 2026, when the dispatcher
+ * had not checked in since 15 October and a draft run had waited since. public_supply() says offline
+ * and not drafting. The default studio's cards, so its open, funded and shipped faces all show.
+ */
+export const OFFLINE_STUDIO: StudioFixture = {
+  ...DEFAULT_STUDIO,
+  supply: { drafting: false, offline: true, short: true, reason: 'already_queued', runs_today: 0, run_limit: 12, next_check_at: '2026-10-19T12:01:00+00:00' },
+};
+
+/** The same cards with the agents online and the Game Designer drafting, to set beside OFFLINE_STUDIO. */
+export const ONLINE_DRAFTING_STUDIO: StudioFixture = {
+  ...DEFAULT_STUDIO,
+  supply: { drafting: true, offline: false, short: true, reason: 'already_queued', runs_today: 1, run_limit: 12, next_check_at: '2026-10-19T12:01:00+00:00' },
 };

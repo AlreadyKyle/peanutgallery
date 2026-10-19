@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { copy } from './copy';
 import type { Role, Snapshot } from './source';
 import { crowded, ERA_KEYS, findPath, floorBoxes, idleHaunts, paintOrder, pathLength, placeAgents, roomPlan, standable, type Box, type Spot } from './studio-scene';
 
@@ -74,6 +75,25 @@ describe('the studio floor', () => {
         // Pairs start at different haunts before any shares one.
         const haunts = places.filter((place) => place.activity === 'chatting').map((place) => place.haunt);
         expect(new Set(haunts).size).toBe(Math.min(Math.floor(count / 2), 4));
+      }
+    });
+
+    it(`puts every agent to sleep at an idle spot while the agents are offline, a body apart, in the ${era}`, () => {
+      for (const count of [2, 5, 8]) {
+        const room = idleRoom(count);
+        // A building card and a drafting flag change nothing while offline (docs/specs/honest-status.md).
+        const building = { id: 'b', title: 'A card', stage: 'building', executor_role_id: 'agent-0' } as Snapshot['cards'][number];
+        const offline: Snapshot = { ...room, cards: [building], supply: { drafting: true, offline: true, short: true, reason: null, runs_today: 0, run_limit: 12, next_check_at: null } };
+        const places = placeAgents(offline, plan);
+        expect(places).toHaveLength(count);
+        for (const place of places) {
+          expect([place.activity, place.asleep, place.card, place.partner, place.doing]).toEqual(['offline', true, null, null, copy.agentsOffline]);
+        }
+        for (let i = 0; i < places.length; i += 1) {
+          for (let j = i + 1; j < places.length; j += 1) expect(crowded(places[i]!.spot, places[j]!.spot), `${places[i]!.role.id} and ${places[j]!.role.id}`).toBe(false);
+        }
+        // Online, the same room works: the builder is at a desk.
+        expect(placeAgents({ ...offline, supply: { ...offline.supply!, offline: false } }, plan).find((place) => place.role.id === 'agent-0')?.activity).toBe('building');
       }
     });
 

@@ -226,7 +226,7 @@ function role(id: string, title: string, description: string): Role {
 }
 
 function supply(over: Partial<Supply> = {}): Supply {
-  return { drafting: false, stalled: false, short: true, reason: null, runs_today: 0, run_limit: 3, next_check_at: null, ...over };
+  return { drafting: false, offline: false, short: true, reason: null, runs_today: 0, run_limit: 3, next_check_at: null, ...over };
 }
 
 function fakeSource(over: Partial<Snapshot> = {}): StudioSource {
@@ -389,6 +389,22 @@ describe('Landing', () => {
     cleanup();
     // An open card is said first, whatever the supply.
     renderLanding(fakeSource({ supply: supply({ drafting: true }) }));
+    expect((await statusLine()).textContent).toBe('3 cards are open for funding. 1 card is being built.');
+  });
+
+  it('says the agents are offline in place of what they build or draft, with the open cards still counted (decision 77)', async () => {
+    renderLanding(fakeSource({ supply: supply({ offline: true }) }));
+    expect((await statusLine()).textContent).toBe(`3 cards are open for funding. ${copy.agentsOffline}`);
+    expect(lane('next').querySelector('.flow-who')?.textContent).toBe(copy.agentsOffline);
+    // The building card names its builder, and says nothing about building now.
+    expect(document.querySelector('main')?.textContent).not.toContain(copy.buildingBy.replace('{name} ', ''));
+    cleanup();
+    const closed = snapshot.cards.filter((card) => !['next1', 'next2', 'studio1'].includes(card.id));
+    renderLanding(fakeSource({ cards: closed, supply: supply({ offline: true, drafting: true }) }));
+    expect((await statusLine()).textContent).toBe(`${copy.status.openNone} ${copy.agentsOffline}`);
+    cleanup();
+    // A pause is not offline: the line is as it was (decision 62).
+    renderLanding(fakeSource({ paused: true, pauseReason: 'board', supply: supply() }));
     expect((await statusLine()).textContent).toBe('3 cards are open for funding. 1 card is being built.');
   });
 

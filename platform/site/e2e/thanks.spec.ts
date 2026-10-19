@@ -1,7 +1,9 @@
 import type { Page } from '@playwright/test';
 import { DISCORD_INVITE } from './fixture-env';
 import { fetchProbe } from './fetch-probe';
+import { copy } from '../src/lib/copy';
 import { expect, mockStudio, test } from './fixtures';
+import { OFFLINE_STUDIO } from './prod-studio';
 import { BUILDING_CARD_ID, LIVE_CARD_ID, OPEN_CARD_ID, SESSIONS, SUPPORTER_STUDIO } from './supporter-studio';
 
 // /thanks, where Stripe's redirect lands (docs/specs/supporter-pages.md): the session leaves the
@@ -130,6 +132,22 @@ test('a recorded payment names the supporter, the cards it reached (named first)
   await expect(page.locator('main > .band').first()).not.toContainText('paused');
   // No amount anywhere in the supporter area.
   expect(await page.locator('main').textContent()).not.toContain('$');
+});
+
+// docs/specs/honest-status.md: while the agents are offline, a card waiting for them or being built
+// says so in its state line; an open or shipped card reads as before.
+test.describe('while the agents are offline', () => {
+  test.use({ studio: { ...SUPPORTER_STUDIO, supply: OFFLINE_STUDIO.supply } });
+
+  test('the building card the payment reached says the agents are offline', async ({ page }) => {
+    await open(page, SESSIONS.recorded);
+    const reached = page.getByRole('region', { name: 'Where your money went' });
+    await expect(reached.locator('li').nth(0).locator('.card-meta')).toHaveText(copy.agentsOffline);
+    await expect(reached.locator('li').nth(1)).toContainText('Open for funding');
+    await expect(reached.locator('li').nth(2)).toContainText('Live.');
+    await expect(page.locator('.thanks-face .card-meta')).toHaveText(copy.agentsOffline);
+    await expect(page.locator('main')).not.toContainText('Being built now.');
+  });
 });
 
 test('a founding supporter reads plain Supporter, with no founding label', async ({ page }) => {

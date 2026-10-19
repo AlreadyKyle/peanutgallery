@@ -9,6 +9,7 @@ import { copy } from '../lib/copy';
 import { withQrSource } from '../lib/count';
 import { groupCards, fundingPlace } from '../lib/cards';
 import { qrModules, qrPath } from '../lib/qr';
+import { agentsOffline } from '../lib/source';
 import { useStudio } from '../lib/studio';
 
 // /broadcast (docs/specs/final-state.md, Channels): a 1920 by 1080 overlay that OBS or any streaming
@@ -92,7 +93,7 @@ export function Broadcast() {
             {snapshot === null ? (
               <p className="muted broadcast-cards-wait">{studio.state === 'loading' ? copy.broadcast.loading : copy.broadcast.unavailable}</p>
             ) : top.length === 0 ? (
-              <p className="muted">{copy.broadcast.noCards}</p>
+              <p className="muted">{agentsOffline(snapshot) ? copy.agentsOffline : copy.broadcast.noCards}</p>
             ) : (
               <ul className="broadcast-fund-list">
                 {top.map((card) => {

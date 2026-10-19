@@ -346,11 +346,12 @@ Deno.test("home-flow-supply: the live document's studio entry carries the drafti
       assert(!acl.some((entry) => entry.startsWith("=")), `public holds no grant on public_supply: ${acl.join(" ")}`);
     });
 
-    await t.step("as anon, studio.supply has exactly its six keys, each a figure, a flag, a time or a fixed code", async () => {
+    await t.step("as anon, studio.supply has exactly its seven keys, each a figure, a flag, a time or a fixed code", async () => {
       const doc = await supply();
-      assertEquals(Object.keys(doc).sort(), ["drafting", "next_check_at", "reason", "run_limit", "runs_today", "short"]);
-      assertEquals([jsonType(doc.drafting), jsonType(doc.short), jsonType(doc.runs_today), jsonType(doc.run_limit), jsonType(doc.next_check_at)], [
-        "boolean", "boolean", "number", "number", "string",
+      // honest-status (20261019000000_honest_status.sql) adds offline to the six home-flow-supply made.
+      assertEquals(Object.keys(doc).sort(), ["drafting", "next_check_at", "offline", "reason", "run_limit", "runs_today", "short"]);
+      assertEquals([jsonType(doc.drafting), jsonType(doc.offline), jsonType(doc.short), jsonType(doc.runs_today), jsonType(doc.run_limit), jsonType(doc.next_check_at)], [
+        "boolean", "boolean", "boolean", "number", "number", "string",
       ]);
       assert(doc.reason === null || /^[a-z_]+$/.test(doc.reason as string), `reason is a fixed code: ${doc.reason}`);
       assertEquals([doc.runs_today, doc.run_limit], [0, 12]); // 20261011100000_always_open.sql raises the limit from 4
@@ -365,12 +366,14 @@ Deno.test("home-flow-supply: the live document's studio entry carries the drafti
       assertEquals([doc.short, doc.reason, doc.runs_today], [check.short, check.reason, check.runs_today]);
     });
 
-    await t.step("drafting is false with no draft run, and true once a draft_card run is queued, then running", async () => {
+    await t.step("drafting is false with no draft run or a queued one, and true while a draft_card run is running", async () => {
+      // Drafting needs the dispatcher seen in the last 15 minutes (honest_status_test.ts has the rest).
+      await s.db.exec(`update public.studio_state set dispatcher_seen_at = now() where id = 1`);
       assertEquals((await supply()).drafting, false);
-      // A draft_card run as enqueue_supply_draft queues it (supply_refill_test.ts).
+      // A draft_card run as enqueue_supply_draft queues it (supply_refill_test.ts): queued is not drafting.
       const run = (await s.row<{ id: string }>(`insert into public.job_runs (job_name, idem_key, origin) values ('draft_card', 'queued-one', 'schedule') returning id`)).id;
       const queued = await supply();
-      assertEquals([queued.drafting, queued.reason, queued.runs_today], [true, "already_queued", 1]);
+      assertEquals([queued.drafting, queued.reason, queued.runs_today], [false, "already_queued", 1]);
       await s.db.query(`update public.job_runs set status = 'running', started_at = now() where id = $1`, [run]);
       assertEquals((await supply()).drafting, true);
       await s.db.query(`update public.job_runs set status = 'succeeded', finished_at = now() where id = $1`, [run]);
@@ -394,6 +397,7 @@ Deno.test("home-flow-supply: the live document's studio entry carries the drafti
     });
 
     await t.step("the migration applies a second time", async () => {
+      // Run alone again, it puts back its own six-key public_supply; later files redefine it.
       await s.db.exec(s.migrations.find((m) => m.name === SUPPLY)!.sql);
       assertEquals(Object.keys(await supply()).length, 6);
     });
