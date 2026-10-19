@@ -308,6 +308,44 @@ describe('createSupabaseDb queries', () => {
     expect(seen).toHaveLength(1);
   });
 
+  it("reads a ship post's start from the card's earliest agent_events start row, and null with none", async () => {
+    const { fetchFn, calls } = mockFetch((method, url) => {
+      const path = new URL(url).pathname;
+      if (path === '/rest/v1/dispatcher_cards') {
+        return {
+          status: 200,
+          json: [
+            { id: 'a', title: 'Card A', live_at: '2026-09-14T14:30:00+00:00', executor_role_id: null, needs_approval: false, approved: false },
+            { id: 'b', title: 'Card B', live_at: '2026-09-14T14:40:00+00:00', executor_role_id: null, needs_approval: false, approved: false },
+          ],
+        };
+      }
+      if (path === '/rest/v1/outbound_posts') return { status: 200, json: [] };
+      if (path === '/rest/v1/dispatcher_card_spend') return { status: 200, json: [] };
+      if (path === '/rest/v1/agent_events') {
+        return {
+          status: 200,
+          json: [
+            { card_id: 'a', created_at: '2026-09-14T13:22:00+00:00' },
+            { card_id: 'a', created_at: '2026-09-14T14:00:00+00:00' },
+          ],
+        };
+      }
+      if (path === '/rest/v1/public_card_supporters') return { status: 200, json: [] };
+      return undefined;
+    });
+    const db = createSupabaseDb('https://db.local', 'service-role', { fetchFn });
+    const posts = await db.unpostedShips(new Date('2026-09-14T00:00:00.000Z'), 5);
+    expect(posts.map((post) => [post.id, post.started_at])).toEqual([
+      ['a', '2026-09-14T13:22:00+00:00'],
+      ['b', null],
+    ]);
+    const starts = new URL(calls.find((call) => call.url.includes('/rest/v1/agent_events'))!.url);
+    expect(starts.searchParams.get('type')).toBe('eq.start');
+    expect(starts.searchParams.get('card_id')).toBe('in.(a,b)');
+    expect(starts.searchParams.get('order')).toBe('created_at.asc');
+  });
+
   it('reads the Console credit bought and the studio spend totals from one database function, never the ledger rows', async () => {
     const { fetchFn, calls } = mockFetch((method, url) =>
       method === 'POST' && url.endsWith('/rest/v1/rpc/studio_spend_totals')

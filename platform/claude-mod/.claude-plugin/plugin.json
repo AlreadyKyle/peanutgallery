@@ -1,0 +1,15 @@
+{
+  "name": "dust",
+  "version": "0.1.0",
+  "description": "Adds /dust, which opens Dust, Mob Machine's idle game, in your browser while Claude works.",
+  "author": { "name": "Mob Machine" },
+  "homepage": "https://play.mobmachine.games",
+  "userConfig": {
+    "longTurnHint": {
+      "type": "boolean",
+      "title": "Suggest Dust on long turns",
+      "description": "Once a session, when a turn has run for two minutes, a short notice suggests /dust. Off unless you turn it on.",
+      "default": false
+    }
+  }
+}

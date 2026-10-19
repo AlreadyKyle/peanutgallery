@@ -321,3 +321,17 @@ export function CardFacts({ detail, onFace = false, children }: { detail: CardDe
     </dl>
   );
 }
+
+/**
+ * A shipped card's stamp line over its facts (the board's card-page pass): the page's own time words
+ * ("Live 40 minutes after work started, 14:00 to 14:40") with what studio-billed work on it cost, the
+ * cost row's figure. A card that cost nothing leaves the cost out, as its shipped caption does.
+ */
+export function CardStamp({ detail, when }: { detail: CardDetail; when: string }) {
+  const text = detail.spent_usd > 0 ? copy.cardPage.stampCost.replace('{when}', when).replace('{cost}', formatUsd(detail.spent_usd)) : when;
+  return (
+    <p className="card-state" data-fact="stamp">
+      {text}
+    </p>
+  );
+}

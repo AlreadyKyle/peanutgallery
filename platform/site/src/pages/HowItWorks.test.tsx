@@ -99,6 +99,10 @@ describe('How it works', () => {
     for (const figure of figures()) expect(figure.querySelector('figcaption')?.textContent).toMatch(/^Example/);
     for (const rule of legal.fixedRules) expect(screen.getByText(rule)).toBeTruthy();
     expect(screen.getByText(legal.artPolicy)).toBeTruthy();
+    // Who made what, under the rules: the agents, the code they wrote and the board.
+    const rules = screen.getByRole('region', { name: page.rulesHeading });
+    expect(within(rules).getByRole('heading', { level: 3, name: copy.whoMadeWhat.heading })).toBeTruthy();
+    expect(within(rules).getByText(copy.whoMadeWhat.body.join(' '))).toBeTruthy();
     // Refunds and disputes links to the Refunds page.
     expect(screen.getByRole('link', { name: legal.refundsPageLink }).getAttribute('href')).toBe('/refunds');
   });

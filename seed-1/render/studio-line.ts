@@ -1,5 +1,5 @@
-// The studio line under the stage ("Made by AI agents at Mob Machine · All ages · See what players are
-// funding next", in index.html) wraps on a phone. Its separators are plain text there, so a wrap
+// The studio line under the stage ("Made by AI agents at Mob Machine · All ages · Who made this · See
+// what players are funding next", in index.html) wraps on a phone. Its separators are plain text there, so a wrap
 // would leave a line ending on "·". This marks each separator as its own element, and the last link
 // as the funding link, so render/style.css can put that link on its own line and drop the separator
 // before it on a narrow screen. The words, the links and the all-ages label are left exactly as the

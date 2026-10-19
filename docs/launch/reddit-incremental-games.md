@@ -1,6 +1,6 @@
 # r/incremental_games
 
-Last of the Reddit posts in the posting order (`README.md`). Reddit allows a 300-character title and a 40,000-character body. Every link carries `?from=reddit`, the tag the site and Dust count (`docs/specs/channel-counters.md`).
+Last in the posting order, once Dust shows depth (`README.md`). Reddit allows a 300-character title and a 40,000-character body. Every link carries `?from=reddit`, the tag the site and Dust count (`docs/specs/channel-counters.md`).
 
 The subreddit's rules, as seen in October 2026: every post needs a line that starts "AI disclosure:" (AutoModerator removes posts without one), a post about your own game is allowed once per 30 days, and referral links are not allowed. The disclosure is the body's first line so it cannot be cut in editing. The `?from=reddit` tag pays no one and counts only a daily total; if the rules on the day read it as a referral link, drop the tag from every link here.
 

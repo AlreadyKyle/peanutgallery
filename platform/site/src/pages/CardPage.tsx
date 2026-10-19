@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { plannedState } from '../components/Cards';
-import { CardFacts, FundAgreement, liveFundLink } from '../components/Funding';
+import { CardFacts, CardStamp, FundAgreement, liveFundLink } from '../components/Funding';
 import { FollowCard } from '../components/Follow';
 import { Glyph } from '../components/Glyph';
 import { NotFound } from '../components/NotFound';
@@ -12,17 +12,19 @@ import { StoppedFacts } from '../components/Stopped';
 import { SuggestedBy } from '../components/SuggestedBy';
 import { Supporters } from '../components/Supporters';
 import { Timeline } from '../components/Timeline';
-import { parseChecks, useCardDetail, type CardDetail } from '../lib/card-source';
+import { parseChecks, useCardDetail, type CardDetail, type Milestones } from '../lib/card-source';
 import { faceOf, isPlanned } from '../lib/cards';
 import { changedLines } from '../lib/config-words';
 import { copy } from '../lib/copy';
-import { formatDateTime, formatInteger, shortSha } from '../lib/format';
+import { SOURCE_PARAM } from '../lib/count';
+import { siteEnv } from '../lib/env';
+import { formatClock, formatDateTime, formatInteger, shortSha } from '../lib/format';
 import { legal } from '../lib/legal';
 import type { Snapshot } from '../lib/source';
 import { useStudio } from '../lib/studio';
 
 // A card's own page, /card/:id (docs/specs/supporter-pages.md), in the card lane: its money shows only
-// through kernel components (CardFacts, Supporters, StoppedFacts), as home's does. The title on the
+// through kernel components (CardFacts, CardStamp, Supporters, StoppedFacts), as home's does. The title on the
 // signal plate; then on paper, stacked at the reading measure at every width, the face with Play (or
 // a planned card's roadmap state) and Tell me when this ships (docs/specs/card-follows.md), the facts,
 // what changed, who suggested it, why it stopped, the supporters and what the agents did. Stacked, because the face and the facts have heights that have nothing to do with
@@ -58,6 +60,73 @@ function minutesBetween(from: string, to: string): number | null {
 }
 
 /**
+ * A shipped card's time words for its stamp line: "Live 40 minutes after work started, 14:00 to
+ * 14:40", in the reader's own time, with the dates when the two fall on different days; null until
+ * both a start and a live time are recorded.
+ */
+export function liveWhen(m: Milestones): string | null {
+  if (m.started_at === null || m.live_at === null) return null;
+  const minutes = minutesBetween(m.started_at, m.live_at);
+  if (minutes === null) return null;
+  const start = new Date(m.started_at);
+  const live = new Date(m.live_at);
+  const sameDay = start.toDateString() === live.toDateString();
+  return words.liveAfter
+    .replace('{minutes}', minutes === 1 ? words.minutesOne : words.minutesMany.replace('{n}', formatInteger(minutes)))
+    .replace('{start}', sameDay ? formatClock(start) : formatDateTime(m.started_at))
+    .replace('{live}', sameDay ? formatClock(live) : formatDateTime(m.live_at));
+}
+
+/**
+ * The build clock on a building or checks card: whole minutes since work started, rounded down,
+ * never seconds ("Building, 42 min in"). The page works it out each time it draws, which is on each
+ * live poll while the card moves, so it never ticks. Null on any other stage or before work started.
+ */
+export function buildClock(stage: string, startedAt: string | null, now: number): string | null {
+  if ((stage !== 'building' && stage !== 'gated') || startedAt === null) return null;
+  const ms = now - Date.parse(startedAt);
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  return words.buildClock[stage === 'building' ? 'building' : 'gated'].replace('{n}', formatInteger(Math.floor(ms / 60_000)));
+}
+
+/** Dust's address tagged as reached from a card page (`?from=card`); null when the site has no play address. */
+export function playFromCard(playUrl: string): string | null {
+  if (playUrl === '') return null;
+  const url = new URL(playUrl);
+  url.searchParams.set(SOURCE_PARAM, 'card');
+  return url.toString();
+}
+
+/**
+ * The card's state line over its facts: a shipped card's stamp (CardStamp, kernel, adds the cost), or
+ * a building or checks card's build clock with, on a Dust card, a plain link to play Dust meanwhile.
+ * A building card has no Fund button, so the clock never sits beside one. A stopped card has neither.
+ */
+function StateLine({ detail }: { detail: CardDetail }) {
+  const card = detail.card;
+  if (detail.stopped !== null) return null;
+  if (card.stage === 'live') {
+    const when = liveWhen(detail.milestones);
+    return when === null ? null : <CardStamp detail={detail} when={when} />;
+  }
+  const clock = buildClock(card.stage, detail.milestones.started_at, Date.now());
+  if (clock === null) return null;
+  const play = card.folder === 'seed-1' ? playFromCard(siteEnv().playUrl) : null;
+  return (
+    <>
+      <p className="card-state" data-fact="clock">
+        {clock}
+      </p>
+      {play === null ? null : (
+        <p className="more card-play-while">
+          <a href={play}>{words.playWhileBuilding}</a>
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
  * Whether the face drawn at the top of the page shows the card's spec rows (Funded, Contributors):
  * an open, picked or funded card with a target (Funding.tsx CardMoney). The facts then leave them out.
  */
@@ -71,18 +140,12 @@ function faceShowsSpecRows(detail: CardDetail): boolean {
 
 function Facts({ detail }: { detail: CardDetail }) {
   const m = detail.milestones;
-  const minutes = m.started_at !== null && m.live_at !== null ? minutesBetween(m.started_at, m.live_at) : null;
   const sha = detail.card.commit_sha;
   return (
     <section className="section" aria-labelledby="card-facts">
       <h2 id="card-facts">{words.factsHeading}</h2>
+      <StateLine detail={detail} />
       <CardFacts detail={detail} onFace={faceShowsSpecRows(detail)}>
-        {minutes === null ? null : (
-          <div data-fact="time">
-            <dt>{words.timeToLive}</dt>
-            <dd>{minutes === 1 ? words.minutesOne : words.minutesMany.replace('{n}', formatInteger(minutes))}</dd>
-          </div>
-        )}
         {m.gate_at === null || m.gate === null ? null : (
           <div data-fact="gate">
             <dt>{words.gate}</dt>
@@ -180,13 +243,17 @@ function Detail({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }
       <section className="section" aria-labelledby="card-lines">
         <h2 id="card-lines">{words.linesHeading}</h2>
         {detail.lines.length === 0 ? null : <p className="muted">{words.linesLede}</p>}
-        <Timeline lines={detail.lines} count={detail.line_count} roles={detail.roles} />
+        <Timeline lines={detail.lines} count={detail.line_count} roles={detail.roles} team={snapshot.roles} />
       </section>
       {/* What the agents are told: on the card's own page only, not on every card (the board, 27 Sep 2026). */}
       {detail.card.intent === null || detail.card.intent.trim() === '' ? null : (
         <section className="section" aria-labelledby="card-brief">
           <h2 id="card-brief">{copy.agentBrief}</h2>
-          <p>{detail.card.intent}</p>
+          {/* Closed by default: a brief can name files and fields, which most readers do not need. */}
+          <details className="card-brief">
+            <summary>{copy.agentBriefOpen}</summary>
+            <p>{detail.card.intent}</p>
+          </details>
         </section>
       )}
     </>
@@ -201,12 +268,17 @@ export function CardPage() {
   if (state.state === 'not-found') return <NotFound body={words.notFound} />;
   const known = snapshot?.cards.find((card) => card.id === id.toLowerCase());
   const title = state.state === 'ready' ? state.detail.card.title : (known?.title ?? words.cardTitle);
+  // Whether a face under the plate says the title: on a phone the plate then keeps only the back link
+  // and Share (styles.css), so the face and its Fund this card come into the first screen. A planned
+  // card draws no face, and a card that did not load has none.
+  const faceTitled =
+    state.state === 'loading' ? known === undefined || !isPlanned(known) : state.state === 'ready' && !(state.detail.stopped === null && isPlanned(state.detail.card));
   // The body arrives after first paint, so the signal plate never grows to fill a short window: the
   // title renders once, where it stays, and the paper band takes the height left over (styles.css).
   // The plate carries no lede: the face under it says the summary, and a short plate puts the face's
   // Fund this card in view when the page opens (docs/specs/brand.md, the second review).
   return (
-    <main className="title-stays card-page">
+    <main className={faceTitled ? 'title-stays card-page face-titled' : 'title-stays card-page'}>
       <div className="band">
         <p className="back">
           <Link className="target" to="/#fund">

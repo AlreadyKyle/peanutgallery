@@ -2,7 +2,8 @@
 // style (render/toon.ts). The dust pile in the middle grows with lifetime dust; gatherers walk lanes
 // to it with sacks, carts roll on a track around it, mills turn at the right, forges glow at the left
 // and foundries smoke at the back. Each unit appears, with a pop, as it is bought, up to the caps in
-// render/world.ts. A strike squashes the pile and throws dust; an unlock throws confetti.
+// render/world.ts. A strike squashes the pile and throws dust; an unlock throws up a cloud of dust
+// puffs, outlined like everything else, and an ink ring runs out across the ground from the pile.
 //
 // Everything moves as a function of the frame clock passed to frame() and of a fixed hash, never
 // Math.random, so the same state at the same clock draws the same pixels (e2e/frames.spec.ts).
@@ -17,7 +18,6 @@ import {
   DataTexture,
   DirectionalLight,
   DodecahedronGeometry,
-  DoubleSide,
   Euler,
   ExtrudeGeometry,
   Float32BufferAttribute,
@@ -29,7 +29,6 @@ import {
   MeshBasicMaterial,
   OctahedronGeometry,
   OrthographicCamera,
-  PlaneGeometry,
   Points,
   PointsMaterial,
   Quaternion,
@@ -103,7 +102,11 @@ const CAMERA_DISTANCE = 40;
 const FRAME_BOX = { half: ISLAND_HALF + 0.2, low: -1.6, high: 2.0 };
 
 const CHUNKS = 90;
-const CONFETTI = 90;
+// The big moments' dust puffs (an unlock, a press, a milestone, a catch, a fork) share one pool.
+const PUFFS = 90;
+// The ink ring a big moment sends across the ground: dashes of ink line, a few rings at once.
+const RING_DASHES = 22;
+const RINGS = 3;
 const POP_SECONDS = 0.5;
 
 const scratch = new Matrix4();
@@ -466,6 +469,14 @@ interface Chunk {
   colour: number;
 }
 
+interface Ring {
+  born: number;
+  life: number;
+  at: Vector3;
+  from: number;
+  to: number;
+}
+
 function outlined(geometry: BufferGeometry, material = toonMaterial()): Group {
   const group = new Group();
   if (geometry.getAttribute('smoothNormal') === undefined) addSmoothNormals(geometry);
@@ -513,12 +524,14 @@ export class DustScene {
   private readonly plots: Prop;
   private readonly shadows: Prop;
   private readonly chunkProp: Prop;
-  private readonly confettiProp: Prop;
+  private readonly puffProp: Prop;
+  private readonly ringProp: Prop;
   private readonly motes: Points;
   private readonly motePositions: Float32Array;
 
   private readonly chunks: Chunk[] = [];
-  private readonly confetti: Chunk[] = [];
+  private readonly puffs: Chunk[] = [];
+  private readonly rings: Ring[] = [];
   private fxSeed = 1;
   // When each drawn unit popped in, by unit and index; absent means it was there from the start.
   private readonly popAt = new Map<string, number[]>();
@@ -577,8 +590,11 @@ export class DustScene {
     this.foundries = new Prop(foundryGeometry(), UNIT_CAPS['foundry']!);
     this.smoke = new Prop(merge([part(new IcosahedronGeometry(0.24, 1), PALETTE.paper)]), UNIT_CAPS['foundry']! * 2 * 3);
     this.chunkProp = new Prop(merge([part(new OctahedronGeometry(1, 0), 0xffffff)]), CHUNKS);
-    this.confettiProp = new Prop(new PlaneGeometry(0.2, 0.12), CONFETTI, new MeshBasicMaterial({ color: 0xffffff, side: DoubleSide }), false);
-    for (const prop of [this.shadows, this.plots, this.gatherers, this.sacks, this.carts, this.mills, this.sails, this.forges, this.glows, this.sparks, this.foundries, this.smoke, this.chunkProp, this.confettiProp]) {
+    // A puff is a low ball like the strike chunks (20 faces, so a full pool adds under 4,000 triangles
+    // with its outline), toon-filled and outlined; a ring dash is a bar of ink.
+    this.puffProp = new Prop(merge([part(new IcosahedronGeometry(1, 0), 0xffffff)]), PUFFS);
+    this.ringProp = new Prop(new BoxGeometry(1, 1, 1), RING_DASHES * RINGS, new MeshBasicMaterial({ color: PALETTE.ink }), false);
+    for (const prop of [this.shadows, this.plots, this.gatherers, this.sacks, this.carts, this.mills, this.sails, this.forges, this.glows, this.sparks, this.foundries, this.smoke, this.chunkProp, this.puffProp, this.ringProp]) {
       this.scene.add(prop.mesh);
       if (prop.outline !== null) this.scene.add(prop.outline);
     }
@@ -593,6 +609,11 @@ export class DustScene {
     this.motes = new Points(moteGeometry, new PointsMaterial({ color: 0xc9b98f, size: 4, sizeAttenuation: false, transparent: true, opacity: 0.7, map: dotTexture(), depthWrite: false }));
     this.motes.frustumCulled = false;
     this.scene.add(this.motes);
+
+    // The puffs carry their colours from the start, as the gatherers do, so they draw with a program
+    // already linked; then every program links now, before play, not in the frame of the first unlock.
+    this.puffProp.colour(0, scratchC.set(PALETTE.sand));
+    this.renderer.compile(this.scene, this.camera);
   }
 
   setState(state: SimState): void {
@@ -710,7 +731,7 @@ export class DustScene {
     this.punchPower = power;
   }
 
-  /** A unit passed a milestone: a nudge and a burst of confetti where it stands. */
+  /** A unit passed a milestone: a nudge and a puff of dust where it stands. */
   milestone(unit: string, owned: number): void {
     this.punch(0.6);
     if (this.calm) return;
@@ -728,7 +749,8 @@ export class DustScene {
     this.popAt.clear();
     for (const unit of Object.keys(UNIT_CAPS)) this.popAt.set(unit, Array.from({ length: UNIT_CAPS[unit]! }, (_, i) => this.time + 0.3 + i * 0.05));
     if (this.calm) return;
-    this.burst(new Vector3(0, this.pileShown * 1.4, 0), CONFETTI, 1.5);
+    this.burst(new Vector3(0, this.pileShown * 1.4, 0), 60, 1.5);
+    this.ring(new Vector3(0, 0.06, 0), this.pileShown * 1.1, this.pileShown * 1.1 + 3.4, 0.8);
     for (let i = 0; i < 40; i += 1) {
       const a = this.random() * Math.PI * 2;
       const speed = 2 + this.random() * 4;
@@ -782,6 +804,7 @@ export class DustScene {
     const at = this.depth.devilAt ?? new Vector3(0, 0.9, 0);
     if (this.calm) return;
     this.burst(at.clone().setY(1.4), 40, 0.9);
+    this.ring(at.clone().setY(0.06), 0.5, 2.2, 0.6);
     for (let i = 0; i < 36; i += 1) {
       const a = (i / 36) * Math.PI * 2;
       const speed = 2.5 + this.random() * 2;
@@ -806,27 +829,36 @@ export class DustScene {
     this.burst(new Vector3(r * 0.7071, 0.8, r * 0.7071), 18, 0.5);
   }
 
-  /** A fork was chosen: a nudge and confetti at the signpost, where the new plank goes up. */
+  /** A fork was chosen: a nudge and a puff of dust at the signpost, where the new plank goes up. */
   chose(): void {
     this.punch(0.6);
     if (this.calm) return;
     this.burst(new Vector3(SIGNPOST.x, 1.6, SIGNPOST.z), 30, 0.7);
+    this.ring(new Vector3(SIGNPOST.x, 0.06, SIGNPOST.z), 0.3, 1.5, 0.5);
   }
 
+  // A cloud of dust puffs thrown up and out from `at`: the pile's own sand, a deeper sand and paper,
+  // never a rainbow. They hang a moment, drift down and shrink away.
   private burst(at: Vector3, count: number, scale: number): void {
     for (let i = 0; i < count; i += 1) {
       const a = this.random() * Math.PI * 2;
-      const speed = (1.2 + this.random() * 3.2) * Math.sqrt(scale);
-      this.spawn(this.confetti, CONFETTI, {
-        born: this.time,
-        life: 2 + this.random() * 1.0,
-        p: at.clone(),
-        v: new Vector3(Math.cos(a) * speed, (4 + this.random() * 4) * Math.sqrt(scale), Math.sin(a) * speed),
-        spin: (this.random() - 0.5) * 16,
-        size: 0.7 + this.random() * 0.6,
-        colour: [PALETTE.magenta, PALETTE.blue, PALETTE.yellow, PALETTE.green, PALETTE.pink, PALETTE.lavender][i % 6]!,
+      const speed = (1.4 + this.random() * 3) * Math.sqrt(scale);
+      this.spawn(this.puffs, PUFFS, {
+        born: this.time + (i % 5) * 0.025,
+        life: 1.3 + this.random() * 0.9,
+        p: at.clone().add(new Vector3(Math.cos(a) * 0.25, 0, Math.sin(a) * 0.25)),
+        v: new Vector3(Math.cos(a) * speed, (2.5 + this.random() * 3.5) * Math.sqrt(scale), Math.sin(a) * speed),
+        spin: (this.random() - 0.5) * 3,
+        size: (0.13 + this.random() * 0.17) * Math.sqrt(scale),
+        colour: i % 5 === 0 ? PALETTE.paper : i % 3 === 0 ? PALETTE.sandDeep : PALETTE.sand,
       });
     }
+  }
+
+  // An ink ring that runs out across the ground from `at`, from radius `from` to `to`, and thins away.
+  private ring(at: Vector3, from: number, to: number, life: number): void {
+    if (this.rings.length >= RINGS) this.rings.shift();
+    this.rings.push({ born: this.time, life, at, from, to });
   }
 
   bought(unit: string, owned: number): void {
@@ -843,23 +875,12 @@ export class DustScene {
     this.punch(0.25);
   }
 
+  /** An unlock: the pile blows a cloud of its own dust into the air, and an ink ring runs out from its foot. */
   unlocked(): void {
     this.punch(1);
     if (this.calm) return;
-    const top = this.pileShown * 1.9;
-    for (let i = 0; i < 60; i += 1) {
-      const a = this.random() * Math.PI * 2;
-      const speed = 1.2 + this.random() * 3.2;
-      this.spawn(this.confetti, CONFETTI, {
-        born: this.time,
-        life: 2.2 + this.random() * 1.0,
-        p: new Vector3(0, top, 0),
-        v: new Vector3(Math.cos(a) * speed, 4 + this.random() * 4, Math.sin(a) * speed),
-        spin: (this.random() - 0.5) * 16,
-        size: 0.8 + this.random() * 0.6,
-        colour: [PALETTE.magenta, PALETTE.blue, PALETTE.yellow, PALETTE.green, PALETTE.pink, PALETTE.lavender][i % 6]!,
-      });
-    }
+    this.burst(new Vector3(0, this.pileShown * 1.2, 0), 54, 1.3);
+    this.ring(new Vector3(0, 0.06, 0), this.pileShown * 1.05, this.pileShown * 1.05 + 2.8, 0.65);
   }
 
   /** The welcome-back moment: dust rains into the pile. */
@@ -1116,23 +1137,45 @@ export class DustScene {
     }
     this.chunkProp.commit(drawn);
 
-    this.confetti.splice(0, this.confetti.length, ...this.confetti.filter((c) => this.time - c.born < c.life));
+    // The big moments' dust puffs: thrown out fast, held back by the air, drifting down as they shrink.
+    this.puffs.splice(0, this.puffs.length, ...this.puffs.filter((c) => this.time - c.born < c.life));
     drawn = 0;
-    for (const c of this.confetti) {
+    for (const c of this.puffs) {
       const age = this.time - c.born;
-      c.v.y -= 5 * dt;
-      c.v.multiplyScalar(1 - Math.min(1, dt * 1.6));
+      if (age < 0) continue;
+      c.v.y -= 2.4 * dt;
+      c.v.multiplyScalar(1 - Math.min(1, dt * 2.8));
       c.p.addScaledVector(c.v, dt);
-      if (c.p.y < 0.03) {
-        c.p.y = 0.03;
-        c.v.set(0, 0, 0);
+      if (c.p.y < c.size) {
+        c.p.y = c.size;
+        c.v.y = 0;
       }
-      const fade = Math.min(1, (c.life - age) / 0.4);
-      this.confettiProp.set(drawn, compose(c.p.x, c.p.y, c.p.z, age * c.spin, c.size * fade, c.size * fade, c.size * fade, age * c.spin * 0.7, age * 3));
-      this.confettiProp.colour(drawn, scratchC.set(c.colour));
+      const k = age / c.life;
+      const grow = 1 - (1 - Math.min(1, age / 0.14)) ** 2;
+      const size = c.size * grow * (1 - k * k);
+      this.puffProp.set(drawn, compose(c.p.x, c.p.y, c.p.z, age * c.spin, size, size * 0.86, size));
+      this.puffProp.colour(drawn, scratchC.set(c.colour));
       drawn += 1;
     }
-    this.confettiProp.commit(drawn);
+    this.puffProp.commit(drawn);
+
+    // The ink rings: dashes of ink line round a circle that runs out fast, then thins away. The line is
+    // as thick as the outlines (render/toon.ts), however big the island is drawn.
+    this.rings.splice(0, this.rings.length, ...this.rings.filter((r) => this.time - r.born < r.life));
+    drawn = 0;
+    const line = outlineUniform.value * 1.1;
+    for (const r of this.rings) {
+      const k = (this.time - r.born) / r.life;
+      const radius = r.from + (r.to - r.from) * (1 - (1 - k) ** 3);
+      const thick = line * Math.sqrt(1 - k);
+      const dash = ((Math.PI * 2 * radius) / RING_DASHES) * 0.62;
+      for (let i = 0; i < RING_DASHES; i += 1) {
+        const a = (i / RING_DASHES) * Math.PI * 2 + r.from;
+        this.ringProp.set(drawn, compose(r.at.x + Math.cos(a) * radius, r.at.y, r.at.z + Math.sin(a) * radius, -a - Math.PI / 2, dash, thick, thick));
+        drawn += 1;
+      }
+    }
+    this.ringProp.commit(drawn);
 
     this.shadows.commit(shadows);
 

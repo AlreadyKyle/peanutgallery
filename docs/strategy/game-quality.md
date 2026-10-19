@@ -74,6 +74,7 @@ No tutorial text walls, no account prompt, no money prompt inside the first 60 s
 - **A reason to come back.** The next unlock is visible and roughly reachable next session.
 - **Shareable end state.** At any natural pause the player can Save as seed and share a run image.
 - **No punishment for leaving.** No streaks, no decay of progress, no timers that expire.
+- **Depth is measured.** The scripted playtest's table and the headless bot's report give the minutes to the last new mechanic (the last unlock that adds a unit, the weather, gems, a fork, or orders or dust devils, rather than only a multiplier) and how many multiplier-only unlocks follow it (`seed-1/bots/depth.ts`).
 
 ## 6. Performance budgets
 
