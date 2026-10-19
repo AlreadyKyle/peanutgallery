@@ -170,15 +170,14 @@ test('while sign-in is closed the site offers no profile, and paying still works
   expect((await page.locator('.topbar').boundingBox())?.height ?? 0).toBeLessThanOrEqual(61);
 });
 
-test('while sign-in is closed the frame links nothing that needs a profile, and the empty lists offer the game', async ({ page }) => {
+test('while sign-in is closed the frame keeps the ideas board, links nothing that needs a profile, and the empty lists offer the game', async ({ page }) => {
   await answerCommunity(page, { signInOpen: false, ideas: [] });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/suggest');
   const nav = page.getByRole('navigation', { name: 'Site' });
   await expect(nav.getByRole('link', { name: 'Team', exact: true })).toBeVisible();
-  // Pitching needs a profile, so the top bar drops Ideas; the footer keeps the board, which anyone can
-  // read, and drops Your desk.
-  await expect(nav.getByRole('link', { name: 'Ideas', exact: true })).toHaveCount(0);
+  // Anyone can read the board, so the top bar and the footer keep Ideas; the footer drops Your desk.
+  await expect(nav.getByRole('link', { name: 'Ideas', exact: true })).toHaveAttribute('href', '/suggest');
   const footer = page.getByRole('contentinfo');
   await expect(footer.getByRole('link', { name: 'Ideas', exact: true })).toHaveAttribute('href', '/suggest');
   await expect(footer.getByRole('link', { name: 'Your desk', exact: true })).toHaveCount(0);

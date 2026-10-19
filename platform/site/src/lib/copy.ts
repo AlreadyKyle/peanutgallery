@@ -797,7 +797,7 @@ export const copy = {
     pitch: 'Pitch an idea',
     all: 'See every idea',
     empty: 'No ideas on the board yet. Sign in and pitch the first one.',
-    emptyClosed: 'No ideas on the board yet.',
+    emptyClosed: 'No ideas on the board yet. Pitching opens with profiles, which are not open yet.',
     unavailable: 'The ideas did not load just now. The full board is on the ideas page.',
     loading: 'Loading the ideas.',
     upvoteOne: '1 upvote',
