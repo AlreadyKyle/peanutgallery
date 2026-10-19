@@ -163,6 +163,11 @@ test('while sign-in is closed the site offers no profile, and paying still works
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page.locator('.perks-keep')).toHaveCount(0);
   expect(await overflowsHorizontally(page)).toBe(false);
+  // The empty you slot takes no room, so the bar stays one row on a 360px phone.
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto('/');
+  await expect(page.locator('.nav-play')).toBeVisible();
+  expect((await page.locator('.topbar').boundingBox())?.height ?? 0).toBeLessThanOrEqual(61);
 });
 
 test('while sign-in is closed the frame links nothing that needs a profile, and the empty lists offer the game', async ({ page }) => {

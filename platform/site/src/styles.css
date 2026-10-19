@@ -567,6 +567,12 @@ nav a.active {
   display: inline-flex;
 }
 
+/* While sign-in is closed the slot holds nothing; it takes no gap in the row either, so the bar stays
+   one row at 360px. */
+.you-slot:empty {
+  display: none;
+}
+
 .you-chip {
   display: inline-flex;
   align-items: center;
