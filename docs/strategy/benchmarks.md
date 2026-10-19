@@ -15,9 +15,9 @@ Abbreviations: D1, D7 and D30 are the share of a group active again 1, 7 and 30 
 
 | Metric | How measured | Target | Floor | Assumption | Comparable or source |
 |---|---|---|---|---|---|
-| Gross contributions (30d) | Ledger, contributions in | Stage 1 of the path to profitability ($390) within 90 days of Phase 2; stage 2 ($600) next | Kill and pivot table, `business-strategy.md` §8 | $10 average contribution | Kick-off plan scenarios: Flop about $1,800, Mid about $27,000 over the first three months |
+| Gross contributions (30d) | Ledger, contributions in | Stage 1 of the path to profitability ($390) within 90 days of the first launch post; stage 2 ($600) next | $200 gross in the first 30 days, the kill table (`docs/PLAN.md` §8) | $10 average contribution | Kick-off plan scenarios: Flop about $1,800, Mid about $27,000 over the first three months |
 | Coverage | Studio share in / studio costs (30d) | Above 1 every month with contributions | 1.0 | Costs per `business-strategy.md` §3 | `docs/VISION.md` §1 |
-| Distinct supporters (30d) | Distinct hashed payer keys on the ledger | 100 within 90 days of Phase 2 | 25 in the first 30 days | | Kick-off plan's 30-day kill line of 100 funders |
+| Distinct supporters (30d) | Distinct hashed payer keys on the ledger | 100 within 90 days of the first launch post | 25 in the first 30 days | | Kick-off plan's 30-day kill line of 100 funders |
 | Median contribution | Ledger | $8 or more | $5 | Fee drag below $5 (`business-strategy.md` §2) | Fee table in `business-strategy.md` |
 | Repeat supporter rate | Share of payer keys with a second payment within 60 days of the first | 25% | 10% | Repeat funding is the business | Patreon-style recurring support; our measured figure replaces it |
 | Return after ship | Payments from a supporter within 7 days of a card they funded going live, as a share of such supporters | 15% | 5% | Ship notices drive it | `docs/VISION.md` §1 |

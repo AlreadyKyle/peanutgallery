@@ -23,18 +23,20 @@ r/incremental_games goes last, once Dust shows depth: the playtest's "Last new m
 
 ## Posting order
 
-The order is PLAN.md §7 Channels: Reddit first, Hacker News second, X third, with r/incremental_games held to the end.
+The order is PLAN.md §7 Channels (§10 decision 77). Leave at least two days between posts: every Reddit post carries `?from=reddit`, so posting on separate days is the only way to tell them apart.
 
 | Order | Where | Draft |
 |---|---|---|
 | 1 | r/ClaudeAI | `reddit-claudeai.md` |
 | 2 | r/artificial | `reddit-artificial.md` |
-| 3 | Hacker News (Show HN) | `show-hn.md` |
-| 4 | X | `x-thread.md` (or the single post, `x-post.md`) |
-| 5 | LinkedIn, optional | `linkedin.md`, the board's personal post |
-| 6 | r/incremental_games, once Dust shows depth (above) | `reddit-incremental-games.md` |
+| 3 | r/WebGames | `reddit-webgames.md` |
+| 4 | r/playmygame | `reddit-playmygame.md` |
+| 5 | Hacker News (Show HN), submitting the game with a comment the board writes itself | `show-hn.md` |
+| 6 | X, by hand until the marketing engine has its keys | `x-thread.md` (or the single post, `x-post.md`) |
+| 7 | LinkedIn, optional | `linkedin.md`, the board's personal post |
+| 8 | r/incremental_games, once Dust shows depth (above) | `reddit-incremental-games.md` |
 
-Nothing goes to r/gamedev (PLAN.md §7 Channels). Press comes fourth in PLAN.md §7 and has no draft here.
+Nothing goes to r/gamedev (PLAN.md §7 Channels). Press comes after these in PLAN.md §7 and has no draft here.
 
 `backlash-line.md` is the prepared reply to a comment that objects to AI in games, on any of the posts.
 

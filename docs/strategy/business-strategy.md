@@ -128,12 +128,12 @@ The moat is the combination and its record: a public ledger of every card, a stu
 
 ## 8. Kill and pivot conditions
 
-Windows are measured from events, not dates: "after Phase 2 starts" means after the last pull request of the final-state series is live and the first launch beat in `growth.md` has run. Every figure below is a proposal for the board to confirm.
+Windows are measured from events, not dates: they count from the first launch post, the first post in `docs/launch/README.md`'s order. This is the same table as `docs/PLAN.md` §8, the only kill table (§10 decision 77).
 
 | Window | Kill or pivot if | Pivot to |
 |---|---|---|
-| 30 days after Phase 2 starts | under 25 distinct supporters, under $500 gross, or the board spends more than 10 hours a week on operations | A weekly live show: the stream runs only during a set block, cards close on the show, and the site stays as the record |
-| 90 days after Phase 2 starts | under 100 distinct supporters, under $2,000 cumulative, or D7 return of players under 2% | A public demo: contributions close, the games and the history stay up, the pipeline is offered as a service or a write-up |
-| 180 days after Phase 2 starts | under $6,000 cumulative and no revenue line beyond contributions in sight | Archive: close contributions, refund unspent agent money by the Terms' wind-down rule (`docs/PLAN.md` §5 Terms), publish the post-mortem and the kit |
+| 30 days after the first launch post | under 25 distinct supporters, under $200 gross, or board time over 10 hours a week | A weekly live show: the studio runs only during a set block, cards close on the show, and the site stays as the record |
+| 90 days after the first launch post | under 100 distinct supporters, under $2,000 cumulative, or D7 return of players under 2% | A public demo: contributions close, the games and the history stay up, the pipeline is offered as a service or a write-up |
+| 180 days after the first launch post | under $6,000 cumulative and no revenue line beyond contributions in sight | Archive: close contributions, refund unspent agent money by the Terms' wind-down rule (`docs/PLAN.md` §5 Terms), publish the post-mortem and the kit |
 
-Continue and invest when the opposite holds: stage 1 of the path above reached within 90 days of Phase 2 and repeat supporters above the target in `benchmarks.md`.
+Continue and invest when the opposite holds: stage 1 of the path above reached within 90 days of the first launch post and repeat supporters above the target in `benchmarks.md`.
