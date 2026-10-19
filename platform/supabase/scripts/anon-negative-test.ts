@@ -217,8 +217,9 @@ const SNAPSHOT_RPCS: Array<[string, string[]]> = [
 // not exist, and the /thanks answer, which for a session that is not a real one is exactly
 // {"status":"pending"}. Both only read; thanks_for_session and public_supply (home-flow) are the
 // security definer functions anon calls: the first's answer for a made-up session names nothing, and
-// the second answers only the drafting status's six figures and fixed codes, no text.
-const SUPPLY_KEYS = ["drafting", "next_check_at", "reason", "run_limit", "runs_today", "short"];
+// the second answers only the drafting status's seven figures, flags and fixed codes, no text
+// (offline from honest-status, docs/specs/honest-status.md).
+const SUPPLY_KEYS = ["drafting", "next_check_at", "offline", "reason", "run_limit", "runs_today", "short"];
 const CARD_DOCUMENT_KEYS = ["card", "funding", "line_count", "lines", "milestones", "roles", "spent_usd", "stopped", "supporter_count", "supporters"];
 const SUPPORTER_COLUMNS = "card_id,supporter_number,founding";
 const ROLE_STATS_COLUMNS = "role_id,spent_usd,spent_7d_usd,shipped_cards";
@@ -393,8 +394,8 @@ async function main(): Promise<void> {
     });
   }
 
-  // home-flow (docs/specs/home-flow.md): public_supply answers exactly its six keys, and site_live's
-  // studio entry carries the same.
+  // home-flow (docs/specs/home-flow.md) and honest-status: public_supply answers exactly its seven
+  // keys, and site_live's studio entry carries the same.
   {
     const { data, error } = await db.rpc("public_supply", {});
     const present = typeof data === "object" && data !== null && !Array.isArray(data) ? Object.keys(data as object).sort() : [];
