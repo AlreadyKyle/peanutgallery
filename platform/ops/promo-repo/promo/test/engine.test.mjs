@@ -10,7 +10,7 @@ import { chooseVariant, emptyPlaybook, updatePlaybook } from '../src/learn.mjs';
 import { listOutbox, readSent, ROOT } from '../src/lib.mjs';
 import { lintText } from '../src/lint.mjs';
 import { learn } from '../src/metrics.mjs';
-import { harvestMoments } from '../src/moments.mjs';
+import { EXPLAINERS, harvestMoments } from '../src/moments.mjs';
 import { publish } from '../src/publish.mjs';
 
 const NOW = Date.parse('2026-10-18T15:00:00Z');
@@ -65,6 +65,9 @@ test('lint catches the studio voice rules', () => {
   assert.ok(lintText('Thanks for the donation to the studio today.').some((p) => p.includes('donation')));
   assert.ok(lintText('This is it — the studio grew today.').some((p) => p.includes('dash')));
   assert.deepEqual(lintText('The Gatherer now costs 10 dust instead of 11.'), []);
+  assert.ok(lintText('The first ever studio run by AI agents in public.').some((p) => p.includes('claims a first')));
+  assert.deepEqual(lintText('The first unlock now comes sooner in Dust.'), []);
+  for (const e of EXPLAINERS) assert.deepEqual(lintText(e.text), [], e.ref);
 });
 
 test('the bandit tries each variant, then prefers the one that earns more', () => {

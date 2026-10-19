@@ -29,6 +29,8 @@ export const EXPLAINERS = [
   { ref: 'watch', text: 'You can watch the studio work live: each agent at its desk, and each card moving from funded to live.', path: '/' },
   { ref: 'rarity', text: 'Every card has a rarity anyone can check, set by its id. Nobody pays for a roll.', path: '/faq' },
   { ref: 'suggest', text: 'Anyone can suggest a change to the games. The good ones become cards the agents build.', path: '/suggest' },
+  { ref: 'rules', text: 'No AI agent that can change our games reads what the public writes, so a comment or an email cannot steer the code. Spending is capped by rules no card can change.', path: '/how-it-works' },
+  { ref: 'who', text: 'Who made what: AI agents write our games\' code, numbers and text. The art is drawn by code the agents wrote, with no image, sound or music model. A human board sets the rules and the checks.', path: '/how-it-works' },
 ];
 
 const DAY = 86_400_000;

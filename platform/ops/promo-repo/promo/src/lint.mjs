@@ -19,6 +19,8 @@ export function lintText(text, { channel, link } = {}) {
   for (const w of URGENCY) if (lower.includes(w)) problems.push(`urgency: ${w}`);
   if (MONEY.test(text)) for (const w of CHANCE) if (words.has(w)) problems.push(`chance word beside money: ${w}`);
   if (/\bthis week\b/i.test(text)) problems.push('says "this week"; name the week');
+  // A "first" claim invites a correction under the post; say what the studio does instead.
+  if (/\b(first[- ]ever|world'?s first|the first (ai|game|studio))\b/i.test(text)) problems.push('claims a first');
   if (/#\w/.test(text)) problems.push('hashtag');
   if (/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(text)) problems.push('emoji');
   if (/\b(you (have|must|should) (to )?fund|please (fund|contribute|support))\b/i.test(text)) problems.push('begs or guilts');
