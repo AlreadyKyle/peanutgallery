@@ -1,10 +1,10 @@
 import { useEffect, useState, type CSSProperties } from 'react';
-import { CardFace } from '../components/Card';
+import { FundingBar, fundingCaption } from '../components/Funding';
 import { feedFromSnapshot, useFeed } from '../lib/community';
 import { useStudioDoc } from '../components/LiveStudio';
 import { MachineMark } from '../components/Mark';
 import { Pipe } from '../components/Pipe';
-import { StudioRoom } from '../components/StudioRoom';
+import { EmptyRoom, StudioRoom } from '../components/StudioRoom';
 import { copy } from '../lib/copy';
 import { withQrSource } from '../lib/count';
 import { groupCards, fundingPlace } from '../lib/cards';
@@ -15,17 +15,21 @@ import { useStudio } from '../lib/studio';
 // tool loads as a browser source. The live studio, the pipe, the top three cards open for funding and
 // "Fund at mobmachine.games" with a QR code drawn in code (lib/qr.ts). Unlisted and not indexed: no
 // link points here and the top bar and footer are not drawn (App.tsx). The frame scales to fit a
-// smaller window, so a preview shows the whole of it.
+// smaller window, so a preview shows the whole of it. The room is the picture, as large as the frame's
+// height allows; the cards and the pipe share one ruled column beside it.
 
 export const BROADCAST_PATH = '/broadcast';
 // The QR code's address carries a source tag, so a landing from it counts as broadcast_qr (lib/count.ts,
 // docs/specs/counter-senders.md); the frame drops the tag on arrival.
 export const FUND_URL = withQrSource('https://mobmachine.games/contribute');
 
+const fitScale = () => Math.min(window.innerWidth / 1920, window.innerHeight / 1080) || 1;
+
+// The first paint is already at the window's scale, so nothing jumps when the page settles.
 function useScale(): number {
-  const [scale, setScale] = useState(1);
+  const [scale, setScale] = useState(fitScale);
   useEffect(() => {
-    const fit = () => setScale(Math.min(window.innerWidth / 1920, window.innerHeight / 1080) || 1);
+    const fit = () => setScale(fitScale());
     fit();
     window.addEventListener('resize', fit);
     return () => window.removeEventListener('resize', fit);
@@ -80,28 +84,30 @@ export function Broadcast() {
         </div>
       </div>
       <div className="band broadcast-body">
-        <div className="broadcast-main">
-          <div className="broadcast-room">
-            {snapshot === null ? (
-              <p className="muted">{studio.state === 'loading' ? copy.broadcast.loading : copy.broadcast.unavailable}</p>
-            ) : (
-              <StudioRoom snapshot={snapshot} studio={doc} facts={false} />
-            )}
-          </div>
+        {/* The empty room holds the picture's box while the snapshot loads. */}
+        <div className="broadcast-room">{snapshot === null ? <EmptyRoom studio={doc} /> : <StudioRoom snapshot={snapshot} studio={doc} facts={false} />}</div>
+        <div className="broadcast-side">
           <section className="broadcast-cards" aria-labelledby="broadcast-cards">
             <h2 id="broadcast-cards">{copy.broadcast.cardsTitle}</h2>
-            {snapshot === null || top.length === 0 ? (
+            {snapshot === null ? (
+              <p className="muted broadcast-cards-wait">{studio.state === 'loading' ? copy.broadcast.loading : copy.broadcast.unavailable}</p>
+            ) : top.length === 0 ? (
               <p className="muted">{copy.broadcast.noCards}</p>
             ) : (
-              <ul className="card-grid broadcast-grid">
-                {top.map((card) => (
-                  <CardFace key={card.id} card={card} snapshot={snapshot} mode="example" compact />
-                ))}
+              <ul className="broadcast-fund-list">
+                {top.map((card) => {
+                  const caption = fundingCaption(card, snapshot);
+                  return (
+                    <li key={card.id}>
+                      <p className="broadcast-fund-title">{card.title}</p>
+                      <FundingBar card={card} />
+                      {caption === null ? null : <p className="small">{caption}</p>}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>
-        </div>
-        <div className="broadcast-side">
           <Pipe
             events={live ? feed.events : snapshot === null ? [] : feedFromSnapshot(snapshot)}
             live={live}
@@ -109,7 +115,7 @@ export function Broadcast() {
             hasOlder={false}
             loadingOlder={false}
             onOlder={() => undefined}
-            pageSize={6}
+            pageSize={3}
             headingLevel={2}
             paging={false}
             linked={false}

@@ -4914,19 +4914,14 @@ main.broadcast > .band > * {
   fill: var(--ink);
 }
 
-/* The overlay's body: the room large on the left with the three cards to fund under it, the pipe a
-   ruled column down the right, as tall as both, so a short feed leaves no hollow. */
+/* The overlay's body: the room as large as the frame's height allows on the left; on the right one
+   ruled column, the cards open for funding over the pipe, so the column is full however short the
+   feed. The room fits by height: the drawing takes the stage's height and its own width from its
+   viewBox, centred, and its frame hugs it, so a role card still lands on its agent. */
 .broadcast-body {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) 34rem;
   gap: var(--space-4);
-  min-height: 0;
-}
-
-.broadcast-main {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: var(--space-3);
   min-height: 0;
 }
 
@@ -4944,28 +4939,73 @@ main.broadcast > .band > * {
 }
 
 .broadcast-room .studio-stage {
+  display: grid;
   flex: 1;
+  place-items: center;
+  min-height: 0;
+}
+
+.broadcast-room .studio-frame {
+  width: fit-content;
+  max-width: 100%;
+  height: 100%;
   min-height: 0;
 }
 
 .broadcast-room .room {
+  width: auto;
+  max-width: 100%;
   height: 100%;
 }
 
 .broadcast-side {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-4);
   min-height: 0;
   overflow: hidden;
   border-inline-start: 1px solid var(--hairline);
   padding-inline-start: var(--space-4);
 }
 
+/* The column places its two parts; the page's section stacking margin does not apply. */
+main.broadcast .broadcast-side > * {
+  margin: 0;
+}
+
+/* The pipe runs to the frame's foot: a row that does not fit fades out there instead of being cut. */
+.broadcast-side > .pipe {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 4rem), transparent);
+}
+
 .broadcast-cards h2 {
   font-size: var(--size-lead);
 }
 
-.broadcast-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  margin-top: var(--space-2);
+/* While the snapshot loads, the line holds three rows' height, so the pipe under it never moves. */
+.broadcast-cards-wait {
+  min-height: 19rem;
+}
+
+.broadcast-fund-list {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.broadcast-fund-list > li {
+  display: grid;
+  gap: var(--space-1);
+  padding-block: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+
+.broadcast-fund-list > li > p {
+  margin: 0;
+}
+
+.broadcast-fund-title {
+  font-weight: var(--weight-bold);
 }
 
 /* Motion of the final state: transform and opacity only, under no-preference only. The legendary
