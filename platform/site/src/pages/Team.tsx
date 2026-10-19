@@ -79,7 +79,7 @@ function RoleRow({ role, status, snapshot }: { role: Role; status: TeamStatus; s
 
 /**
  * A role that does not run yet (Starts later, Planned) as one entry of a compact list under the
- * running team's boxes (the full pass, S25: ten boxes of roles still to come took over half the page
+ * running team's boxes (the full pass, S25: ten boxes of roles still to come took about half the page
  * on a phone): its sleeping avatar beside its name, what it will do, and when it starts. No box, no
  * model and no cost, since it has none yet.
  */

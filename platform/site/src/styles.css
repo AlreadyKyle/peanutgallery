@@ -2170,8 +2170,9 @@ button.link:hover:not(:disabled) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* The last row's first entry closes the list with a hairline too, under its partner. */
-  .later-role:nth-last-child(2):nth-child(odd) {
+  /* The last entry of each column closes it with a hairline: with an even count, the last row's
+     first entry; with an odd count, the right-hand entry of the row above the last. */
+  .later-role:nth-last-child(2) {
     border-bottom: 1px solid var(--hairline);
   }
 }
