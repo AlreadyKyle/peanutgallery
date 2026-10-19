@@ -672,11 +672,9 @@ main:not(.sheet) .section > h2 + p:not(.muted, .small, .card-state):has(+ :not(p
   line-height: var(--leading-title);
 }
 
-/* A sheet's headings label its reading column (from 64rem they stand in its left five twelfths), and
-   a framed panel's heading titles a part: both take the part size, so a clause never breaks into a
-   word a line. */
-main.sheet h2,
-.how-rules > h2 {
+/* A sheet's headings label its reading column (from 64rem they stand in its left five twelfths), so
+   they take the part size, and a clause never breaks into a word a line. */
+main.sheet h2 {
   font-size: var(--size-h2);
 }
 
@@ -1878,8 +1876,8 @@ button.link:hover:not(:disabled) {
 
 /* How it works: six steps, each a short text with the real component that shows it under it, held
    to the reading measure. Stacked at every width, so a short text never floats beside a tall
-   example. The visual sits in a dashed frame with its Example label, so it never reads as something
-   to act on. */
+   example. The visual sits on the page under its Example label, with no frame (text sits on the
+   page; a dashed edge means an empty slot), and the label says it is not something to act on. */
 /* The explainer video above the six steps: on the steps' measure on a phone, the full width from 64rem. */
 .how-watch {
   max-width: var(--measure);
@@ -1911,15 +1909,12 @@ button.link:hover:not(:disabled) {
 
 .example {
   margin: 0;
-  padding: var(--space-2);
-  border: 1px dashed var(--field);
-  border-radius: var(--radius);
 }
 
 .example-label {
   display: flex;
   flex-direction: column;
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
   color: var(--text-muted);
   font-size: var(--size-small);
   font-weight: var(--weight-strong);
@@ -2703,9 +2698,8 @@ input[type='radio'] {
   font-weight: var(--weight-bold);
 }
 
-/* Who runs it (WhoRuns.tsx), on ink: a large lede, two tiles side by side, then the board's duties as
-   a numbered checklist in two columns. Rules are hairlines in the text colour, so the block reads on
-   any band. */
+/* Who runs it (WhoRuns.tsx): a large lede, then the two ways it is run side by side. No frame: the
+   parts sit on the page and group by space (text sits on the page with no box; the full pass). */
 .who-runs .who-lede {
   max-width: 40rem;
   font-size: var(--size-lead);
@@ -2721,30 +2715,20 @@ input[type='radio'] {
 
 .who-tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-}
-
-.who-tile {
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
-  border-radius: var(--radius-card);
+  gap: var(--space-3) var(--space-5);
+  margin-top: var(--space-4);
 }
 
 .who-tile p:last-child {
   margin-bottom: 0;
 }
 
-/* /how-it-works' fixed rules: framed like Who runs it's tiles, on the ink band. */
-.how-rules {
-  padding: var(--space-3);
-  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
-  border-radius: var(--radius-card);
-}
-
-.how-rules > :last-child {
-  margin-bottom: 0;
+/* From 48rem the two ways it is run share two columns, so with no frame around them their left
+   edges still line up down the block. */
+@media (min-width: 48rem) {
+  .who-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* Motion ---------------------------------------------------------------------
@@ -3390,10 +3374,6 @@ input[type='radio'] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .example {
-    padding: var(--space-3);
-  }
-
   /* /how-it-works: the video takes the page's width, and each step's text sits beside its example. */
   .how-watch,
   .how-steps {
@@ -3411,7 +3391,7 @@ input[type='radio'] {
     top: calc(var(--bar) + var(--space-4));
   }
 
-  /* The money band's pair: the money on the left, the framed rules beside it, one width each. */
+  /* The money band's pair: the money on the left, the rules beside it, one width each. */
   .pair.how-pair {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3452,9 +3432,8 @@ input[type='radio'] {
 }
 
 /* A lone example card (/how-it-works and the guide's demos) is one three-column cell wide, and the
-   dashed frame around an example card hugs it, so its edge sits one padding outside the card and no
-   empty column runs down beside the card inside the frame. On a phone the frame is the full width
-   and the card fills it. */
+   example around it hugs it, so its label sits over the card's own width. On a phone the card takes
+   the full width. */
 .example .card-grid,
 .demo .card-grid {
   grid-template-columns: minmax(0, 23rem);
@@ -4685,14 +4664,13 @@ ol.timeline {
   accent-color: var(--ink);
 }
 
+/* A plain note (the suggestion form's safety line, /me's sign-in and claim notes): its glyph beside
+   the words, on the page with no box around it (the full pass). */
 .notice-plain {
   display: flex;
   gap: var(--space-1);
   align-items: flex-start;
   max-width: var(--measure-text);
-  padding: var(--space-2);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
   font-size: var(--size-small);
 }
 
