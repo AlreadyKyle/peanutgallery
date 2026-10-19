@@ -47,10 +47,9 @@ const PLAIN_PATH = /^\/[a-z0-9-]*$/;
 // A footer link may go one level deeper (/studio/history), still a plain path on this site.
 const PLAIN_PATH_DEEP = /^\/[a-z0-9-]+(\/[a-z0-9-]+)?$/;
 
-// While sign-in is closed (lib/sign-in.ts) the frame drops the links to what needs a profile: the top
-// bar's Ideas (pitching needs one; the footer keeps the board, which anyone can read) and the footer's
-// Your desk (the Menu's own desk link already waits on the same answer).
-const TOP_BAR_NEEDS_PROFILE: readonly string[] = ['/suggest'];
+// While sign-in is closed (lib/sign-in.ts) the frame drops the footer's Your desk, which needs a profile
+// (the Menu's own desk link already waits on the same answer). The top bar keeps Ideas: anyone can read
+// the board and how the review agent works, and the page says pitching waits on profiles.
 const FOOTER_NEEDS_PROFILE: readonly string[] = ['/me'];
 
 /**
@@ -255,7 +254,7 @@ function TopBar() {
         </button>
         <ul id="site-menu" className="nav-links" data-open={open ? 'true' : undefined}>
           {pageNav
-            .filter((item) => PLAIN_PATH.test(item.to) && (signInOpen || !TOP_BAR_NEEDS_PROFILE.includes(item.to)))
+            .filter((item) => PLAIN_PATH.test(item.to))
             .map((item) => (
               <li key={item.to}>
                 <NavLink to={item.to}>{item.label}</NavLink>

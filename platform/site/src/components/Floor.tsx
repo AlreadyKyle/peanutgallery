@@ -188,16 +188,15 @@ export function useTopIdeas() {
 }
 
 /**
- * Whether home walks past the Ideas station: always while players can pitch, and while sign-in is
- * closed only once the board has ideas to read, so a part of the floor, a rail row and a place on the
- * map never advertise what nobody can do yet.
+ * Home always walks past the Ideas station. While sign-in is closed it reads the board and says that
+ * pitching waits on profiles, rather than leaving the players' ideas off the floor, the rail and the map.
  */
 export function useIdeasStation() {
   const signedIn = useSignedIn();
   const signInOpen = useSignInOpen();
   const ideas = useTopIdeas();
   const pitching = signedIn || signInOpen;
-  return { pitching, ideas, shown: pitching || (ideas.state === 'ready' && ideas.items.length > 0) };
+  return { pitching, ideas, shown: true };
 }
 
 /**
@@ -231,7 +230,8 @@ export function IdeasStation({ index, station }: { index: number; station: Retur
           ))}
         </ol>
       )}
-      {pitching ? null : <p className="small station-note">{copy.ideas.closed}</p>}
+      {/* An empty board's tile already says why nobody can pitch; a board with ideas says it under them. */}
+      {pitching || ideas.items.length === 0 ? null : <p className="small station-note">{copy.ideas.closed}</p>}
       <p className="hero-actions station-actions">
         {pitching ? (
           <Link className="button" to="/suggest#suggest-send">

@@ -245,7 +245,7 @@ describe('Site chrome', () => {
     expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: copy.createdByName }).getAttribute('href')).toBe(copy.createdByUrl);
   });
 
-  it('drops the top bar\'s Ideas and the footer\'s Your desk while sign-in is closed, and keeps Ideas in the footer', async () => {
+  it('keeps Ideas in the top bar and the footer while sign-in is closed, and drops the footer\'s Your desk', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string) =>
@@ -261,7 +261,7 @@ describe('Site chrome', () => {
       await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledWith('/api/community/auth/settings', expect.anything()));
       await waitFor(() => expect(window.localStorage.getItem('mm:sign-in-open')).toBe('0'));
       const hrefs = (root: HTMLElement) => within(root).getAllByRole('link').map((link) => link.getAttribute('href'));
-      expect(hrefs(nav())).not.toContain('/suggest');
+      expect(hrefs(nav())).toContain('/suggest');
       expect(hrefs(nav())).not.toContain('/me');
       expect(hrefs(nav())).toContain('/team');
       const footer = screen.getByRole('contentinfo');

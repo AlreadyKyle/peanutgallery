@@ -519,7 +519,7 @@ describe('Landing', () => {
     expect(within(lane('next')).queryByRole('progressbar')).toBeNull();
   });
 
-  it('leaves Ideas off the floor and the rail while sign-in is closed and the board has no ideas', async () => {
+  it('keeps Ideas on the floor and the rail while sign-in is closed and the board has no ideas, with no pitch button', async () => {
     resetSignInOpen();
     window.localStorage.clear();
     const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } }));
@@ -531,12 +531,15 @@ describe('Landing', () => {
     vi.stubGlobal('fetch', fetch);
     try {
       const { container } = renderLanding(fakeSource());
-      await waitFor(() => expect(document.querySelectorAll('.floor-parts > [data-station-part]')).toHaveLength(4));
+      await waitFor(() => expect(document.querySelectorAll('.floor-parts > [data-station-part]')).toHaveLength(5));
       await waitFor(() => expect(fetch.mock.calls.map(([url]) => url).some((url) => url.includes('/suggestions'))).toBe(true));
       await waitFor(() => expect(window.localStorage.getItem('mm:sign-in-open')).toBe('0'));
-      expect(container.querySelector('[data-station-part="ideas"]')).toBeNull();
-      expect(screen.queryByRole('heading', { level: 2, name: copy.ideas.title })).toBeNull();
-      expect([...container.querySelectorAll('.floor-stations a')].map((a) => a.getAttribute('href'))).not.toContain('#ideas');
+      const part = container.querySelector<HTMLElement>('[data-station-part="ideas"]')!;
+      expect(part).not.toBeNull();
+      await waitFor(() => expect(within(part).getByText(copy.ideas.emptyClosed)).toBeTruthy());
+      expect(within(part).queryByText(copy.ideas.closed)).toBeNull();
+      expect(within(part).queryByRole('link', { name: copy.ideas.pitch })).toBeNull();
+      expect([...container.querySelectorAll('.floor-stations a')].map((a) => a.getAttribute('href'))).toContain('#ideas');
     } finally {
       vi.unstubAllGlobals();
       resetSignInOpen();
