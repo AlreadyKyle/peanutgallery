@@ -1,15 +1,17 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { GUIDE, PAGE_PATHS } from '../e2e/routes';
+import { staticSitemap } from '../netlify/lib/sitemap';
 
-// public/robots.txt and public/sitemap.xml (docs/specs/robots-sitemap.md). Without them both paths
-// fell through to the page's HTML. The sitemap lists every page in the kernel route list except the
-// versioned legal pages, the not-found page and the unlisted design guide, so a new page fails here
-// until it is listed. Paths resolve from the package root vitest runs in (see styles.test.ts).
+// public/robots.txt and /sitemap.xml (docs/specs/robots-sitemap.md). Without them both paths fell
+// through to the page's HTML. The sitemap is served by netlify/functions/sitemap.mts, which adds the
+// card pages to these fixed pages: every page in the kernel route list except the versioned legal
+// pages, the not-found page and the unlisted design guide, so a new page fails here until it is
+// listed. Paths resolve from the package root vitest runs in (see styles.test.ts).
 const robots = readFileSync(resolve(process.cwd(), 'public/robots.txt'), 'utf8');
-const sitemap = readFileSync(resolve(process.cwd(), 'public/sitemap.xml'), 'utf8');
+const sitemap = staticSitemap();
 const ORIGIN = 'https://mobmachine.games';
 
 describe('robots.txt and sitemap.xml', () => {
@@ -26,6 +28,10 @@ describe('robots.txt and sitemap.xml', () => {
     const unlisted = ['/no-such-page', GUIDE, '/u/sample-player', '/me', '/broadcast'];
     const expected = PAGE_PATHS.filter((path) => !/\/\d+$/.test(path) && !unlisted.includes(path));
     expect(listed).toEqual(expected.map((path) => `${ORIGIN}${path}`));
+  });
+
+  it('leaves no static sitemap in public/ to stand in for the function', () => {
+    expect(existsSync(resolve(process.cwd(), 'public/sitemap.xml'))).toBe(false);
   });
 
   it('never names the design guide', () => {

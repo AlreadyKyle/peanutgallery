@@ -14,7 +14,7 @@ export type PageMeta = { readonly title: string; readonly description: string };
  * faq.ts and terms-versions.ts hold it) and its lede as the description; home keeps index.html's
  * pitch. A fixed table, so the edge function reads nothing at run time; netlify/page-meta.test.ts
  * fails when a page's words move and the table does not, or when a page is added to the kernel route
- * list (e2e/routes.ts) and not here.
+ * list (e2e/routes.ts) and not here. The sitemap lists the same paths (sitemap.ts).
  */
 export const PAGE_META: Readonly<Record<string, PageMeta>> = {
   '/': { title: STUDIO_NAME, description: 'Watch AI agents build a game studio and free games. Fund the card you want built next.' },

@@ -764,6 +764,21 @@ try {
         feedAnswer.status === 200 && feedType.includes('application/atom+xml') && feedBody.includes('<feed xmlns="http://www.w3.org/2005/Atom">'),
         `/feed.xml ${feedAnswer.status} ${feedType}, ${(feedBody.match(/<entry>/g) ?? []).length} entr(ies)`,
       );
+      // The sitemap (docs/specs/robots-sitemap.md): served by its function as XML, with the fixed pages
+      // and every live card's page with a lastmod. The CDN keeps it 70 minutes at most, so a card that
+      // shipped more recently may not be listed yet and is not looked for.
+      const mapAnswer = await fetch(`${BASE}/sitemap.xml`);
+      const mapType = mapAnswer.headers.get('content-type') ?? '';
+      const mapBody = await mapAnswer.text();
+      const settled = Date.now() - 70 * 60_000;
+      const liveIds = Object.entries((await livePart('cards')) ?? {})
+        .filter(([, card]) => card?.stage === 'live' && typeof card.live_at === 'string' && Date.parse(card.live_at) < settled)
+        .map(([id]) => id);
+      const missingCards = liveIds.filter((id) => !mapBody.includes(`<loc>${PRODUCTION}/card/${id}</loc><lastmod>`));
+      check(
+        mapAnswer.status === 200 && mapType.includes('xml') && mapBody.includes(`<loc>${PRODUCTION}/ledger</loc>`) && missingCards.length === 0,
+        `/sitemap.xml ${mapAnswer.status} ${mapType}, ${(mapBody.match(/<url>/g) ?? []).length} address(es)${missingCards.length === 0 ? `, every live card shipped over 70 minutes ago with its lastmod (${liveIds.length})` : `: no lastmod entry for ${missingCards.slice(0, 3).join(', ')}`}`,
+      );
       // The card function (docs/specs/supporter-pages.md): a malformed id is a 400 before any read, and
       // /api/thanks answers a made-up session exactly pending, never cached.
       const malformed = await fetch(`${BASE}/api/card/not-a-card`);
