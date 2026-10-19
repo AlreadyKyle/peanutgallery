@@ -69,11 +69,12 @@ for (const viewport of WIDTHS) {
       await expect(station('next').locator('.flow-agent')).toBeVisible();
 
       const money = page.getByRole('region', { name: 'Where the money goes' });
-      await expect(money.locator('.pool-line')).toHaveText('$12.34 in the pool');
+      await expect(money.locator('.pool-line')).toHaveText('$12.34 ready for the agents to spend.');
+      await expect(money.getByText('Every figure is on the ledger.')).toBeVisible();
       await expect(money.locator('.pool-line svg.coin')).toHaveCount(1);
-      await expect(money.getByText('Unless you change it on the Fund a card page, 80% goes to the agents and 20% to the studio.', { exact: false })).toBeVisible();
-      await expect(money.getByText("The agents' share pays only for the AI model time that builds funded cards", { exact: false })).toBeVisible();
-      await expect(money.getByText('These are contributions, not donations.', { exact: false })).toBeVisible();
+      // The split is told on /how-it-works and /contribute, not again on home.
+      await expect(money.getByText('Unless you change it on the Fund a card page', { exact: false })).toHaveCount(0);
+      await expect(money.getByText("The agents' share pays only for the AI model time that builds funded cards", { exact: false })).toHaveCount(0);
       await expect(money.locator('ul.rows li')).toHaveCount(3);
       await expect(money.getByRole('link', { name: 'Full ledger' })).toHaveAttribute('href', '/ledger');
 
@@ -147,7 +148,7 @@ for (const viewport of WIDTHS) {
       await expect(page.getByRole('heading', { level: 1, name: 'Ledger' })).toBeVisible();
       // No card has stopped in the default fixture, so the Stopped band is not drawn.
       await expect(page.getByRole('main').getByRole('heading', { level: 2 })).toHaveText(['Funding', 'Money in', 'Agent work', 'Deploys']);
-      await expect(page.getByRole('region', { name: 'Deploys' }).getByRole('listitem').first()).toContainText('Game 2775bcb passed checks');
+      await expect(page.getByRole('region', { name: 'Deploys' }).getByRole('listitem').first()).toContainText('Dust update passed checks');
       await expect(page.getByText('simulated seconds', { exact: false })).toHaveCount(0);
       // Stacked, one band each: nothing sits beside the long lists.
       const tops = await page.evaluate(() => [...document.querySelectorAll('main > .band')].map((band) => band.getBoundingClientRect().left));

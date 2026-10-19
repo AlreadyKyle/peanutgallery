@@ -502,7 +502,7 @@ export function Me() {
   return (
     <main className="wide">
       <div className="band">
-        <PageHeader title={copy.me.title} lede={me.state === 'ready' ? copy.desk.lede : copy.me.lede} />
+        <PageHeader title={copy.me.title} lede={me.state === 'ready' ? copy.desk.lede : open ? copy.me.lede : copy.me.ledeClosed} />
       </div>
       <div className="band">
         {me.state === 'signed-out' ? (

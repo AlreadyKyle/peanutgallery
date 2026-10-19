@@ -165,6 +165,8 @@ describe('/me', () => {
     renderMe('/me?keep=1');
     await settle();
     expect(screen.getByRole('heading', { level: 2, name: copy.me.closedTitle })).toBeTruthy();
+    expect(screen.getByText(copy.me.ledeClosed)).toBeTruthy();
+    expect(screen.queryByText(copy.me.lede)).toBeNull();
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(screen.queryByRole('heading', { name: legal.perks.keepTitle })).toBeNull();
     expect(screen.getByText(legal.perks.guest[0]!)).toBeTruthy();

@@ -3,14 +3,14 @@ import { legal } from '../lib/legal';
 import { useSignInOpen } from '../lib/sign-in';
 
 // What a contribution gets you (docs/specs/place.md): the perks that exist today, as a guest and with
-// a free profile, said where people decide to pay (home's Fund station, a card's page, /contribute)
-// and once they have (/thanks, as Keep this card). Kernel, so /contribute and /thanks may draw it: it
-// imports only legal.ts (its words, kernel too, so no card can change what paying is said to get),
-// the sign-in probe and the router. XP is a record of taking part and never money; paying never needs
-// an account. While sign-in is closed the panel keeps
-// to the guest side and Keep this card hides, so nothing points at a form that cannot work.
+// a free profile, said where people decide to pay (/contribute, which home and a card's page link to)
+// and once they have (/me, and /thanks as Keep this card). Kernel, so /contribute and /thanks may draw
+// it: it imports only legal.ts (its words, kernel too, so no card can change what paying is said to
+// get), the sign-in probe and the router. XP is a record of taking part and never money; paying never
+// needs an account. While sign-in is closed the panel keeps to the guest side and Keep this card hides,
+// so nothing points at a form that cannot work.
 
-export function Perks({ signIn = false }: { signIn?: boolean }) {
+export function Perks() {
   const words = legal.perks;
   const open = useSignInOpen();
   return (
@@ -39,13 +39,6 @@ export function Perks({ signIn = false }: { signIn?: boolean }) {
         ) : null}
       </div>
       <p className="small perks-note">{open ? words.note : words.noteClosed}</p>
-      {signIn && open ? (
-        <p>
-          <Link className="target" to="/me">
-            {words.signIn}
-          </Link>
-        </p>
-      ) : null}
     </section>
   );
 }

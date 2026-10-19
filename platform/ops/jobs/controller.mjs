@@ -1,8 +1,9 @@
 // The Controller (docs/specs/money-safety.md): a daily deterministic reconciliation of the books
 // against Stripe, run by peanutgallery-controller.timer on the VPS, outside the dispatcher. It reads
 // Stripe with the restricted read key only (GET requests; it cannot move money) and the database with
-// the service key, and it writes one controller_runs row per run. On any mismatch it alerts the board
-// through ntfy (and healthchecks.io /fail when a Controller check URL is set).
+// the service key, and it writes one controller_runs row per run. On a new mismatch it alerts the
+// board through ntfy, and repeats the same mismatches weekly; a dispute to answer alerts every run
+// (healthchecks.io gets /fail on every failing run when a Controller check URL is set).
 //
 // What it checks:
 // - the ledger identity, in SQL (ledger_identity);
@@ -33,7 +34,7 @@
 // - the newest paid payout, whose id the board may give the panel's optional Record a credit purchase
 //   form (docs/specs/optional-board.md).
 import { readFileSync } from 'node:fs';
-import { alerter, floor2, jobEnvProblems, JobEnvError, round2, round4, stripeApiVersion, stripeReader, supabaseClient, toCents } from './lib.mjs';
+import { alerter, alertSignature, floor2, jobEnvProblems, JobEnvError, round2, round4, shouldAlert, stripeApiVersion, stripeReader, supabaseClient, toCents } from './lib.mjs';
 
 // How far back Stripe lets the Events API read, and the window of fees in the Minimum balance.
 export const EVENT_WINDOW_DAYS = 30;
@@ -411,18 +412,34 @@ export async function runController({ env, fetchFn = fetch, now = new Date(), dr
     { name: 'stripe_fees_booked', ok: feeRefusals.length === 0, detail: `${feesBooked.length} dispute fee(s) Stripe reported`, items: feeRefusals },
   ];
   const mismatches = checks.reduce((total, c) => total + c.items.length, 0);
+  // A dispute to answer alerts on every run. The same mismatches alert once, again when they change,
+  // and again only after REPEAT_ALERT_DAYS (lib.mjs shouldAlert), as the quota check does. If the
+  // earlier rows cannot be read, it alerts.
+  let alert = false;
+  const signature = mismatches === 0 ? null : alertSignature(checks);
+  if (!dryRun && result.attention.length > 0) alert = true;
+  else if (!dryRun && mismatches > 0) {
+    let previous = [];
+    try {
+      previous = await db.select('controller_runs', 'select=started_at,figures&job=eq.reconcile&order=started_at.desc&limit=60');
+    } catch {
+      previous = [];
+    }
+    alert = shouldAlert({ signature, previous: Array.isArray(previous) ? previous : [], now });
+  }
+  const runFigures = { ...result.figures, reinstated, fees_booked: feesBooked, ...(alert && signature ? { alerted: true, alert_signature: signature } : {}) };
   const row = {
     job: 'reconcile',
     started_at: startedAt,
     ok: mismatches === 0,
     mismatches,
     checks,
-    figures: { ...result.figures, reinstated, fees_booked: feesBooked },
+    figures: runFigures,
   };
   const final = { ...result, ok: row.ok, mismatches, checks };
   if (!dryRun) {
     await db.insert('controller_runs', row);
-    if (!row.ok || result.attention.length > 0) await alerts.notify(alertMessage(final));
+    if (alert) await alerts.notify(alertMessage(final));
     await alerts.ping(row.ok);
   }
   out.write(`${row.ok ? 'PASS' : 'FAIL'}: controller ${mismatches} mismatch(es); credit to buy $${result.figures.credit_purchase_usd.toFixed(2)}; minimum balance $${result.figures.minimum_balance_usd.toFixed(2)}${dryRun ? ' (dry run: nothing written, nobody alerted)' : ''}\n`);

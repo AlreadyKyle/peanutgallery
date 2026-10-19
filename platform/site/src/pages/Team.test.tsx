@@ -113,7 +113,7 @@ afterEach(() => {
 });
 
 const facts = (model: string, total: string, week: string, ships: string) =>
-  `${model} · ${legal.teamSpent.replace('{total}', total).replace('{week}', week)} · ${ships}`;
+  `${model} · ${legal.teamSpentWeek.replace('{total}', total).replace('{week}', week)} · ${ships}`;
 
 describe('Team', () => {
   it('puts the roles in Running, Starts later and Planned from the roster columns', async () => {
@@ -134,7 +134,8 @@ describe('Team', () => {
     renderTeam(sourceOf(snapshot()));
     await screen.findByRole('region', { name: team.running });
     expect(within(box('Builder A')).getByText(facts('claude-opus-5-5', '$1.50', '$0.25', 'Worked on 2 shipped cards'))).toBeTruthy();
-    expect(within(box('QA')).getByText(facts('claude-opus-5-5', '$0.00', '$0.00', 'Worked on 1 shipped card'))).toBeTruthy();
+    // A zero figure is left out, so a row of zeros never reads as an idle studio.
+    expect(within(box('QA')).getByText('claude-opus-5-5 · Worked on 1 shipped card')).toBeTruthy();
     // A role with no stats row has spent nothing from contributions and shipped nothing.
     expect(within(box('Builder A')).getByText(team.aiAgent)).toBeTruthy();
     expect(within(box('Builder A')).getByText('Builder A does its job.')).toBeTruthy();

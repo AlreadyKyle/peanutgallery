@@ -1,7 +1,7 @@
 {
   "name": "Curator",
   "title": "Curator",
-  "description": "Reads queued player suggestions as quoted data and sorts them into structured fields; it has no tools and writes nothing.",
+  "description": "Reads the ideas players pitch and sorts them into clear summaries. It has no tools and changes nothing.",
   "species_note": "A small sand-coloured creature with one tall antenna and wide, watchful eyes.",
   "model": "MODEL_BUILDER",
   "budget_share": 0,

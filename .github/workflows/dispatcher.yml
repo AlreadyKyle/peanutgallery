@@ -61,10 +61,12 @@ jobs:
       - name: Install age
         run: sudo apt-get install -y -q --no-install-recommends age > /dev/null
 
+      # The job token reads the run before this one, so a stop that holds alerts the board once.
       - name: Run the dispatcher
         id: run
         env:
           DISPATCHER_ENV: ${{ secrets.DISPATCHER_ENV }}
+          GH_TOKEN: ${{ github.token }}
         run: bash platform/ops/actions/run-dispatcher.sh run
 
       - name: Encrypt the dispatcher log

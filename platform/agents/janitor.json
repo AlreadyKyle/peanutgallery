@@ -1,7 +1,7 @@
 {
   "name": "Janitor",
   "title": "Janitor",
-  "description": "Checks the database, the models, Claude Code and the dependencies against what the code says, every day and with code only, and alerts on each difference.",
+  "description": "Plain code that checks every day that the database, the models and the tools still match what the studio's code expects, and raises an alert when they don't.",
   "species_note": "A short orange creature with long legs and one large eye.",
   "model": "MODEL_BUILDER",
   "budget_share": 0,

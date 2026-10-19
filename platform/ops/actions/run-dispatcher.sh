@@ -24,9 +24,11 @@
 #   own lines and a fixed line per lifecycle message (lifecycle_lines), never a field of the log.
 # - It writes to $GITHUB_OUTPUT: status (the dispatcher's exit), fatal, drained, hard_stopped, ran
 #   (seconds), redispatch (whether the workflow starts the next run now) and alerted. Exit 78, or a
-#   failed check here, is fatal: ntfy hears "fatal startup error", with the dispatcher's own reason (env
-#   values masked) after an exit 78, and nothing starts the next run until
-#   the board does. A drained run, a hard stop, or any run of HEALTHY_SECONDS or more starts the next
+#   failed check here, is fatal: ntfy hears "fatal startup error", with the public stop reason and the
+#   dispatcher's own reason (env values masked) after an exit 78, and nothing starts the next run until
+#   the board does. The schedule keeps starting runs while the stop holds, so ntfy hears a stop once:
+#   a run that stops the same way as the run before it, which alerted or held its alert, holds its
+#   alert too (previous_stop). If the earlier run cannot be read, it alerts. A drained run, a hard stop, or any run of HEALTHY_SECONDS or more starts the next
 #   one now; a shorter failed run is left to the workflow's 30-minute schedule, which is the restart
 #   delay, and ntfy hears of it.
 #
@@ -101,9 +103,36 @@ alert() {
   [ -n "$url" ] || { note "no NTFY_TOPIC_URL; the alert was not sent"; return 0; }
   config=$(mktemp "${RUNNER_TEMP:-/tmp}/ntfy.XXXXXX")
   printf 'url = "%s"\nheader = "Title: Mob Machine dispatcher"\ndata-binary = "%s"\noutput = "/dev/null"\n' "$url" "$1" > "$config"
-  curl -fsS --max-time 20 -K "$config" || note "could not post to ntfy"
+  if curl -fsS --max-time 20 -K "$config"; then note "alert sent"; else note "could not post to ntfy"; fi
   rm -f "$config"
   output alerted true
+}
+
+# previous_stop: how the newest earlier finished run of this workflow stopped (its public "stopped: "
+# line), when that run sent its alert or held it. Empty when there is no such run, no job token, or its
+# log cannot be read, so the caller alerts. It reads the public log only, with the job's own token.
+previous_stop() {
+  local id zip text
+  [ -n "${GH_TOKEN:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ] && command -v gh > /dev/null || return 0
+  case "${GITHUB_RUN_ID:-}" in '' | *[!0-9]*) return 0 ;; esac
+  id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/dispatcher.yml/runs?status=completed&per_page=20" \
+    --jq ".workflow_runs[] | select(.id != $GITHUB_RUN_ID and (.conclusion == \"failure\" or .conclusion == \"success\")) | .id" 2> /dev/null | head -n 1) || return 0
+  case "$id" in '' | *[!0-9]*) return 0 ;; esac
+  zip=$(mktemp "${RUNNER_TEMP:-/tmp}/previous-log.XXXXXX")
+  if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/logs" > "$zip" 2> /dev/null; then
+    text=$(unzip -p "$zip" 2> /dev/null | tr -d '\r' | sed -nE 's/^[^ ]* actions-host: //p')
+  fi
+  rm -f "$zip"
+  printf '%s\n' "${text:-}" | grep -qE '^alert (sent|held)' || return 0
+  printf '%s\n' "${text:-}" | sed -n 's/^stopped: //p' | tail -n 1
+}
+
+# stop_reason: the dispatcher's public stop reason from its log ("stop reason: ..."), one of the fixed
+# lifecycle lines, or a note that only the encrypted log says why.
+stop_reason() {
+  local reason=""
+  [ -f "$LOG" ] && reason=$(lifecycle_lines < "$LOG" | sed -n 's/^dispatcher: \(stop reason: .*\)$/\1/p' | tail -n 1)
+  printf '%s' "${reason:-the encrypted log says why}"
 }
 
 # check_code <code clone>: the entrypoint's checks on the checkout.
@@ -211,12 +240,18 @@ fatal_reason() {
   ' "$LOG" "$ENV_FILE" 2> /dev/null || true
 }
 
-# stop_fatal <public reason> [private detail]: the detail goes to ntfy alone.
+# stop_fatal <public reason> [private detail]: the detail goes to ntfy alone, and ntfy hears a stop
+# once (previous_stop).
 stop_fatal() {
   note "stopped: fatal startup error: $1"
   output fatal true
   output redispatch false
-  alert "Mob Machine dispatcher stopped on GitHub Actions: fatal startup error${2:+: $2}"
+  if [ "$(previous_stop)" = "fatal startup error: $1" ]; then
+    note "alert held: the run before stopped the same way and the board has that alert"
+    output alerted true
+  else
+    alert "Mob Machine dispatcher stopped on GitHub Actions: fatal startup error: $1${2:+: $2}. Nothing runs until this is fixed; this alert comes once, and again only if the stop changes."
+  fi
   exit "$EXIT_FATAL"
 }
 
@@ -280,7 +315,7 @@ run() {
   output drained "$drained"
   output hard_stopped "$hard"
   output ran "$ran"
-  [ "$status" = "$EXIT_FATAL" ] && stop_fatal "the dispatcher exited $EXIT_FATAL; the encrypted log says why" "$(fatal_reason)"
+  [ "$status" = "$EXIT_FATAL" ] && stop_fatal "the dispatcher exited $EXIT_FATAL ($(stop_reason))" "$(fatal_reason)"
   output fatal false
   redispatch=$(redispatch_now false "$drained" "$hard" "$ran")
   output redispatch "$redispatch"

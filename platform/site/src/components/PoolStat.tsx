@@ -25,11 +25,13 @@ export function PoolStat({ balance }: { balance: number }) {
 }
 
 /**
- * The pool figure as one line on home: the coin mark, the amount and "in the pool", with the same
- * description as the ledger's figure under it, so the term is explained where it appears.
+ * The pool figure as one line on home: the coin mark, the amount and "ready for the agents to spend.",
+ * then that every figure is on the ledger (the Full ledger link sits beside it). When agent work has
+ * cost more than came in, the line under it says by how much first, as the ledger's figure does.
  */
 export function PoolLine({ balance }: { balance: number }) {
-  const { value, description } = poolFigure(balance);
+  const { value } = poolFigure(balance);
+  const shortfall = formatUsd(Math.max(0, -balance));
   return (
     <>
       <p className="pool-line with-glyph">
@@ -38,7 +40,9 @@ export function PoolLine({ balance }: { balance: number }) {
           <span className="figure">{value}</span> {legal.poolInline}
         </span>
       </p>
-      <p className="muted small">{description}</p>
+      <p className="muted small">
+        {shortfall === formatUsd(0) ? legal.moneyLedgerLine : `${legal.shortfall.replace('{amount}', shortfall)} ${legal.moneyLedgerLine}`}
+      </p>
     </>
   );
 }
