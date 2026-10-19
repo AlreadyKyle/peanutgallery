@@ -2,7 +2,7 @@
 
 The dispatcher runs unattended on a small Ubuntu server in a Docker container under systemd, on the studio's Anthropic key (`docs/specs/vps.md`). Each card's agent runs as a Claude Managed Agents session in a container Anthropic hosts (`docs/specs/launch-managed.md`): the VPS holds the session's event stream, meters it, applies the patch the agent hands back, and drives the gate, merge and deploy. No agent-written code runs on the VPS. This page is how the board provisions it, cuts over from the Mac, deploys, rotates keys, reads logs, pauses and rolls back.
 
-**The host is GitHub Actions** (`docs/PLAN.md` §10 decision 61, `docs/specs/actions-host.md`): since 6 October 2026 the repository is public, its Actions minutes are free, and the dispatcher runs there one run of up to about six hours after another; [The GitHub Actions host](#the-github-actions-host) is its runbook. The daily jobs run on Actions in the board's private repository AlreadyKyle/mobmachine-ops (`ops-repo/README.md`). The board's Mac host is retired and its LaunchAgents are removed; [The Mac host](#the-mac-host) is kept for the record, and `backup-mac.sh` is the backup the ops repository runs. The server sections are kept for a paid always-on host once player money pays the overhead, which reuses this Ubuntu provisioning (`docs/BACKLOG.md`, Move the dispatcher off the Mac); the Oracle-specific parts are kept for the record and are not run.
+**The host is GitHub Actions** (`docs/PLAN.md` §10 decision 61, `docs/specs/actions-host.md`): since 6 October 2026 the repository is public, its Actions minutes are free, and the dispatcher runs there one run of up to about six hours after another; [The GitHub Actions host](#the-github-actions-host) is its runbook. The daily jobs run on Actions in this repository too, in the main-only environment `ops` (`docs/PLAN.md` §10 decision 78, `ops-repo/README.md`); from 6 to 18 October 2026 they ran in the board's private repository AlreadyKyle/mobmachine-ops, which now holds the promotion workflows. The board's Mac host is retired and its LaunchAgents are removed; [The Mac host](#the-mac-host) is kept for the record, and `backup-mac.sh` is the backup the daily jobs run. The server sections are kept for a paid always-on host once player money pays the overhead, which reuses this Ubuntu provisioning (`docs/BACKLOG.md`, Move the dispatcher off the Mac); the Oracle-specific parts are kept for the record and are not run.
 
 ## What runs where
 
@@ -35,7 +35,7 @@ The dispatcher runs unattended on a small Ubuntu server in a Docker container un
 | `jobs/main.mjs`, `peanutgallery-quota.service`, `.timer` | the VPS, in the image, as nobody | the quota check: database size and Actions minutes |
 | `peanutgallery-job-alert@.service` | the VPS | posts to ntfy when a job fails |
 | `actions/run-dispatcher.sh`, `.github/workflows/dispatcher.yml` | GitHub Actions, this repository | the dispatcher's host (The GitHub Actions host, below) |
-| `ops-repo/` | the private repository AlreadyKyle/mobmachine-ops | the daily jobs' workflow template and its README |
+| `ops-repo/` | GitHub Actions in this repository (`.github/workflows/ops-jobs.yml`, `actions/run-ops-job.sh`) | the daily jobs' runbook, and what the private repository AlreadyKyle/mobmachine-ops still holds |
 | `after-restore.sql` | the Mac, on a restored copy | what the migrations make outside the dumped schemas: the sign-in trigger, Realtime's tables, the backup login's reads and the pg_cron jobs |
 
 ## Operator inputs
@@ -396,7 +396,7 @@ Each step is a command from the board's checkout of main. Nothing here sets a va
 
 ### Deploy an update
 
-Every run checks out main at its own start, so a merge reaches the host at the next run, at most about five hours later. To deploy at once: pause from /board and let any building card finish, `gh run cancel <run id>`, `gh workflow run dispatcher.yml --ref main`, and check the probe lines as in the cutover's step 6; resume. When the merge changes `platform/ops`, move the ops repository's `STUDIO_REF` to the new main sha after reviewing its `platform/ops` diff (`ops-repo/README.md`).
+Every run checks out main at its own start, so a merge reaches the host at the next run, at most about five hours later. To deploy at once: pause from /board and let any building card finish, `gh run cancel <run id>`, `gh workflow run dispatcher.yml --ref main`, and check the probe lines as in the cutover's step 6; resume. The daily jobs run main's own commit too, so a merge that changes `platform/ops` reaches them at their next run (`ops-repo/README.md`).
 
 ### Roll back
 
@@ -431,7 +431,7 @@ A failed run's public lines end with `dispatcher: stop reason: <phrase>`, which 
 
 ## The Mac host
 
-Retired on 6 October 2026 (`docs/PLAN.md` §10 decision 61): the dispatcher runs on GitHub Actions ([The GitHub Actions host](#the-github-actions-host)) and the daily jobs in the private ops repository (`ops-repo/README.md`), and the Mac's LaunchAgents were removed with `uninstall.sh`. This section is kept for the record; `backup-mac.sh` and the restore steps below are still the ones the backups use.
+Retired on 6 October 2026 (`docs/PLAN.md` §10 decision 61): the dispatcher runs on GitHub Actions ([The GitHub Actions host](#the-github-actions-host)) and the daily jobs on Actions too (`ops-repo/README.md`), and the Mac's LaunchAgents were removed with `uninstall.sh`. This section is kept for the record; `backup-mac.sh` and the restore steps below are still the ones the backups use.
 
 Until the studio has a server, the dispatcher runs unattended on the board's Mac, a MacBook Pro on Apple Silicon kept plugged in, under launchd (`docs/PLAN.md` §10 decision 38, `docs/specs/mac-host.md`). The daily jobs run there too. It keeps the server's rules where a single-user Mac can: the dispatcher runs from a code clone it cannot write, git state lives in a separate work clone, card worktrees sit outside both, every git call runs with hooks and fsmonitor off, a deploy needs the gate green and the board's confirmed sha, and no agent-written code runs on the Mac at all (card sessions are Managed Agents sessions). What is weaker is at the end of this section.
 

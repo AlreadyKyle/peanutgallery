@@ -492,6 +492,7 @@ describe('shell scripts', () => {
   test('parse with bash -n (the entrypoint with sh -n too)', () => {
     assert.deepEqual(SHELL_SCRIPTS.sort(), [
       'actions/run-dispatcher.sh',
+      'actions/run-ops-job.sh',
       'backup/backup.sh',
       'deploy.sh',
       'dispatcher-entrypoint.sh',
@@ -1473,25 +1474,137 @@ describe('the Oracle instance', () => {
   });
 });
 
-// docs/specs/actions-host.md: the daily jobs in the private ops repository.
-describe('the ops repository template', () => {
-  test('lives outside .github, reads contents only, runs the four jobs at their times from STUDIO_REF, and uses only its own secrets', () => {
-    const workflow = read('platform/ops/ops-repo/jobs.yml');
-    assert.match(workflow, /^permissions:\n {2}contents: read\n(?! )/m);
-    assert.deepEqual([...new Set([...workflow.matchAll(/secrets\.([A-Z_]+)/g)].map((match) => match[1]))].sort(), ['BACKUP_ENV', 'CONTROLLER_ENV', 'NOTICES_ENV', 'NTFY_TOPIC_URL', 'QUOTA_ENV']);
-    for (const cron of ["'17 6 * * *'", "'7 7 * * *'", "'37 7 * * *'", "'7 9 * * *'"]) assert.ok(workflow.includes(`- cron: ${cron}`), cron);
-    assert.match(workflow, /repository: AlreadyKyle\/peanutgallery\n\s+ref: \$\{\{ vars\.STUDIO_REF \}\}/);
-    assert.match(workflow, /persist-credentials: false/);
-    assert.match(workflow, /BACKUP_PG_BIN=\/usr\/lib\/postgresql\/17\/bin/);
-    assert.match(workflow, /bash studio\/platform\/ops\/mac\/backup-mac\.sh/);
-    assert.match(workflow, /retention-days: 90/);
-    assert.match(workflow, /node studio\/platform\/ops\/jobs\/check-env\.mjs "\$JOB" "\$file"/);
-    assert.doesNotMatch(workflow, /pull_request/);
-    assert.doesNotMatch(workflow, /OWNER|postgres\./);
-    const workflows = readdirSync(path.join(REPO_ROOT, '.github', 'workflows'));
-    assert.ok(!workflows.includes('jobs.yml'), 'the template is not a workflow of this repository');
+// docs/PLAN.md §10 decision 78: the daily jobs on GitHub Actions in this repository,
+// .github/workflows/ops-jobs.yml and platform/ops/actions/run-ops-job.sh.
+describe('the daily jobs on GitHub Actions', () => {
+  const require = createRequire(path.join(REPO_ROOT, 'platform', 'dispatcher', 'package.json'));
+  const YAML = require('yaml');
+  const text = read('.github/workflows/ops-jobs.yml');
+  const workflow = YAML.parse(text);
+  const job = workflow.jobs.run;
+  const steps = job.steps;
+  const step = (name) => steps.find((candidate) => candidate.name === name);
+  const SECRETS = { backup: 'BACKUP_ENV', controller: 'CONTROLLER_ENV', quota: 'QUOTA_ENV', notices: 'NOTICES_ENV' };
+
+  test('runs the four jobs at their times and on workflow_dispatch, on main only, in the environment ops', () => {
+    assert.deepEqual(Object.keys(workflow.on).sort(), ['schedule', 'workflow_dispatch']);
+    assert.deepEqual(workflow.on.schedule, [{ cron: '17 6 * * *' }, { cron: '7 7 * * *' }, { cron: '37 7 * * *' }, { cron: '7 9 * * *' }]);
+    assert.deepEqual(workflow.on.workflow_dispatch.inputs.job.options, ['backup', 'controller', 'quota', 'notices']);
+    assert.equal(job.if, "github.ref == 'refs/heads/main' && github.repository == 'AlreadyKyle/peanutgallery'");
+    assert.equal(job.environment, 'ops');
+    assert.equal(job['timeout-minutes'], 30);
+    assert.deepEqual(workflow.permissions, { contents: 'read' });
+    assert.equal(job.permissions, undefined);
+    assert.deepEqual(Object.keys(workflow.jobs), ['run']);
+    assert.doesNotMatch(text, /pull_request|workflow_run/);
+    for (const [cron, name] of [['17 6 * * *', 'backup'], ['7 7 * * *', 'controller'], ['37 7 * * *', 'quota'], ['7 9 * * *', 'notices']]) {
+      assert.ok(step('Pick the job').run.includes(`${name}:* | ':${cron}') job=${name} ;;`), name);
+    }
+  });
+
+  test('pins every action to a commit sha, and its checkout of the run sha keeps no credential', () => {
+    for (const { uses } of steps.filter((candidate) => candidate.uses)) assert.match(uses, /@[0-9a-f]{40}$/, uses);
+    const checkout = steps.find((candidate) => candidate.uses?.startsWith('actions/checkout@'));
+    assert.deepEqual(checkout.with, { ref: '${{ github.sha }}', 'persist-credentials': false, 'sparse-checkout': 'platform/ops\nplatform/supabase/functions/_shared\nplatform/site\n' });
+  });
+
+  test("hands each job its own env alone, in the run step, and NTFY_TOPIC_URL to the alert alone; echoes no secret", () => {
+    const withSecrets = steps.filter((candidate) => JSON.stringify(candidate).includes('secrets.'));
+    assert.deepEqual(withSecrets.map((candidate) => candidate.name), ['Run the job', 'Alert the board']);
+    const env = step('Run the job').env.JOB_ENV;
+    for (const [name, secret] of Object.entries(SECRETS)) assert.ok(env.includes(`(steps.pick.outputs.job == '${name}' && secrets.${secret})`), name);
+    assert.equal([...env.matchAll(/secrets\./g)].length, 4);
+    assert.match(env, /\|\| '' \}\}$/, 'no job falls through to a value that is not its own');
+    assert.equal(step('Run the job').run, 'bash platform/ops/actions/run-ops-job.sh "$JOB"');
+    assert.equal(step('Alert the board').env.NTFY_TOPIC_URL, '${{ secrets.NTFY_TOPIC_URL }}');
+    assert.deepEqual([...new Set([...text.matchAll(/secrets\.([A-Z_]+)/g)].map((match) => match[1]))].sort(), ['BACKUP_ENV', 'CONTROLLER_ENV', 'NOTICES_ENV', 'NTFY_TOPIC_URL', 'QUOTA_ENV']);
+    for (const candidate of steps) {
+      assert.doesNotMatch(candidate.run ?? '', /secrets\.|\$\{\{/, `${candidate.name} puts an expression in its script`);
+      assert.doesNotMatch(candidate.run ?? '', /(echo|printf|cat)[^\n]*JOB_ENV/, `${candidate.name} prints the env`);
+    }
+    const install = step('Install age, and the PostgreSQL 17 client for the backup');
+    assert.ok(steps.indexOf(install) < steps.indexOf(step('Run the job')));
+    assert.deepEqual(Object.keys(install.env), ['JOB']);
+  });
+
+  test('encrypts the log before it is kept, keeps the backup 90 days, and alerts on failure', () => {
+    const encrypt = step("Encrypt the job's log");
+    assert.equal(encrypt.if, 'always()');
+    assert.deepEqual(encrypt.env, { AGE_RECIPIENT: '${{ vars.BACKUP_AGE_RECIPIENT }}' });
+    assert.match(encrypt.run, /age -r "\$AGE_RECIPIENT" -o "\$RUNNER_TEMP\/ops-job-log\.age" "\$log"\n\s*rm -f "\$log"/);
+    assert.match(encrypt.run, /rm -f "\$log"\n\s*echo "vars\.BACKUP_AGE_RECIPIENT is not set; the log was deleted, not uploaded"\n\s*exit 1/);
+    const log = step('Keep the encrypted log');
+    assert.equal(log.if, "always() && steps.log.outputs.encrypted == 'true'");
+    assert.equal(log.with.path, '${{ runner.temp }}/ops-job-log.age');
+    assert.equal(log.with['retention-days'], 14);
+    const backup = step('Keep the encrypted backup');
+    assert.equal(backup.if, "steps.pick.outputs.job == 'backup'");
+    assert.equal(backup.with.path, '${{ runner.temp }}/ops-job/backups/*.tar.age');
+    assert.equal(backup.with['retention-days'], 90);
+    assert.equal(backup.with['if-no-files-found'], 'error');
+    assert.equal(steps.filter((candidate) => candidate.uses?.startsWith('actions/upload-artifact@')).length, 2);
+    assert.equal(step('Alert the board').if, 'failure()');
+    assert.ok(steps.indexOf(step('Run the job')) < steps.indexOf(encrypt));
+  });
+
+  // run-ops-job.sh with a stand-in node on PATH that prints what a job prints, env values included.
+  const fakeBin = path.join(scratch, 'ops-job-bin');
+  mkdirSync(fakeBin, { recursive: true });
+  writeFileSync(
+    path.join(fakeBin, 'node'),
+    '#!/bin/bash\ncase "$*" in\n  *check-env.mjs*) echo "check-env: $2 ok" ;;\n  *main.mjs*) echo "PASS: $3 0 mismatches (key ${SUPABASE_SERVICE_ROLE_KEY:-unset})"; cat "${1#--env-file=}" ;;\nesac\n',
+    { mode: 0o755 },
+  );
+  const runJob = (args, env = {}) => {
+    const dir = mkdtempSync(path.join(scratch, 'ops-job-'));
+    const result = spawnSync('bash', [path.join(OPS_DIR, 'actions', 'run-ops-job.sh'), ...args], {
+      env: { PATH: `${fakeBin}:${process.env.PATH}`, HOME: process.env.HOME, OPS_JOB_DIR: dir, ...env },
+      encoding: 'utf8',
+    });
+    const log = path.join(dir, 'job.log');
+    return { ...result, dir, log: existsSync(log) ? readFileSync(log, 'utf8') : null, logMode: existsSync(log) ? statSync(log).mode & 0o777 : null };
+  };
+  const JOB_ENV = 'SUPABASE_URL=https://fixture.supabase.local\nSUPABASE_SERVICE_ROLE_KEY=fixture-service-key\nSTRIPE_READ_KEY=rk_live_fixture\nNTFY_TOPIC_URL=https://ntfy.sh/fixture-topic';
+
+  test('runs a job with its output in the 0600 log alone, prints its exit and PASS or FAIL, and masks every long value', () => {
+    const result = runJob(['controller'], { JOB_ENV });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.equal(result.logMode, 0o600);
+    assert.match(result.log, /^check-env: controller ok$/m);
+    assert.match(result.log, /^PASS: controller 0 mismatches \(key unset\)$/m, 'the job reads its keys from --env-file, not the environment');
+    assert.match(result.log, /^SUPABASE_SERVICE_ROLE_KEY=fixture-service-key$/m);
+    const lines = result.stdout.trim().split('\n');
+    const shown = lines.filter((line) => !line.startsWith('::add-mask::'));
+    assert.deepEqual(shown, ['ops-job: job: controller', 'ops-job: controller exited 0 (PASS); the full output is in the encrypted log']);
+    assert.deepEqual(lines.filter((line) => line.startsWith('::add-mask::')).sort(), ['::add-mask::fixture-service-key', '::add-mask::https://fixture.supabase.local', '::add-mask::https://ntfy.sh/fixture-topic', '::add-mask::rk_live_fixture']);
+    assert.ok(!existsSync(path.join(result.dir, 'env', 'controller.env')), 'the env file is removed after the run');
+  });
+
+  test('stops with a fixed line when the job has no env, and refuses a job it does not know', () => {
+    const missing = runJob(['notices']);
+    assert.equal(missing.status, 1);
+    assert.match(missing.stdout, /^ops-job: no env for notices: set its secret in the GitHub environment ops/m);
+    const unknown = runJob(['promo'], { JOB_ENV });
+    assert.equal(unknown.status, 2);
+    assert.match(unknown.stderr, /^usage: run-ops-job\.sh backup\|controller\|quota\|notices$/m);
+  });
+
+  test("writes the backup's env with BACKUP_DIR set to the runner's folder, and reads its done line", () => {
+    const dir = mkdtempSync(path.join(scratch, 'ops-job-backup-'));
+    const env = { JOB_ENV: 'BACKUP_DB_URL=postgresql://peanutgallery_backup.fixtureref:fixture-password@pooler.local:5432/postgres\nBACKUP_DIR=/Users/board/Google Drive/backups\nBACKUP_AGE_RECIPIENT=age1fixture', OPS_JOB_DIR: dir };
+    const write = callFunction('actions/run-ops-job.sh', 'OPS_JOB_SOURCE_ONLY', 'write_env_file backup "$OPS_JOB_DIR/env/backup.env"; cat "$OPS_JOB_DIR/env/backup.env"; stat -c %a "$OPS_JOB_DIR/env/backup.env" 2>/dev/null || stat -f %Lp "$OPS_JOB_DIR/env/backup.env"', env);
+    assert.equal(write.status, 0, write.stderr);
+    assert.equal(write.stdout, `BACKUP_DB_URL=postgresql://peanutgallery_backup.fixtureref:fixture-password@pooler.local:5432/postgres\nBACKUP_AGE_RECIPIENT=age1fixture\nBACKUP_DIR=${dir}/backups\n600\n`);
+    writeFileSync(path.join(dir, 'job.log'), 'backup: dumping\nbackup: done: peanutgallery-20261020T061700Z.tar.age\n');
+    assert.equal(callFunction('actions/run-ops-job.sh', 'OPS_JOB_SOURCE_ONLY', 'result_word backup', { OPS_JOB_DIR: dir }).stdout, 'done\n');
+    writeFileSync(path.join(dir, 'job.log'), 'backup: stopped: pg_dump failed\n');
+    assert.equal(callFunction('actions/run-ops-job.sh', 'OPS_JOB_SOURCE_ONLY', 'result_word backup', { OPS_JOB_DIR: dir }).stdout, '');
+  });
+
+  test('the old template is gone, and the ops repository keeps only what is not the daily jobs', () => {
+    assert.ok(!existsSync(path.join(OPS_DIR, 'ops-repo', 'jobs.yml')), 'the private repository template is retired');
     assert.ok(!existsSync(path.join(OPS_DIR, 'backups-repo')), 'the Oracle-era template is gone');
-    assert.match(read('platform/ops/ops-repo/README.md'), /never in this one/);
+    assert.match(read('platform/ops/ops-repo/README.md'), /\.github\/workflows\/ops-jobs\.yml/);
   });
 });
 

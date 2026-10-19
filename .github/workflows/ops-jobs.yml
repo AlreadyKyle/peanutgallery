@@ -1,0 +1,146 @@
+# Mob Machine's daily jobs (docs/specs/actions-host.md, docs/PLAN.md §10 decision 78): the nightly
+# backup, the Controller, the quota check and the ship notices, on GitHub-hosted runners, free in this
+# public repository. They ran in the board's private repository AlreadyKyle/mobmachine-ops from
+# 6 October 2026 until the account's free private minutes ran out on 18 October 2026.
+#
+# Secrets: the job runs in the GitHub environment `ops`, whose deployment branch policy allows main
+# alone, so a card branch, a pull request or a fork never receives a job's env. Only the step that runs
+# the job reads a secret, and only that job's own (BACKUP_ENV, CONTROLLER_ENV, QUOTA_ENV or
+# NOTICES_ENV); the alert step reads NTFY_TOPIC_URL. The job code is this run's own commit of main, as
+# for the dispatcher: the kernel paths (.github, platform/ops) keep card code from changing what runs.
+# The repository is public, and so are its Actions logs: the job's output goes to a file that is
+# encrypted with age to vars.BACKUP_AGE_RECIPIENT and kept as an artifact for 14 days, and the public
+# log shows only the job, its exit and its PASS or FAIL (platform/ops/actions/run-ops-job.sh). The
+# backup is the same .tar.age as before, encrypted to the same key before it leaves the job.
+# Every action is pinned to a full commit sha (the tag it was is in the comment).
+name: ops-jobs
+
+on:
+  schedule:
+    - cron: '17 6 * * *'   # backup
+    - cron: '7 7 * * *'    # controller
+    - cron: '37 7 * * *'   # quota
+    - cron: '7 9 * * *'    # notices
+  workflow_dispatch:
+    inputs:
+      job:
+        description: backup, controller, quota or notices
+        required: true
+        type: choice
+        options: [backup, controller, quota, notices]
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    name: ops job
+    if: github.ref == 'refs/heads/main' && github.repository == 'AlreadyKyle/peanutgallery'
+    runs-on: ubuntu-24.04
+    environment: ops
+    timeout-minutes: 30
+    concurrency:
+      group: ops-job-${{ github.event.inputs.job || github.event.schedule }}
+      cancel-in-progress: false
+    steps:
+      - name: Pick the job
+        id: pick
+        env:
+          ASKED: ${{ github.event.inputs.job }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          set -euo pipefail
+          case "$ASKED:$SCHEDULE" in
+            backup:* | ':17 6 * * *') job=backup ;;
+            controller:* | ':7 7 * * *') job=controller ;;
+            quota:* | ':37 7 * * *') job=quota ;;
+            notices:* | ':7 9 * * *') job=notices ;;
+            *) echo "no job for '$ASKED' '$SCHEDULE'"; exit 1 ;;
+          esac
+          echo "job=$job" >> "$GITHUB_OUTPUT"
+          echo "job: $job"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            platform/ops
+            platform/supabase/functions/_shared
+            platform/site
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+
+      - name: Install age, and the PostgreSQL 17 client for the backup
+        env:
+          JOB: ${{ steps.pick.outputs.job }}
+        run: |
+          set -euo pipefail
+          if [ "$JOB" = backup ]; then
+            sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null
+            sudo apt-get install -y -q --no-install-recommends postgresql-client-17 age > /dev/null
+            /usr/lib/postgresql/17/bin/pg_dump --version
+          else
+            sudo apt-get install -y -q --no-install-recommends age > /dev/null
+          fi
+
+      - name: Run the job
+        env:
+          JOB: ${{ steps.pick.outputs.job }}
+          JOB_ENV: ${{ (steps.pick.outputs.job == 'backup' && secrets.BACKUP_ENV) || (steps.pick.outputs.job == 'controller' && secrets.CONTROLLER_ENV) || (steps.pick.outputs.job == 'quota' && secrets.QUOTA_ENV) || (steps.pick.outputs.job == 'notices' && secrets.NOTICES_ENV) || '' }}
+        run: bash platform/ops/actions/run-ops-job.sh "$JOB"
+
+      - name: Encrypt the job's log
+        id: log
+        if: always()
+        env:
+          AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/ops-job/job.log"
+          if [ ! -f "$log" ]; then echo "no job log"; exit 0; fi
+          if [ -z "$AGE_RECIPIENT" ]; then
+            rm -f "$log"
+            echo "vars.BACKUP_AGE_RECIPIENT is not set; the log was deleted, not uploaded"
+            exit 1
+          fi
+          age -r "$AGE_RECIPIENT" -o "$RUNNER_TEMP/ops-job-log.age" "$log"
+          rm -f "$log"
+          echo "encrypted=true" >> "$GITHUB_OUTPUT"
+
+      - name: Keep the encrypted log
+        if: always() && steps.log.outputs.encrypted == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ops-log-${{ steps.pick.outputs.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ops-job-log.age
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Keep the encrypted backup
+        if: steps.pick.outputs.job == 'backup'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: backup-${{ github.run_id }}
+          path: ${{ runner.temp }}/ops-job/backups/*.tar.age
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Alert the board
+        if: failure()
+        env:
+          NTFY_TOPIC_URL: ${{ secrets.NTFY_TOPIC_URL }}
+          JOB: ${{ steps.pick.outputs.job }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$NTFY_TOPIC_URL" ]; then echo "no NTFY_TOPIC_URL; the alert was not sent"; exit 0; fi
+          curl -fsS --max-time 20 -H 'Title: Mob Machine job' \
+            -d "Mob Machine job ${JOB:-unknown} failed on GitHub Actions: $RUN_URL" "$NTFY_TOPIC_URL" > /dev/null || true
+
+      - name: Remove the env files
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/ops-job/env"
