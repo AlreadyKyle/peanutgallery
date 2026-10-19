@@ -42,6 +42,8 @@ and its reason.
 | A standing permissions allowlist | refused |
 | Driving the board's browser | refused |
 | Deleting a branch | refused (HTTP 403); GitHub's auto-delete or a local session does it |
+| Re-running a failed job (`rerun-failed-jobs`) | refused (HTTP 403); a push with a real change starts a new gate run |
+| Reading the container's environment notes or a local tool's configuration for keys | refused (the safety check's credential rule); a key's state comes from the run log that used it |
 | Supabase Auth settings (sign-ups, redirect URLs) | no connector tool; set from the Mac or the dashboard |
 | Stripe connector: writes (a new price or Payment Link) | refused (`Forbidden`): the connector's key is read-only, so a Stripe Dashboard change is the board's |
 | GitHub account billing (Actions minutes and budgets) | refused from the cloud (sessions are bound to their repositories); the private ops repository stops when the account's free minutes run out and its Actions budget is $0 |
@@ -77,3 +79,6 @@ and its reason.
   `apply_migration` then ran on production without a dialog. The same day the ops repository's jobs
   stopped because the account's free Actions minutes ran out; a session first read it as a failed
   payment, and GitHub's usage email named the cause.
+- 19 October 2026: during GitHub's own Actions incident (githubstatus.com, from 15:49Z) a docs-only
+  gate run failed: its gate job read detect as cancelled while detect was still running. Check the
+  status page before diagnosing a failure the diff can't explain.
