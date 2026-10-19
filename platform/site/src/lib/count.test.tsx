@@ -29,7 +29,8 @@ import {
 
 const INVITE = 'https://discord.gg/mob-machine';
 const PLAY = 'https://play.mobmachine.games';
-const CHECKOUT = 'https://buy.stripe.com/test_link?client_reference_id=split20';
+const PAYMENT_LINK = 'https://buy.stripe.com/test_link';
+const CHECKOUT = `${PAYMENT_LINK}?client_reference_id=split20`;
 
 afterEach(() => {
   cleanup();
@@ -146,14 +147,17 @@ describe('isDiscordLink', () => {
 });
 
 describe('isCheckoutLink and isGameLink (the funnel)', () => {
-  it('takes an https link on buy.stripe.com as a Payment Link, and nothing else', () => {
-    expect(isCheckoutLink(CHECKOUT)).toBe(true);
-    expect(isCheckoutLink('https://BUY.stripe.com/abc')).toBe(true);
-    expect(isCheckoutLink('http://buy.stripe.com/abc')).toBe(false);
-    expect(isCheckoutLink('https://buy.stripe.com.example.com/abc')).toBe(false);
-    expect(isCheckoutLink('https://stripe.com/abc')).toBe(false);
-    expect(isCheckoutLink('https://mobmachine.games/contribute')).toBe(false);
-    expect(isCheckoutLink('not a url')).toBe(false);
+  it("takes the site's own Payment Link, with any query, as checkout, and nothing else", () => {
+    expect(isCheckoutLink(CHECKOUT, PAYMENT_LINK)).toBe(true);
+    expect(isCheckoutLink(PAYMENT_LINK, PAYMENT_LINK)).toBe(true);
+    expect(isCheckoutLink('https://BUY.stripe.com/test_link', PAYMENT_LINK)).toBe(true);
+    expect(isCheckoutLink('http://buy.stripe.com/test_link', PAYMENT_LINK)).toBe(false);
+    expect(isCheckoutLink('https://buy.stripe.com/other_link', PAYMENT_LINK)).toBe(false);
+    expect(isCheckoutLink('https://buy.stripe.com.example.com/test_link', PAYMENT_LINK)).toBe(false);
+    expect(isCheckoutLink('https://mobmachine.games/contribute', PAYMENT_LINK)).toBe(false);
+    expect(isCheckoutLink(CHECKOUT, '')).toBe(false);
+    expect(isCheckoutLink('', PAYMENT_LINK)).toBe(false);
+    expect(isCheckoutLink('not a url', PAYMENT_LINK)).toBe(false);
   });
 
   it("takes a link to the play address's origin, with any query, as a link into the game", () => {
@@ -184,7 +188,7 @@ describe('useSiteCounts', () => {
 
   // A frame that mounts the counts with one router, and links to move between pages.
   function Frame() {
-    useSiteCounts({ discordInvite: INVITE, playUrl: PLAY }, send, once);
+    useSiteCounts({ discordInvite: INVITE, playUrl: PLAY, stripePaymentLinkUrl: PAYMENT_LINK }, send, once);
     const navigate = useNavigate();
     const location = useLocation();
     const [, rerender] = useState(0);

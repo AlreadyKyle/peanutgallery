@@ -155,14 +155,18 @@ export function isDiscordLink(href: string, invite: string): boolean {
   return DISCORD_HOSTS.some((known) => host === known || host.endsWith(`.${known}`));
 }
 
-/** The host of every Stripe Payment Link: a press on a link there opens checkout. */
-export const CHECKOUT_HOST = 'buy.stripe.com';
-
-/** Whether a link is a Payment Link, an https address on buy.stripe.com. */
-export function isCheckoutLink(href: string): boolean {
+/**
+ * Whether a link opens checkout: the site's own Payment Link, at the same https address with any query
+ * (a card's Fund adds `client_reference_id`). It compares against the configured link rather than the
+ * payment host, so the build names no payment address but that one (platform/gate/payment-host-scan.mjs).
+ * No Payment Link, no checkout link.
+ */
+export function isCheckoutLink(href: string, paymentLink: string): boolean {
+  if (href === '' || paymentLink === '') return false;
   try {
-    const url = new URL(href);
-    return url.protocol === 'https:' && url.hostname.toLowerCase() === CHECKOUT_HOST;
+    const link = new URL(href);
+    const checkout = new URL(paymentLink);
+    return link.protocol === 'https:' && link.origin === checkout.origin && link.pathname === checkout.pathname;
   } catch {
     return false;
   }
@@ -212,8 +216,8 @@ function pageVisible(): boolean {
 const perPageLoad = onceEach();
 const sendEach = (event: PlayEvent): void => countEvent(event);
 
-/** The site's own addresses the counts read: its Discord invite and the game's play address. */
-export type CountLinks = { discordInvite: string; playUrl: string };
+/** The site's own addresses the counts read: its Discord invite, the game's play address and its Payment Link. */
+export type CountLinks = { discordInvite: string; playUrl: string; stripePaymentLinkUrl?: string };
 
 /**
  * The site's benchmark counters, mounted once by the frame (App.tsx):
@@ -229,6 +233,7 @@ export type CountLinks = { discordInvite: string; playUrl: string };
  */
 export function useSiteCounts(links: CountLinks, send: (event: PlayEvent) => void = sendEach, once: (event: PlayEvent) => void = perPageLoad): void {
   const { discordInvite, playUrl } = links;
+  const paymentLink = links.stripePaymentLinkUrl ?? '';
   const { pathname, search, hash } = useLocation();
   const navigate = useNavigate();
   const path = routePath(pathname);
@@ -287,7 +292,7 @@ export function useSiteCounts(links: CountLinks, send: (event: PlayEvent) => voi
       const anchor = pressedLink(event);
       if (anchor === null) return;
       if (isDiscordLink(anchor.href, discordInvite)) once('discord_click');
-      if (isCheckoutLink(anchor.href)) once('checkout_open');
+      if (isCheckoutLink(anchor.href, paymentLink)) once('checkout_open');
     };
     document.addEventListener('click', onPress, true);
     document.addEventListener('auxclick', onPress, true);
@@ -295,5 +300,5 @@ export function useSiteCounts(links: CountLinks, send: (event: PlayEvent) => voi
       document.removeEventListener('click', onPress, true);
       document.removeEventListener('auxclick', onPress, true);
     };
-  }, [discordInvite, once]);
+  }, [discordInvite, paymentLink, once]);
 }
