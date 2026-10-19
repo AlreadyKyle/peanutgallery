@@ -54,10 +54,13 @@ export function withoutSource(search: string): string {
 
 export const COUNT_PATH = '/api/count';
 
-type Beacon = Pick<Navigator, 'sendBeacon'>;
+type Beacon = Pick<Navigator, 'sendBeacon' | 'webdriver'>;
 
 export function countEvent(event: PlayEvent, nav: Partial<Beacon> = navigator, fetchFn: typeof fetch = fetch): void {
   try {
+    // An automated browser says so in navigator.webdriver (WebDriver and Playwright set it): that is a
+    // check or a screenshot run, not a visitor, so nothing is counted (docs/specs/counter-senders.md).
+    if (nav.webdriver === true) return;
     const body = JSON.stringify({ event });
     if (typeof nav.sendBeacon === 'function' && nav.sendBeacon(COUNT_PATH, body)) return;
     void fetchFn(COUNT_PATH, {

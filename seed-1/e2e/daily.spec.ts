@@ -71,6 +71,9 @@ function nearlyOver(date: string): string {
 // Counts are fire-and-forget: the preview has no /api/count, so this answers 204 and keeps the names.
 async function countsOf(page: Page): Promise<string[]> {
   const names: string[] = [];
+  // Playwright's browser says it is automated (navigator.webdriver), and render/count.ts sends nothing
+  // there; these tests play a person's browser.
+  await page.addInitScript(() => Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false, configurable: true }));
   await page.route('**/api/count', async (route) => {
     const body = (route.request() as Request).postData() ?? '';
     try {

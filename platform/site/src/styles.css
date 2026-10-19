@@ -778,6 +778,22 @@ main.sheet > .band:not(:first-child) > .section > h2:first-child + .faq-item {
   }
 }
 
+/* An earlier version's page (/terms/n, /refunds/n) says when it was in force and links the version in
+   force now: two lines, three or four on a phone. While the read runs, the loading line sits over that
+   status drawn hidden (Legal.tsx), so it takes the same room and the page under it holds still (the
+   full pass: /terms/1 and /refunds/1 shifted 0.04 to 0.07). */
+main.text-page .terms-loading {
+  display: grid;
+}
+
+main.text-page .terms-loading > * {
+  grid-area: 1 / 1;
+}
+
+main.text-page .terms-reserve {
+  visibility: hidden;
+}
+
 /* A card's own page from 64rem: the face in the left five twelfths, held in view, and the facts, the
    supporters and the agents' log in the seven beside it. */
 @media (min-width: 64rem) {

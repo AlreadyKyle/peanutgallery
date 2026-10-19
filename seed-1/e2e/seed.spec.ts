@@ -78,6 +78,9 @@ test('starting from a seed loads its run and keeps the old save as a backup', as
 test('a seed link and Save as seed are each counted once, by name alone', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => undefined);
   const events: string[] = [];
+  // Playwright's browser says it is automated (navigator.webdriver), and render/count.ts sends nothing
+  // there; this test plays a person's browser.
+  await page.addInitScript(() => Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false, configurable: true }));
   await page.route('**/api/count', async (route) => {
     const request = route.request();
     expect(request.method()).toBe('POST');
@@ -101,6 +104,9 @@ test('a seed link and Save as seed are each counted once, by name alone', async 
 
 test('a load from a save a day old counts dust_return_1d, read from the save it already holds', async ({ page }) => {
   const events: string[] = [];
+  // Playwright's browser says it is automated (navigator.webdriver), and render/count.ts sends nothing
+  // there; this test plays a person's browser.
+  await page.addInitScript(() => Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false, configurable: true }));
   await page.route('**/api/count', async (route) => {
     events.push(String((JSON.parse(route.request().postData() ?? '{}') as { event?: unknown }).event));
     await route.fulfill({ status: 204 });
