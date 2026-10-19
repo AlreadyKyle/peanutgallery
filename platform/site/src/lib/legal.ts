@@ -615,7 +615,7 @@ export const legal = {
     note: 'Paying never needs an account. Paid as a guest already? Sign in with the email on your receipt and claim it.',
     noteClosed: 'Paying never needs an account.',
     keepTitle: 'Keep this card',
-    keepBody: 'Sign in with the email on your receipt and this card joins your collection, with its XP and badges. There is no password.',
+    keepBody: 'Sign in with the email on your receipt and this card joins your collection, with its XP and badges.',
     keep: 'Add it to my collection',
   },
 } as const;

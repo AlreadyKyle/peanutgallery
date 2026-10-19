@@ -3,7 +3,7 @@ import { expect, overflowsHorizontally, test } from './fixtures';
 import { LIVE_CARD_ID, OPEN_CARD_ID, SUPPORTER_STUDIO } from './supporter-studio';
 
 // "Tell me when this ships" (docs/specs/card-follows.md): on a card's page a signed-in player follows
-// and unfollows the card; a signed-out visitor is offered the magic-link sign-in and comes back to the
+// and unfollows the card; a signed-out visitor is offered the sign-in form and comes back to the
 // card with the follow made; when sign-in is not available the form says so; a shipped card shows no
 // button; /me lists the follows with Unfollow. The community function is answered here, as
 // community.mts would answer it, and every request stays on the site's own origin.
@@ -111,11 +111,11 @@ test('a signed-out visitor signs in by email and comes back to the card with the
   await expect(button).toHaveAttribute('aria-expanded', 'false');
   await button.click();
   await expect(button).toHaveAttribute('aria-expanded', 'true');
-  const form = page.locator('.follow form');
-  await expect(form).toContainText('Sign in with your email and the studio emails you once when this card goes live.');
+  const form = page.locator('.follow');
+  await expect(form).toContainText('Sign in and the studio emails you once when this card goes live.');
   await form.getByLabel('Email').fill('visitor@example.com');
-  await form.getByRole('button', { name: 'Send the link' }).click();
-  await expect(form.getByRole('status')).toHaveText('Check your email for the link. Opening it signs you in and follows this card.');
+  await form.getByRole('button', { name: 'Email me a sign-in link' }).click();
+  await expect(form.getByRole('status')).toContainText('We sent a sign-in link to visitor@example.com. It works once.');
   const origin = new URL(page.url()).origin;
   expect(posts).toEqual([{ path: '/api/community/auth/otp', body: { email: 'visitor@example.com', redirectTo: `${origin}/me` }, auth: null }]);
   expect(await page.evaluate(() => window.localStorage.getItem('mm:pending-follow'))).toBe(OPEN_CARD_ID);
@@ -133,10 +133,10 @@ test('when email sign-in is not available, the form says so and nothing is kept 
   await answerCommunity(page, posts, { otpStatus: 400 });
   await page.goto(`/card/${OPEN_CARD_ID}`);
   await page.getByRole('button', { name: 'Tell me when this ships' }).click();
-  const form = page.locator('.follow form');
+  const form = page.locator('.follow');
   await form.getByLabel('Email').fill('visitor@example.com');
-  await form.getByRole('button', { name: 'Send the link' }).click();
-  await expect(form.getByRole('status')).toHaveText('Sign-in is not available right now.');
+  await form.getByRole('button', { name: 'Email me a sign-in link' }).click();
+  await expect(form.getByRole('alert')).toHaveText('That did not work just now. Try again in a moment.');
   expect(await page.evaluate(() => window.localStorage.getItem('mm:pending-follow'))).toBeNull();
   // The rest of the card's page is unchanged.
   await expect(page.getByRole('region', { name: 'The facts' })).toBeVisible();

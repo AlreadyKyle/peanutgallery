@@ -36,6 +36,11 @@ export const PAGE_ROUTES: readonly NamedRoute[] = [
   ['seeds', '/seeds'],
   ['profile', '/u/sample-player'],
   ['me', '/me'],
+  // The account pages (docs/specs/accounts.md).
+  ['sign-in', '/sign-in'],
+  ['sign-up', '/sign-up'],
+  ['forgot-password', '/forgot-password'],
+  ['reset-password', '/reset-password'],
   ['faq', '/faq'],
   ['broadcast', '/broadcast'],
 ];

@@ -1,51 +1,32 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
-import { sendMagicLink, useSignedIn } from '../lib/account';
+import { useEffect, useId, useRef, useState } from 'react';
+import { useSignedIn } from '../lib/account';
+import { claimInBackground } from '../lib/arrive';
 import { CommunityError } from '../lib/community';
 import { copy } from '../lib/copy';
 import { clearPendingFollow, followable, followCard, pendingFollow, rememberPendingFollow, unfollowCard, useFollows } from '../lib/follows';
 import { useSignInOpen } from '../lib/sign-in';
+import { AuthForm } from './AuthForm';
 import { Glyph } from './Glyph';
 
 // "Tell me when this ships" on a card's page (docs/specs/card-follows.md). Signed in, it is a toggle
 // (aria-pressed, the check glyph when pressed) that follows or unfollows the card. Signed out, it
-// opens the magic-link sign-in under it; the card is kept in this browser, and /me sends the player
-// back here, where the follow is made once. When sign-in is not available the form says so, as /me's
-// does, and the rest of the page is unchanged. A card that shipped or was turned down shows nothing.
+// opens the sign-in form under it (docs/specs/accounts.md); the card is kept in this browser, and a
+// password sign-in here, or /me after a link or a provider, makes the follow once. When sign-in is
+// not available the form says so, and the rest of the page is unchanged. A card that shipped or was turned down shows nothing.
 
 const words = copy.follow;
 
 type Status = 'idle' | 'busy' | 'following' | 'unfollowed' | 'failed';
 
 function SignIn({ cardId }: { cardId: string }) {
-  const id = useId();
-  const [email, setEmail] = useState('');
-  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    setState('sending');
-    rememberPendingFollow(cardId);
-    // The link lands on /me, the address sign-in is set up for; /me sends the player back here.
-    sendMagicLink(email.trim(), `${window.location.origin}/me`)
-      .then(() => setState('sent'))
-      .catch(() => {
-        clearPendingFollow();
-        setState('error');
-      });
-  };
   return (
-    <form className="form" onSubmit={submit} id={`${id}-form`}>
+    <div className="follow-sign-in">
       <p className="small">{words.signInBody}</p>
-      <label htmlFor={`${id}-email`}>{copy.me.emailLabel}</label>
-      <input id={`${id}-email`} type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.currentTarget.value)} />
-      <p>
-        <button type="submit" className="button" disabled={state === 'sending'}>
-          {state === 'sending' ? copy.me.sending : copy.me.send}
-        </button>
-      </p>
-      <p role="status" className="small">
-        {state === 'sent' ? words.sentBody : state === 'error' ? copy.me.closed : ''}
-      </p>
-    </form>
+      <div className="auth-panel">
+        {/* The card is kept in this browser as sign-in starts; signed in here or back from /me, it is followed once. */}
+        <AuthForm title="h3" onLeave={() => rememberPendingFollow(cardId)} onFailed={clearPendingFollow} onSignedIn={claimInBackground} />
+      </div>
+    </div>
   );
 }
 

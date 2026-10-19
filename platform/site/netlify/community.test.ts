@@ -151,16 +151,17 @@ describe('the sign-in routes', () => {
   });
 
   it('says whether email sign-in takes new players, as one boolean read from the public auth settings', async () => {
-    for (const [settings, signIn] of [
-      [{ external: { email: true, google: false }, disable_signup: false, mailer_autoconfirm: false }, true],
-      [{ external: { email: true }, disable_signup: true }, false],
-      [{ external: { email: false }, disable_signup: false }, false],
-      [{}, false],
+    for (const [settings, signIn, providers] of [
+      [{ external: { email: true, google: false }, disable_signup: false, mailer_autoconfirm: false }, true, []],
+      [{ external: { email: true, google: true, github: true, twitter: true, discord: false, apple: true }, disable_signup: false }, true, ['google', 'apple', 'github']],
+      [{ external: { email: true, google: true }, disable_signup: true }, false, []],
+      [{ external: { email: false }, disable_signup: false }, false, []],
+      [{}, false, []],
     ] as const) {
       const calls = stubFetch([{ body: settings }]);
       const response = await get('/api/community/auth/settings');
       expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ signIn });
+      expect(await response.json()).toEqual({ signIn, providers });
       expect(calls[0]!.url).toBe(`${SUPABASE_URL}/auth/v1/settings`);
       expect((calls[0]!.init.headers as Record<string, string>).apikey).toBe(SUPABASE_PUBLISHABLE_KEY);
       expect(response.headers.get('Netlify-CDN-Cache-Control')).toContain('s-maxage=60');
@@ -170,6 +171,112 @@ describe('the sign-in routes', () => {
     const none = stubFetch([{ body: {} }]);
     expect((await get('/api/community/auth/settings?x=1')).status).toBe(400);
     expect(none).toHaveLength(0);
+  });
+
+  it('makes an account with a password, asking for the email to be confirmed, and never says who has one', async () => {
+    const calls = stubFetch([{ body: { id: 'u1', email: 'new@example.com', identities: [] } }]);
+    const response = await post('/api/community/auth/signup', { email: 'New@Example.com', password: 'long enough pass', redirectTo: `${ORIGIN}/me` });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ confirm: true });
+    expect(calls[0]!.url).toBe(`${SUPABASE_URL}/auth/v1/signup?redirect_to=${encodeURIComponent(`${ORIGIN}/me`)}`);
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ email: 'new@example.com', password: 'long enough pass' });
+    stubFetch([{ body: { access_token: TOKEN, refresh_token: 'r3fresh-token', expires_in: 60, user: {} } }]);
+    expect(await (await post('/api/community/auth/signup', { email: 'a@example.com', password: 'long enough pass', redirectTo: `${ORIGIN}/me` })).json()).toEqual({
+      access_token: TOKEN,
+      refresh_token: 'r3fresh-token',
+      expires_in: 60,
+    });
+  });
+
+  it('refuses a short password before Supabase, and turns its refusals into codes', async () => {
+    const none = stubFetch([{ body: {} }]);
+    const short = await post('/api/community/auth/signup', { email: 'a@example.com', password: 'short', redirectTo: `${ORIGIN}/me` });
+    expect(short.status).toBe(400);
+    expect(await short.json()).toEqual({ error: 'Use at least 8 characters', code: 'weak' });
+    expect((await post('/api/community/auth/signup', { email: 'a@example.com', password: 'x'.repeat(73), redirectTo: `${ORIGIN}/me` })).status).toBe(400);
+    expect((await post('/api/community/auth/signup', { email: 'a@example.com', password: 'long enough pass', redirectTo: 'https://evil.example/me' })).status).toBe(400);
+    expect(none).toHaveLength(0);
+    for (const [status, body, want, code] of [
+      [422, { error_code: 'weak_password', msg: 'Password is known to be weak' }, 400, 'weak'],
+      [422, { error_code: 'signup_disabled', msg: 'Signups not allowed' }, 403, 'closed'],
+      [429, { error_code: 'over_email_send_rate_limit' }, 429, 'limit'],
+    ] as const) {
+      stubFetch([{ status, body }]);
+      const response = await post('/api/community/auth/signup', { email: 'a@example.com', password: 'long enough pass', redirectTo: `${ORIGIN}/me` });
+      expect(response.status).toBe(want);
+      expect(((await response.json()) as { code: string }).code).toBe(code);
+    }
+  });
+
+  it('signs in with a password, and says wrong or unconfirmed without saying which part was wrong', async () => {
+    const calls = stubFetch([{ body: { access_token: TOKEN, refresh_token: 'r3fresh-token', expires_in: 3600, user: { email: 'a@example.com' } } }]);
+    const ok = await post('/api/community/auth/password', { email: 'A@example.com', password: 'pw' });
+    expect(await ok.json()).toEqual({ access_token: TOKEN, refresh_token: 'r3fresh-token', expires_in: 3600 });
+    expect(calls[0]!.url).toBe(`${SUPABASE_URL}/auth/v1/token?grant_type=password`);
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ email: 'a@example.com', password: 'pw' });
+    stubFetch([{ status: 400, body: { error_code: 'invalid_credentials' } }]);
+    const wrong = await post('/api/community/auth/password', { email: 'a@example.com', password: 'pw' });
+    expect(wrong.status).toBe(401);
+    expect(await wrong.json()).toEqual({ error: 'Wrong email or password', code: 'wrong' });
+    stubFetch([{ status: 400, body: { error_code: 'email_not_confirmed' } }]);
+    expect(((await (await post('/api/community/auth/password', { email: 'a@example.com', password: 'pw' })).json()) as { code: string }).code).toBe('unconfirmed');
+    expect((await post('/api/community/auth/password', { email: 'a@example.com', password: '' })).status).toBe(400);
+  });
+
+  it('limits password tries per address', async () => {
+    stubFetch([{ status: 400, body: { error_code: 'invalid_credentials' } }]);
+    const tryOnce = () =>
+      community(
+        new Request(`${ORIGIN}/api/community/auth/password`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-nf-client-connection-ip': '192.0.2.88' },
+          body: JSON.stringify({ email: 'a@example.com', password: 'guess' }),
+        }),
+      );
+    const statuses: number[] = [];
+    for (let i = 0; i < 11; i += 1) statuses.push((await tryOnce()).status);
+    expect(statuses.slice(0, 10).every((status) => status === 401)).toBe(true);
+    expect(statuses[10]).toBe(429);
+  });
+
+  it('sends a reset link or the confirmation again, with the same answer for any address', async () => {
+    const calls = stubFetch([{ body: {} }, { status: 422, body: { error_code: 'user_not_found' } }]);
+    const reset = await post('/api/community/auth/recover', { email: 'a@example.com', redirectTo: `${ORIGIN}/me` });
+    expect(await reset.json()).toEqual({ sent: true });
+    expect(calls[0]!.url).toBe(`${SUPABASE_URL}/auth/v1/recover?redirect_to=${encodeURIComponent(`${ORIGIN}/me`)}`);
+    const again = await post('/api/community/auth/resend', { email: 'a@example.com', redirectTo: `${ORIGIN}/me` });
+    expect(await again.json()).toEqual({ sent: true });
+    expect(calls[1]!.url).toBe(`${SUPABASE_URL}/auth/v1/resend?redirect_to=${encodeURIComponent(`${ORIGIN}/me`)}`);
+    expect(JSON.parse(String(calls[1]!.init.body))).toEqual({ type: 'signup', email: 'a@example.com' });
+  });
+
+  it('sets a new password only with the player\'s token, by PUT', async () => {
+    const calls = stubFetch([{ body: { id: 'u1' } }]);
+    expect((await post('/api/community/auth/new-password', { password: 'a new long one' })).status).toBe(401);
+    const changed = await post('/api/community/auth/new-password', { password: 'a new long one' }, { authorization: `Bearer ${TOKEN}` });
+    expect(await changed.json()).toEqual({ changed: true });
+    expect(calls[0]!.url).toBe(`${SUPABASE_URL}/auth/v1/user`);
+    expect(calls[0]!.init.method).toBe('PUT');
+    expect((calls[0]!.init.headers as Record<string, string>).Authorization).toBe(`Bearer ${TOKEN}`);
+    expect((await post('/api/community/auth/new-password', { password: 'short' }, { authorization: `Bearer ${TOKEN}` })).status).toBe(400);
+    stubFetch([{ status: 422, body: { error_code: 'same_password' } }]);
+    expect(((await (await post('/api/community/auth/new-password', { password: 'a new long one' }, { authorization: `Bearer ${TOKEN}` })).json()) as { code: string }).code).toBe('same');
+  });
+
+  it('sends a provider sign-in to Supabase Auth, only for the listed providers and back to this site', async () => {
+    const back = encodeURIComponent(`${ORIGIN}/me`);
+    const google = await get(`/api/community/auth/authorize?provider=google&redirectTo=${back}`);
+    expect(google.status).toBe(302);
+    expect(google.headers.get('Location')).toBe(`${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${back}`);
+    expect((await get(`/api/community/auth/authorize?provider=twitter&redirectTo=${back}`)).status).toBe(400);
+    expect((await get(`/api/community/auth/authorize?provider=google&redirectTo=${encodeURIComponent('https://evil.example/me')}`)).status).toBe(400);
+    expect((await get(`/api/community/auth/authorize?provider=google&redirectTo=${back}&scopes=x`)).status).toBe(400);
+  });
+
+  it('ends a session on the server when signing out', async () => {
+    const calls = stubFetch([{ status: 204 }]);
+    expect(await (await post('/api/community/auth/signout', {}, { authorization: `Bearer ${TOKEN}` })).json()).toEqual({ signedOut: true });
+    expect(calls[0]!.url).toBe(`${SUPABASE_URL}/auth/v1/logout?scope=local`);
   });
 
   it('answers 405 to a GET on a POST route', async () => {

@@ -147,23 +147,128 @@ export function rpcArgs(name: string, body: unknown): Parsed<Record<string, unkn
 
 const EMAIL = /^[^\s@<>()",;:]{1,64}@[A-Za-z0-9.-]{1,185}\.[A-Za-z]{2,24}$/;
 
-/** The magic-link request: an email and a redirect on this site's own origin. */
-export function otpRequest(body: unknown, origin: string): Parsed<{ email: string; redirectTo: string }> {
-  if (typeof body !== 'object' || body === null || Array.isArray(body)) return { ok: false, status: 400, error: 'The body must be a JSON object' };
-  const { email, redirectTo, ...rest } = body as Record<string, unknown>;
-  if (Object.keys(rest).length > 0) return { ok: false, status: 400, error: 'Send only email and redirectTo' };
-  if (typeof email !== 'string' || email.length > 254 || !EMAIL.test(email.trim())) return { ok: false, status: 400, error: 'Enter a valid email address' };
-  if (typeof redirectTo !== 'string' || redirectTo.length > 500) return { ok: false, status: 400, error: 'redirectTo must be a page on this site' };
+/** The sign-in providers the site offers a button for, once each is switched on in Supabase Auth. */
+export const OAUTH_PROVIDERS = ['google', 'apple', 'github', 'discord'] as const;
+export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
+
+/** A new password's length: at least 8 characters, and at most 72 bytes (bcrypt reads no further). */
+export const PASSWORD_MIN = 8;
+export const PASSWORD_MAX_BYTES = 72;
+
+function objectBody(body: unknown): body is Record<string, unknown> {
+  return typeof body === 'object' && body !== null && !Array.isArray(body);
+}
+
+const NOT_OBJECT = { ok: false, status: 400, error: 'The body must be a JSON object' } as const;
+
+function emailOf(value: unknown): string | null {
+  return typeof value === 'string' && value.length <= 254 && EMAIL.test(value.trim()) ? value.trim().toLowerCase() : null;
+}
+
+/** A redirect on this site's own origin, with no user or password in it, or null. */
+export function sameOrigin(value: unknown, origin: string): string | null {
+  if (typeof value !== 'string' || value.length > 500) return null;
   let target: URL;
   try {
-    target = new URL(redirectTo);
+    target = new URL(value);
   } catch {
-    return { ok: false, status: 400, error: 'redirectTo must be a page on this site' };
+    return null;
   }
-  if (target.origin !== origin || target.username !== '' || target.password !== '') {
-    return { ok: false, status: 400, error: 'redirectTo must be a page on this site' };
-  }
-  return { ok: true, value: { email: email.trim().toLowerCase(), redirectTo: target.href } };
+  if (target.origin !== origin || target.username !== '' || target.password !== '') return null;
+  return target.href;
+}
+
+/** A new password's problem, or null when it will do. */
+export function passwordProblem(password: unknown): string | null {
+  if (typeof password !== 'string') return 'Enter a password';
+  if ([...password].length < PASSWORD_MIN) return `Use at least ${PASSWORD_MIN} characters`;
+  if (new TextEncoder().encode(password).length > PASSWORD_MAX_BYTES) return 'Use a shorter password';
+  return null;
+}
+
+/**
+ * The magic-link, password reset and confirmation-resend requests: an email and a redirect on this
+ * site's own origin.
+ */
+export function otpRequest(body: unknown, origin: string): Parsed<{ email: string; redirectTo: string }> {
+  if (!objectBody(body)) return NOT_OBJECT;
+  const { email, redirectTo, ...rest } = body;
+  if (Object.keys(rest).length > 0) return { ok: false, status: 400, error: 'Send only email and redirectTo' };
+  const address = emailOf(email);
+  if (address === null) return { ok: false, status: 400, error: 'Enter a valid email address' };
+  const target = sameOrigin(redirectTo, origin);
+  if (target === null) return { ok: false, status: 400, error: 'redirectTo must be a page on this site' };
+  return { ok: true, value: { email: address, redirectTo: target } };
+}
+
+/** Sign-up: an email, a new password and the page the confirmation link lands on. */
+export function signupRequest(body: unknown, origin: string): Parsed<{ email: string; password: string; redirectTo: string }> {
+  if (!objectBody(body)) return NOT_OBJECT;
+  const { password, ...rest } = body;
+  const base = otpRequest(rest, origin);
+  if (!base.ok) return base;
+  const problem = passwordProblem(password);
+  if (problem !== null) return { ok: false, status: 400, error: problem };
+  return { ok: true, value: { ...base.value, password: password as string } };
+}
+
+/** Password sign-in: an email and the password. Its length is Supabase's to judge, not this one's. */
+export function passwordRequest(body: unknown): Parsed<{ email: string; password: string }> {
+  if (!objectBody(body)) return NOT_OBJECT;
+  const { email, password, ...rest } = body;
+  if (Object.keys(rest).length > 0) return { ok: false, status: 400, error: 'Send only email and password' };
+  const address = emailOf(email);
+  if (address === null) return { ok: false, status: 400, error: 'Enter a valid email address' };
+  if (typeof password !== 'string' || password === '' || password.length > 256) return { ok: false, status: 400, error: 'Enter your password' };
+  return { ok: true, value: { email: address, password } };
+}
+
+/** A signed-in player's new password (after a reset link, or from their desk). */
+export function newPasswordRequest(body: unknown): Parsed<string> {
+  if (!objectBody(body)) return NOT_OBJECT;
+  const { password, ...rest } = body;
+  if (Object.keys(rest).length > 0) return { ok: false, status: 400, error: 'Send only password' };
+  const problem = passwordProblem(password);
+  if (problem !== null) return { ok: false, status: 400, error: problem };
+  return { ok: true, value: password as string };
+}
+
+/** Continue with a provider: one of OAUTH_PROVIDERS and a page on this site to come back to. */
+export function authorizeRequest(params: URLSearchParams, origin: string): Parsed<{ provider: OAuthProvider; redirectTo: string }> {
+  const bad = only(params, ['provider', 'redirectTo']);
+  if (bad) return { ok: false, status: 400, error: bad };
+  const provider = params.get('provider') ?? '';
+  if (!(OAUTH_PROVIDERS as readonly string[]).includes(provider)) return { ok: false, status: 400, error: 'Unknown provider' };
+  const target = sameOrigin(params.get('redirectTo'), origin);
+  if (target === null) return { ok: false, status: 400, error: 'redirectTo must be a page on this site' };
+  return { ok: true, value: { provider: provider as OAuthProvider, redirectTo: target } };
+}
+
+/**
+ * What the site may know of Supabase Auth's public settings: whether email sign-in takes new players
+ * (signIn), and which of OAUTH_PROVIDERS are switched on. Nothing else of the settings leaves.
+ */
+export function publicAuthSettings(settings: unknown): { signIn: boolean; providers: OAuthProvider[] } {
+  const record = objectBody(settings) ? settings : {};
+  const external = objectBody(record.external) ? record.external : {};
+  const open = record.disable_signup !== true;
+  return {
+    signIn: external.email === true && open,
+    providers: open ? OAUTH_PROVIDERS.filter((provider) => external[provider] === true) : [],
+  };
+}
+
+/** The token answer a sign-in returns to the page: the three fields the session keeps, or null. */
+export function sessionFields(body: unknown): { access_token: string; refresh_token: string; expires_in: number } | null {
+  if (!objectBody(body) || typeof body.access_token !== 'string' || typeof body.refresh_token !== 'string') return null;
+  return { access_token: body.access_token, refresh_token: body.refresh_token, expires_in: Number(body.expires_in) || 3600 };
+}
+
+/** Supabase Auth's error code (weak_password, email_not_confirmed, ...), or null. */
+export function errorCode(body: unknown): string | null {
+  if (!objectBody(body)) return null;
+  const code = body.error_code ?? body.code ?? body.error;
+  return typeof code === 'string' && /^[a-z_]{1,60}$/.test(code) ? code : null;
 }
 
 export function refreshRequest(body: unknown): Parsed<string> {
