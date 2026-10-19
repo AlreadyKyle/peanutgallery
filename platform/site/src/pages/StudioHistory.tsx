@@ -50,11 +50,6 @@ export function StudioHistory() {
       <div className="band">
         <section className="section" aria-labelledby="history-eras">
           <h2 id="history-eras">{copy.history.erasTitle}</h2>
-          {doc.state === 'loading' ? (
-            <p className="muted" aria-busy="true">
-              {copy.history.loading}
-            </p>
-          ) : null}
           {doc.state === 'unavailable' ? <p className="muted">{legal.partUnavailable} {copy.history.fallback}</p> : null}
           <div className="blueprint">
             <div className="blueprint-head">
@@ -62,7 +57,13 @@ export function StudioHistory() {
                 <span className="blueprint-index">{copy.history.eraNumber.replace('{n}', String((era?.index ?? 0) + 1))}</span>
                 <span className="blueprint-name">{era?.name ?? copy.studioRoom.eras.garage}</span>
               </p>
-              {era === null ? null : (
+              {/* While the eras load, the loading line takes the place of when the era was reached,
+                  so the blueprint is drawn where it stays and nothing moves when the eras arrive. */}
+              {doc.state === 'loading' ? (
+                <p className="blueprint-when" aria-busy="true">
+                  {copy.history.loading}
+                </p>
+              ) : era === null ? null : (
                 <p className="blueprint-when">
                   {era.reachedAt === null ? copy.history.notReached : copy.history.reachedOn.replace('{date}', formatDate(era.reachedAt))}
                 </p>
@@ -125,9 +126,13 @@ export function StudioHistory() {
               ))}
             </ol>
           ) : null}
-          <p>
-            <Link to="/goals">{copy.history.goalsLink}</Link>
-          </p>
+          {/* The link to the goals follows the eras, so it waits for them: drawn while they load, it
+              would sit under the blueprint and drop below the stepper and the list when they arrive. */}
+          {doc.state === 'loading' ? null : (
+            <p>
+              <Link to="/goals">{copy.history.goalsLink}</Link>
+            </p>
+          )}
         </section>
       </div>
     </main>

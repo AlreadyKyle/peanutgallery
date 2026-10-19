@@ -752,6 +752,32 @@ main.sheet > .band:not(:first-child) > .section > h2:first-child + .faq-item {
   }
 }
 
+/* A community list's loading line holds the room of the answer that takes its place, so the sections
+   under it do not jump when it arrives (the full pass: /suggest and /seeds moved 104px at 768px,
+   /goals 48px). The ideas board and the seed gallery hold their empty tile (its dashed edges, padding,
+   line and button), the least a first answer draws; the goals track holds the total and the line
+   under it. The line ends its section as the answer does, with no lede's margin under it (on the
+   sheet's grid that margin does not collapse and would hold 40px more than the answer). */
+.section:has(> #suggest-list, > #seeds-gallery) > p[aria-busy='true'] {
+  min-height: calc(4px + 2 * var(--space-3) + 1lh + var(--space-1) + var(--target));
+  margin-bottom: 0;
+}
+
+.section:has(> #goals-track) > p[aria-busy='true'] {
+  min-height: calc(var(--size-lead) * var(--leading-body) + var(--space-2) + 1lh);
+  margin-bottom: 0;
+}
+
+/* The Terms' and the Refunds' version line ("Version n, in force since ...", about 28rem of text)
+   takes two lines in a phone's column: there the loading line under the lede holds those two, so the
+   page under the plate does not drop a line when the line arrives (the full pass: /terms and /refunds
+   moved 27px at 375px). */
+@media (max-width: 30.99rem) {
+  main.text-page .hero > p[aria-busy='true'] {
+    min-height: 2lh;
+  }
+}
+
 /* A card's own page from 64rem: the face in the left five twelfths, held in view, and the facts, the
    supporters and the agents' log in the seven beside it. */
 @media (min-width: 64rem) {
