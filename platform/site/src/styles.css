@@ -2079,6 +2079,68 @@ button.link:hover:not(:disabled) {
   width: 3.5rem;
 }
 
+/* The roles still to come (Starts later, Planned): a compact list under the running team's boxes
+   (the full pass, S25), never boxes. Each entry is a row between hairlines, like a list of rows: the
+   sleeping avatar beside the name at the body size, what the role will do, and when it starts, small
+   and muted. One column on a phone; two from 48rem, one entry to a cell, the rows' hairlines lining
+   up across the pair. */
+.team-later {
+  display: grid;
+  column-gap: var(--space-4);
+  margin: 0 0 var(--space-2);
+}
+
+.later-role {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr;
+  column-gap: var(--space-2);
+  align-content: start;
+  padding-block: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+
+.later-role:last-child {
+  border-bottom: 1px solid var(--hairline);
+}
+
+.later-role > * {
+  grid-column: 2;
+  margin: 0;
+}
+
+.later-role > .avatar {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  width: 2.5rem;
+  height: auto;
+}
+
+.later-role > h3 {
+  font-size: var(--size-body);
+}
+
+.later-role > h3 + p {
+  margin-top: 0.25rem;
+}
+
+.later-when {
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--size-small);
+}
+
+@media (min-width: 48rem) {
+  .team-later {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* The last row's first entry closes the list with a hairline too, under its partner. */
+  .later-role:nth-last-child(2):nth-child(odd) {
+    border-bottom: 1px solid var(--hairline);
+  }
+}
+
 /* The team strip: borderless links, avatar beside the name and job. */
 .team-strip {
   display: grid;

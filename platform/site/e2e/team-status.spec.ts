@@ -37,10 +37,10 @@ test.describe('while the studio is paused', () => {
   });
 });
 
-test.describe('the boxes of each section', () => {
+test.describe("the running team's boxes", () => {
   test.use({ studio: SUPPORTER_STUDIO });
 
-  test('end their feet together and line up their Paused tags across each row, in all three sections', async ({ page }) => {
+  test('end their feet together and line up their Paused tags across each row', async ({ page }) => {
     for (const width of [768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto('/team');
@@ -48,8 +48,8 @@ test.describe('the boxes of each section', () => {
       // Rows of agents side by side, grouped by where each starts; within a row, each foot line's top.
       const misaligned = await page.evaluate(() => {
         const grids = document.querySelectorAll('.team-grid');
-        // Running, Starts later and Planned: every section is a team grid of boxes.
-        const out: string[] = grids.length === 3 ? [] : [`${grids.length} team grids`];
+        // Only Running is a team grid of boxes; the roles still to come are a compact list (S25).
+        const out: string[] = grids.length === 1 ? [] : [`${grids.length} team grids`];
         for (const grid of grids) {
           const rows = new Map<number, Element[]>();
           for (const agent of grid.querySelectorAll(':scope > li.agent')) {
@@ -75,13 +75,15 @@ test.describe('the boxes of each section', () => {
   });
 });
 
-// The board, 26 Sep 2026 (PLAN §10 decision 49): every member of the team in the same box, one to a
-// grid cell. One width for every box on the page at every breakpoint; from 768px every box in a
-// section as tall as the tallest in it. The default fixture draws all three sections.
+// The board, 26 Sep 2026 (PLAN §10 decision 49): every running member of the team in the same box,
+// one to a grid cell, one width at every breakpoint and, from 768px, one height. The roles still to
+// come are a compact list under them (the full pass, S25): an entry per role between hairlines, one
+// column on a phone and two equal columns from 768px, each entry shorter than any box. The
+// default fixture draws all three sections.
 test.describe('every member of the team', () => {
   test.use({ studio: DEFAULT_STUDIO });
 
-  test('sits in one box size: one width on the page, one height in each section from 768px', async ({ page }) => {
+  test('runs in one box size, and the roles still to come sit in a compact list of one or two columns', async ({ page }) => {
     for (const width of [375, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto('/team');
@@ -89,25 +91,43 @@ test.describe('every member of the team', () => {
       await page.evaluate(() => document.fonts.ready);
       const sections = await page.evaluate(() =>
         [...document.querySelectorAll('main section')]
-          .filter((section) => section.querySelector('li.agent') !== null)
+          .filter((section) => section.querySelector('li.agent, li.later-role') !== null)
           .map((section) => ({
             heading: section.querySelector('h2')?.textContent ?? '',
             lists: [...section.querySelectorAll('ul')].map((ul) => ul.className),
-            boxes: [...section.querySelectorAll('li.agent')].map((li) => {
+            items: [...section.querySelectorAll('ul > li')].map((li) => {
               const r = li.getBoundingClientRect();
-              return { width: r.width, height: r.height, parent: li.parentElement?.className ?? '' };
+              return { className: li.className, left: Math.round(r.left), top: Math.round(r.top), width: r.width, height: r.height };
             }),
           })),
       );
-      expect(sections.map((section) => section.heading), `${width}px`).toEqual(['Running', 'Starts later', 'Planned']);
-      const widths = sections.flatMap((section) => section.boxes.map((b) => b.width));
+      expect(sections.map((section) => [section.heading, section.lists]), `${width}px`).toEqual([
+        ['Running', ['team-grid']],
+        ['Starts later', ['team-later']],
+        ['Planned', ['team-later']],
+      ]);
+      const [running, ...later] = sections;
+      expect(new Set(running!.items.map((item) => item.className)), `${width}px`).toEqual(new Set(['agent']));
+      const widths = running!.items.map((b) => b.width);
       expect(Math.max(...widths) - Math.min(...widths), `${width}px box widths ${widths.join(', ')}`).toBeLessThanOrEqual(1);
-      for (const section of sections) {
-        expect(section.lists, `${section.heading} at ${width}px`).toEqual(['team-grid']);
-        expect(new Set(section.boxes.map((b) => b.parent)), `${section.heading} at ${width}px`).toEqual(new Set(['team-grid']));
-        if (width < 768) continue;
-        const heights = section.boxes.map((b) => b.height);
-        expect(Math.max(...heights) - Math.min(...heights), `${section.heading} at ${width}px heights ${heights.join(', ')}`).toBeLessThanOrEqual(1);
+      if (width >= 768) {
+        const heights = running!.items.map((b) => b.height);
+        expect(Math.max(...heights) - Math.min(...heights), `Running at ${width}px heights ${heights.join(', ')}`).toBeLessThanOrEqual(1);
+      }
+      const shortestBox = Math.min(...running!.items.map((b) => b.height));
+      for (const section of later) {
+        expect(new Set(section.items.map((item) => item.className)), `${section.heading} at ${width}px`).toEqual(new Set(['later-role']));
+        // One column on a phone, two equal columns from 768px, each entry starting a row or beside one.
+        const columns = [...new Set(section.items.map((item) => item.left))];
+        expect(columns.length, `${section.heading} at ${width}px columns ${columns.join(', ')}`).toBe(width < 768 ? 1 : Math.min(2, section.items.length));
+        const entryWidths = section.items.map((item) => item.width);
+        expect(Math.max(...entryWidths) - Math.min(...entryWidths), `${section.heading} at ${width}px entry widths`).toBeLessThanOrEqual(1);
+        // The pair in a row shares its top and its height, so their hairlines line up.
+        const rows = new Map<number, number[]>();
+        for (const item of section.items) rows.set(item.top, [...(rows.get(item.top) ?? []), item.height]);
+        for (const [top, heights] of rows) expect(Math.max(...heights) - Math.min(...heights), `${section.heading} row at ${top} at ${width}px`).toBeLessThanOrEqual(1);
+        // Compact: every entry is shorter than the shortest running box.
+        for (const item of section.items) expect(item.height, `${section.heading} entry at ${width}px`).toBeLessThan(shortestBox);
       }
     }
   });

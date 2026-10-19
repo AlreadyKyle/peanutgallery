@@ -77,23 +77,53 @@ function RoleRow({ role, status, snapshot }: { role: Role; status: TeamStatus; s
   );
 }
 
-function Section({ id, heading, intro, rows, snapshot }: {
+/**
+ * A role that does not run yet (Starts later, Planned) as one entry of a compact list under the
+ * running team's boxes (the full pass, S25: ten boxes of roles still to come took over half the page
+ * on a phone): its sleeping avatar beside its name, what it will do, and when it starts. No box, no
+ * model and no cost, since it has none yet.
+ */
+function LaterRow({ role, status }: { role: Role; status: TeamStatus }) {
+  return (
+    <li className="later-role" id={`agent-${role.id}`} data-status={status.kind}>
+      <Avatar note={role.species_note} asleep size={40} />
+      <h3 id={`role-${role.id}`}>{role.title === role.name ? role.name : `${role.name} · ${role.title}`}</h3>
+      {role.description === null || role.description.trim() === '' ? null : <p>{role.description}</p>}
+      {status.sentence === null ? null : <p className="later-when">{status.sentence}</p>}
+    </li>
+  );
+}
+
+/**
+ * One section of the roster: Running as a grid of boxes, one to a cell; the roles still to come as
+ * a compact list, one column on a phone and two from 48rem (DESIGN.md, The team).
+ */
+function Section({ id, heading, intro, rows, snapshot, later = false }: {
   id: string;
   heading: string;
   intro: string;
   rows: { role: Role; status: TeamStatus }[];
   snapshot: Snapshot;
+  later?: boolean;
 }) {
   if (rows.length === 0) return null;
   return (
     <section className="section" aria-labelledby={id}>
       <h2 id={id}>{heading}</h2>
       <p className="muted">{intro}</p>
-      <ul className="team-grid">
-        {rows.map(({ role, status }) => (
-          <RoleRow key={role.id} role={role} status={status} snapshot={snapshot} />
-        ))}
-      </ul>
+      {later ? (
+        <ul className="team-later">
+          {rows.map(({ role, status }) => (
+            <LaterRow key={role.id} role={role} status={status} />
+          ))}
+        </ul>
+      ) : (
+        <ul className="team-grid">
+          {rows.map(({ role, status }) => (
+            <RoleRow key={role.id} role={role} status={status} snapshot={snapshot} />
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -113,8 +143,8 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
         rows={running}
         snapshot={snapshot}
       />
-      <Section id="team-starts" heading={team.startsLater} intro={team.startsLaterIntro} rows={rows.filter((row) => row.status.kind === 'starts')} snapshot={snapshot} />
-      <Section id="team-planned" heading={team.planned} intro={team.plannedIntro} rows={rows.filter((row) => row.status.kind === 'planned')} snapshot={snapshot} />
+      <Section id="team-starts" heading={team.startsLater} intro={team.startsLaterIntro} rows={rows.filter((row) => row.status.kind === 'starts')} snapshot={snapshot} later />
+      <Section id="team-planned" heading={team.planned} intro={team.plannedIntro} rows={rows.filter((row) => row.status.kind === 'planned')} snapshot={snapshot} later />
     </>
   );
 }
@@ -124,7 +154,8 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
  * (lib/roster.ts teamStatus): Running (with the paused rows while a role itself is paused; a studio pause is not shown, docs/PLAN.md §10 decision 62),
  * Starts later and Planned. Running and paused rows show the model, the cost from contributions and
  * the shipped cards, or, for a code-only role, that it calls no model; the rest show when they start.
- * Every section is the same grid of the same boxes, one to a cell. Three bands: the heading on the
+ * Running is a grid of boxes, one to a cell; Starts later and Planned are compact lists under it, so
+ * the roles still to come take a fraction of the page (the full pass, S25). Three bands: the heading on the
  * signal plate, every agent box on paper (DESIGN.md, Bands), and who runs the studio on ink
  * (docs/specs/copy-pass.md).
  */
