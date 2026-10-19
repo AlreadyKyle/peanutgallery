@@ -9,7 +9,7 @@ import { composeDrafts } from '../src/compose.mjs';
 import { chooseVariant, emptyPlaybook, updatePlaybook } from '../src/learn.mjs';
 import { listOutbox, readSent, ROOT } from '../src/lib.mjs';
 import { lintText } from '../src/lint.mjs';
-import { learn } from '../src/metrics.mjs';
+import { learn, visitsByChannel } from '../src/metrics.mjs';
 import { EXPLAINERS, harvestMoments } from '../src/moments.mjs';
 import { publish } from '../src/publish.mjs';
 
@@ -174,4 +174,9 @@ test('publish renders a clip draft before sending it', async () => {
   assert.deepEqual(rendered, ['ship-x-youtube']);
   assert.equal(summary.sent, 1);
   assert.ok(calls.some((u) => u.endsWith('/upload')), 'the rendered clip was uploaded');
+});
+
+test('site visits keyed by link tag land on the channel that carries the tag', () => {
+  const config = { channels: { bluesky: { tag: 'bsky' }, youtube: { tag: 'yt' }, x: { tag: 'x' } } };
+  assert.deepEqual(visitsByChannel({ bsky: 3, yt: 1, x: 2, reddit: 4 }, config), { bluesky: 3, youtube: 1, x: 2, reddit: 4 });
 });

@@ -57,10 +57,20 @@ export function learn({ root = ROOT, now = new Date(), log = console.log } = {})
     learned.add(r.id);
   }
   // Site visits per channel tag, written by the marketer routine from the studio's own counters.
+  // The file is keyed by the link's source tag (bsky, yt); the playbook by channel name (bluesky, youtube).
   const visits = readJson(join(p.metrics, 'site-visits.json'), {});
-  const playbook = updatePlaybook(readJson(p.playbook, emptyPlaybook()), results, visits.byChannel ?? {}, now);
+  const config = loadConfig(root);
+  const playbook = updatePlaybook(readJson(p.playbook, emptyPlaybook()), results, visitsByChannel(visits.byChannel ?? {}, config), now);
   writeJson(p.playbook, playbook);
   writeJson(learnedFile, [...learned]);
   log(`learned from ${results.length} posts`);
   return { learned: results.length };
+}
+
+/** Site visits keyed by channel name: a tag maps to the channel whose config carries it; an unknown tag is kept as it is. */
+export function visitsByChannel(byTag, config) {
+  const nameOf = new Map(Object.entries(config.channels ?? {}).map(([name, c]) => [c.tag ?? name, name]));
+  const out = {};
+  for (const [tag, n] of Object.entries(byTag)) out[nameOf.get(tag) ?? tag] = (out[nameOf.get(tag) ?? tag] ?? 0) + n;
+  return out;
 }
