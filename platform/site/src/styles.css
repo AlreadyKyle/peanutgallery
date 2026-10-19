@@ -5290,6 +5290,14 @@ main:not(.sheet) .section.station-part[data-quiet] > h2 + p {
   }
 }
 
+/* In the two-column station grid a third card would sit alone, so a station whose link to the rest
+   follows its cards (Shipped) shows two; the rest are one press away, as in the Fund station. */
+@media (min-width: 48rem) and (max-width: 79.99rem) {
+  .station-cards:has(~ .more) > li:nth-child(n + 3) {
+    display: none;
+  }
+}
+
 .station-actions {
   margin-top: var(--space-3);
 }
