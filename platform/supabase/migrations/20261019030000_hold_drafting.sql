@@ -1,5 +1,5 @@
 -- Hold drafting while nothing sells (docs/specs/studio-reports.md, the card supply floor; docs/PLAN.md
--- §10 decision 77). Applies after 20261018130000_plain_role_descriptions.sql and can run twice.
+-- §10 decision 77). Applies after 20261019020000_funnel_counters.sql and can run twice.
 --
 -- The floor kept asking the Game Designer for drafts while nothing sold: five cards open, none funded
 -- for ten days, and every draft paid from Not on a card yet. Now, while no card was funded in the
