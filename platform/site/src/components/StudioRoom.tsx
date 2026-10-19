@@ -207,7 +207,8 @@ function RoleCard({ place, at, onEnter, onLeave }: { place: AgentPlace; at: { le
     <div
       className="role-card"
       data-below={below ? 'true' : undefined}
-      style={{ left: `${Math.min(86, Math.max(14, at.left))}%`, top: `${at.top}%` }}
+      // Centred on the agent, but never past the room's edge: half the card's width, min(17rem, 80%).
+      style={{ left: `clamp(min(8.5rem, 40%), ${Math.min(86, Math.max(14, at.left))}%, calc(100% - min(8.5rem, 40%)))`, top: `${at.top}%` }}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
     >

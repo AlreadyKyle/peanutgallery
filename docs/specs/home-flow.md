@@ -61,7 +61,7 @@ When no card is open and the Game Designer is drafting, the status line says "Th
 
 Bands on home: signal (what it is), paper (the cards to fund, then how they move), ink (the team), paper (where the money goes). Without team roles there are three bands. Cards sit only in band 2.
 
-`public_supply()` returns only `drafting`, `short`, `reason` (a fixed code), `runs_today`, `run_limit` and `next_check_at`, with no card text. `site_live()` carries it as `studio.supply`. The site reads it as optional, so home works before the migration is applied.
+`public_supply()` returns only `drafting`, `short`, `reason` (a fixed code), `runs_today`, `run_limit` and `next_check_at`, with no card text. `site_live()` carries it as `studio.supply`. The site reads it as optional, so home works before the migration is applied. (`honest-status.md` adds `offline` and makes `drafting` true only while a draft run is running and the dispatcher checked in within 15 minutes.)
 
 ## Acceptance criteria
 
@@ -72,7 +72,7 @@ Bands on home: signal (what it is), paper (the cards to fund, then how they move
 - [ ] Building holds funded cards as "Waiting for the agents".
 - [ ] Next up never shows a card on horizon now or a vetoed card.
 - [ ] The Next up who-line and the status line follow the supply: drafting, daily limit, idle; a missing supply reads as idle.
-- [ ] `site_live()->'studio'->'supply'` has exactly the six keys as anon, and `drafting` follows a queued or running `draft_card` run.
+- [ ] ~~`site_live()->'studio'->'supply'` has exactly the six keys as anon, and `drafting` follows a queued or running `draft_card` run.~~ Replaced by `honest-status.md`: seven keys with `offline`, and `drafting` only while a run is running and the dispatcher is fresh.
 - [ ] A Game Director verdict whose note is over 600 characters is clipped to 600 and the draft run goes on; any other schema violation still fails.
 - [ ] The live check fails when a lane or the fund section is blank.
 - [ ] /contribute is full width, its card choices in one, two or three columns.
