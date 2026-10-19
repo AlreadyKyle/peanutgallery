@@ -2,10 +2,10 @@ import type { Locator } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { OFFLINE_STUDIO } from './prod-studio';
 
-// The idle bob (DESIGN.md, Motion): home's team strip and the running boxes on /team breathe as an
-// idle agent in the live studio does, also while the agents are offline. A role still to come holds
-// still, an avatar under the pointer holds still, nothing around a bobbing avatar moves, and under
-// reduced motion every avatar is drawn still.
+// The idle bob (DESIGN.md, Motion): home's team strip and every agent on /team breathe as an idle
+// agent in the live studio does, also while the agents are offline, and none sleeps (the board, 19
+// October 2026). An avatar under the pointer holds still, nothing around a bobbing avatar moves, and
+// under reduced motion every avatar is drawn still.
 
 const lifts = (avatars: Locator) => avatars.evaluateAll((els) => els.map((el) => el.querySelector(':scope > g')?.getAttribute('transform') ?? ''));
 
@@ -33,7 +33,8 @@ for (const viewport of [
       // Each agent keeps its own rhythm, so a row never moves as one.
       if (path === '/' && viewport.width === 1440) await expect.poll(async () => new Set(await lifts(avatars)).size).toBe(3);
     }
-    await expect(page.locator('li.later-role svg.avatar[data-idle]')).toHaveCount(0);
+    await expect(page.locator('li.later-role svg.avatar:not([data-idle])')).toHaveCount(0);
+    await expect(page.locator('svg.avatar .avatar-lid')).toHaveCount(0);
   });
 }
 

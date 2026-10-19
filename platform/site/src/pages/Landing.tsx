@@ -193,7 +193,7 @@ function TeamSection({ view }: { view: HomeView }) {
     <div className="band">
       <section className="section" aria-labelledby="team" data-station-part="team">
         <h2 id="team">{copy.team.title}</h2>
-        <TeamStrip roles={roles} asleep={false} />
+        <TeamStrip roles={roles} />
         <p className="more">
           <MoreLink to="/team">{copy.team.meetAll}</MoreLink>
         </p>

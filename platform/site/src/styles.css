@@ -2205,7 +2205,7 @@ button.link:hover:not(:disabled) {
   font-weight: var(--weight-strong);
 }
 
-/* A role still to come keeps its smaller, sleeping avatar in the same box. */
+/* A role still to come keeps its smaller avatar in the same box. */
 .agent[data-status='starts'] .avatar,
 .agent[data-status='planned'] .avatar {
   width: 3.5rem;
@@ -2213,7 +2213,7 @@ button.link:hover:not(:disabled) {
 
 /* The roles still to come (Starts later, Planned): a compact list under the running team's boxes
    (the full pass, S25), never boxes. Each entry is a row between hairlines, like a list of rows: the
-   sleeping avatar beside the name at the body size, what the role will do, and when it starts, small
+   avatar beside the name at the body size, what the role will do, and when it starts, small
    and muted. One column on a phone; two from 48rem, one entry to a cell, the rows' hairlines lining
    up across the pair. */
 .team-later {

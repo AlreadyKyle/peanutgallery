@@ -135,7 +135,7 @@ function bodyFor(features: AvatarFeatures): Body {
   return features.wideHead ? { ...body, rx: body.rx + 6 } : body;
 }
 
-function eyeAt(key: string, x: number, y: number, shape: EyeShape, asleep = false): ReactNode {
+function eyeAt(key: string, x: number, y: number, shape: EyeShape): ReactNode {
   const sizes: Record<EyeShape, { rx: number; ry: number; pupil: number }> = {
     normal: { rx: 6, ry: 6, pupil: 3 },
     small: { rx: 3.6, ry: 3.6, pupil: 1.8 },
@@ -144,10 +144,6 @@ function eyeAt(key: string, x: number, y: number, shape: EyeShape, asleep = fals
     tall: { rx: 4.2, ry: 8, pupil: 2.2 },
   };
   const size = sizes[shape];
-  if (asleep) {
-    // Eyes closed: a lid line curving down, the width of the open eye.
-    return <path key={key} className="avatar-line avatar-thin avatar-lid" d={`M ${x - size.rx} ${y} Q ${x} ${y + size.ry} ${x + size.rx} ${y}`} />;
-  }
   return (
     <g key={key}>
       <ellipse className="avatar-eye" cx={x} cy={y} rx={size.rx} ry={size.ry} />
@@ -156,18 +152,18 @@ function eyeAt(key: string, x: number, y: number, shape: EyeShape, asleep = fals
   );
 }
 
-function eyes(features: AvatarFeatures, body: Body, y: number, asleep: boolean): ReactNode[] {
+function eyes(features: AvatarFeatures, body: Body, y: number): ReactNode[] {
   const { count, shape, ring } = features.eyes;
   if (ring && count > 2) {
     const radius = 11;
     return Array.from({ length: count }, (_, i) => {
       const angle = (2 * Math.PI * i) / count - Math.PI / 2;
-      return eyeAt(`eye-${i}`, body.cx + radius * Math.cos(angle), y + radius * Math.sin(angle), shape, asleep);
+      return eyeAt(`eye-${i}`, body.cx + radius * Math.cos(angle), y + radius * Math.sin(angle), shape);
     });
   }
   const gap = shape === 'large' ? 24 : shape === 'wide' ? 20 : 15;
   const start = body.cx - (gap * (count - 1)) / 2;
-  return Array.from({ length: count }, (_, i) => eyeAt(`eye-${i}`, start + gap * i, y, shape, asleep));
+  return Array.from({ length: count }, (_, i) => eyeAt(`eye-${i}`, start + gap * i, y, shape));
 }
 
 /** Everything drawn behind the body: ears, the tail and the legs. */
@@ -270,7 +266,7 @@ function mouth(features: AvatarFeatures, body: Body, y: number): ReactNode {
 }
 
 /** The whole picture, as SVG children, for these features. */
-export function avatarParts(features: AvatarFeatures, asleep = false): ReactNode[] {
+export function avatarParts(features: AvatarFeatures): ReactNode[] {
   const body = bodyFor(features);
   const eyeY = features.shell ? body.cy + body.ry * 0.12 : body.cy - body.ry * 0.28;
   const eyeDrop = features.eyes.ring && features.eyes.count > 2 ? 16 : features.eyes.shape === 'large' ? 18 : 13;
@@ -285,24 +281,24 @@ export function avatarParts(features: AvatarFeatures, asleep = false): ReactNode
       <ellipse key="body" className="avatar-body" cx={body.cx} cy={body.cy} rx={body.rx} ry={body.ry} />
     ),
     ...onTop(features, body),
-    ...eyes(features, body, eyeY, asleep),
+    ...eyes(features, body, eyeY),
     <g key="mouth">{mouth(features, body, eyeY + eyeDrop)}</g>,
   ];
 }
 
 /**
  * An agent's picture, drawn from its species note. The note is also the picture's text alternative,
- * so a screen reader hears what the drawing shows. The pose comes only from data: `asleep` (eyes
- * closed) while public_studio.paused is true, and the default drawing until the studio row loads.
+ * so a screen reader hears what the drawing shows. Its eyes are always open (the board, 19 October
+ * 2026), whether it works, waits, is paused or the agents are offline.
  * `idle` gives it the live studio's idle bob (lib/idle.ts): the body rises and settles over its
  * ground shadow on its own rhythm, seeded from the note, and is drawn still under reduced motion.
  */
-export function Avatar({ note, size = 96, asleep = false, idle = false }: { note: string; size?: number; asleep?: boolean; idle?: boolean }) {
+export function Avatar({ note, size = 96, idle = false }: { note: string; size?: number; idle?: boolean }) {
   const titleId = useId();
   const body = useRef<SVGGElement>(null);
   const features = avatarFeatures(note);
   const style = { '--avatar-fill': `var(--creature-${features.colour})` } as CSSProperties;
-  const [ground, ...figure] = avatarParts(features, asleep);
+  const [ground, ...figure] = avatarParts(features);
   const phase = (noteHash(note) % 6283) / 1000;
   useEffect(() => (idle && body.current !== null ? watchIdle(body.current, phase) : undefined), [idle, phase]);
   return (
@@ -316,7 +312,6 @@ export function Avatar({ note, size = 96, asleep = false, idle = false }: { note
       height={size}
       style={style}
       data-colour={features.colour}
-      data-pose={asleep ? 'asleep' : 'awake'}
       data-idle={idle ? 'true' : undefined}
     >
       <title id={titleId}>{note}</title>

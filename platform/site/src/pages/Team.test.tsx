@@ -183,9 +183,9 @@ describe('Team', () => {
     await screen.findByRole('region', { name: team.running });
     expect(box('QA').getAttribute('data-status')).toBe('paused');
     expect(within(box('QA')).getByText('Waiting on a fix to its tools.')).toBeTruthy();
-    expect(box('Builder A').querySelector('svg.avatar')?.getAttribute('data-pose')).toBe('awake');
-    expect(box('QA').querySelector('svg.avatar')?.getAttribute('data-pose')).toBe('asleep');
-    expect(box('Biz Dev').querySelector('svg.avatar')?.getAttribute('data-pose')).toBe('asleep');
+    // Eyes open on every box, the paused one and the roles still to come included (the board, 19 October 2026).
+    for (const title of ['Builder A', 'QA', 'Biz Dev']) expect(box(title).querySelector('svg.avatar .avatar-eye'), title).not.toBeNull();
+    expect(document.querySelectorAll('svg.avatar .avatar-lid')).toHaveLength(0);
   });
 
   it('draws every agent with an avatar named by its species note, and shows no scorecards', async () => {
@@ -220,14 +220,15 @@ describe('Team', () => {
     expect(screen.getByText(legal.meterUnavailable)).toBeTruthy();
   });
 
-  it('draws the Running section awake and the roles still to come asleep, whether or not the studio is paused', async () => {
-    const poses = (region: HTMLElement) => [...region.querySelectorAll('svg.avatar')].map((svg) => svg.getAttribute('data-pose'));
+  it('draws every agent with its eyes open in every section, whether or not the studio is paused', async () => {
     for (const paused of [true, false]) {
       renderTeam(sourceOf(snapshot({ paused })));
       const running = await screen.findByRole('region', { name: team.running });
-      expect(new Set(poses(running))).toEqual(new Set(['awake']));
-      for (const name of [team.startsLater, team.planned]) {
-        expect(new Set(poses(screen.getByRole('region', { name })))).toEqual(new Set(['asleep']));
+      for (const region of [running, screen.getByRole('region', { name: team.startsLater }), screen.getByRole('region', { name: team.planned })]) {
+        const avatars = region.querySelectorAll('svg.avatar');
+        expect(avatars.length).toBeGreaterThan(0);
+        expect(region.querySelectorAll('svg.avatar .avatar-lid')).toHaveLength(0);
+        for (const svg of avatars) expect(svg.querySelector('.avatar-eye')).not.toBeNull();
       }
       cleanup();
     }
@@ -252,7 +253,7 @@ describe('Team', () => {
       expect([...lists[0]!.children].every((li) => li.tagName === 'LI' && li.className === 'later-role')).toBe(true);
     }
     expect(document.querySelectorAll('li.later-role')).toHaveLength(ROLES.length - names(running).length);
-    // An entry is the sleeping avatar, the name, what the role will do and when it starts: no "AI
+    // An entry is the avatar, eyes open, the name, what the role will do and when it starts: no "AI
     // agent" line, no foot, no model and no cost. Its id is the one home's team strip links to.
     for (const [name, when] of [
       ['Biz Dev', 'Starts last, once every other role is built.'],
@@ -261,7 +262,7 @@ describe('Team', () => {
       const entry = box(name!);
       expect(entry.id).toBe(`agent-r-${name!.toLowerCase().replace(/\s+/g, '-')}`);
       expect([...entry.children].map((child) => child.tagName.toLowerCase())).toEqual(['svg', 'h3', 'p', 'p']);
-      expect(entry.querySelector(':scope > svg.avatar')?.getAttribute('data-pose')).toBe('asleep');
+      expect(entry.querySelector(':scope > svg.avatar .avatar-eye')).not.toBeNull();
       expect(within(entry).getByText(`${name} does its job.`)).toBeTruthy();
       expect(within(entry).getByText(when!).className).toBe('later-when');
       expect(within(entry).queryByText(team.aiAgent)).toBeNull();

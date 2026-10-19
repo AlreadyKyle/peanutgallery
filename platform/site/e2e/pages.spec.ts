@@ -143,8 +143,9 @@ for (const viewport of WIDTHS) {
       // The check scripts/live-check.mjs runs on production, on the same locators.
       const models = runningModelsCheck(await runningRoleRows(running));
       expect(models).toEqual({ ok: true, message: `/team ${MODEL_ROLES.length} ${MODELS_MESSAGE}: ${ROLE_MODELS.join(', ')}` });
-      // Nothing is paused: every avatar is awake and no row says Paused.
-      await expect(page.locator('svg.avatar[data-pose="asleep"]')).toHaveCount(DEFAULT_STUDIO.roles.length - RUNNING_ROLES.length);
+      // Nothing is paused and nobody sleeps: every avatar has its eyes open and no row says Paused.
+      await expect(page.locator('svg.avatar')).toHaveCount(DEFAULT_STUDIO.roles.length);
+      await expect(page.locator('svg.avatar .avatar-lid')).toHaveCount(0);
       await expect(running.locator('li.agent[data-status="paused"]')).toHaveCount(0);
       expect(await overflowsHorizontally(page)).toBe(false);
       await screenshot(page, 'team', viewport.width);

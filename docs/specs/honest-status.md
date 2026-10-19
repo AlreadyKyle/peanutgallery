@@ -13,7 +13,7 @@ Draft: written, not yet agreed. Agreed: the contract for the work, settled by th
 In:
 - A migration, `20261019000000_honest_status.sql`, that redefines `public_supply()` with the same signature, security, search path and grants: `drafting` only while a `draft_card` run is `running` and `studio_state.dispatcher_seen_at` is less than 15 minutes old, and a new key, `offline`.
 - The site's reading of the supply (`lib/source.ts`, which drops the old `stalled` guess), its types and the e2e fixtures. The edge-cached `/api/live` (`netlify/functions/snapshot.mts`) passes `site_live()` through unchanged, so it needs no change.
-- "The agents are offline." wherever the site says what the studio is doing: home's status line, Next up's line, Building's empty tile (no start time), a funded card's waiting line, a building card's who line and its page's build clock, /thanks' state line, /broadcast's line with no card open, and each agent's line in the studio room, where every agent sleeps.
+- "The agents are offline." wherever the site says what the studio is doing: home's status line, Next up's line, Building's empty tile (no start time), a funded card's waiting line, a building card's who line and its page's build clock, /thanks' state line, /broadcast's line with no card open, and each agent's line in the studio room, where every agent putters about awake (the board, 19 October 2026: the agents never sleep).
 - `scripts/live-check.mjs`'s status line pattern, and `anon-negative-test.ts`'s key list.
 
 Out:
@@ -35,7 +35,7 @@ Out:
   - A building card names its builder without "is building this"; its own page shows "The agents are offline." where the build clock was, with no link to play while the agents work.
   - /thanks says "The agents are offline." as the state of a funded, building or checks card the payment reached.
   - /broadcast with no card open says "The agents are offline." in place of "The agents are drafting the next cards."
-  - In the studio room every agent sleeps at an idle spot (eyes closed, the sleep mark) and does not walk, and its role card and accessible name say "The agents are offline."
+  - In the studio room every agent putters about the room like an idle agent, eyes open with no sleep mark (the board, 19 October 2026, replacing the first version, where they slept and held still), and its role card and accessible name say "The agents are offline."
 - Online, every line is as it was, and the Game Designer is drafting only while a draft actually runs.
 
 ## Acceptance criteria
@@ -49,7 +49,7 @@ Out:
 - [ ] Home's status line, Next up, Building's tile and a funded card say the offline lines; a pause alone changes nothing (`Landing.test.tsx`, `Flow.test.tsx`, `Card.test.tsx`, `e2e/home-flow.spec.ts`).
 - [ ] A building card's face and page drop "is building this", the clock and the play link while offline; a funded card's page says offline (`Card.test.tsx`, `e2e/card.spec.ts`).
 - [ ] /thanks says offline for a building card the payment reached (`e2e/thanks.spec.ts`).
-- [ ] Every agent in the room sleeps, never crowded, and does not move, and its role card says offline (`studio-walk.test.ts`, `e2e/studio-room.spec.ts`).
+- [ ] Every agent in the room putters about awake, never crowded, and its role card says offline (`studio-walk.test.ts`, `e2e/studio-room.spec.ts`).
 - [ ] Home's every station is filled with no horizontal scroll at 320, 390, 768 and 1280px while offline (`e2e/home-flow.spec.ts`).
 - [ ] The live check accepts "N cards are open for funding. The agents are offline." and still refuses a paused sentence (`live-check.mjs`).
 - [ ] After the migration and the deploy, production's home shows the offline line while the dispatcher stays down (the `live-check` workflow).
