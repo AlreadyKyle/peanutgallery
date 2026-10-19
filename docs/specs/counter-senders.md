@@ -10,8 +10,8 @@ Draft: written, not yet agreed. Agreed: the contract for the work, settled by th
 
 ## Scope
 
-In: Dust's returning, session and seed counts (`seed-1/render/count.ts`, `render/main.ts`); the site's home, dwell, broadcast, QR and Discord counts (`platform/site/src/lib/count.ts`, mounted by `App.tsx`); the source tag on /broadcast's QR code; the Privacy page's section; the two dwell rows on the benchmark review's scoreboard (`platform/dispatcher/src/benchmarks.ts`).
-Out: any migration (the names are in production since `20261017200000_benchmark_counters.sql`); any cookie, local storage key, identifier, fingerprint or address; distinct referrers on /broadcast and contributions from the QR source, which need a record of a visit; clicks from links inside Discord posts back to the site, which need a source tag on the posts' links and a counter name for it; scoreboard rows for the broadcast and Discord counts, whose benchmarks are counted per stream, contribution or member; the board panel's play counts table, which still lists the four play counts.
+In: Dust's returning, session and seed counts (`seed-1/render/count.ts`, `render/main.ts`); the site's home, dwell, broadcast, QR and Discord counts (`platform/site/src/lib/count.ts`, mounted by `App.tsx`); the source tag on /broadcast's QR code; the Privacy page's section; the two dwell rows on the benchmark review's scoreboard (`platform/dispatcher/src/benchmarks.ts`). Added by the full pass (its finding M6): the funnel's three counts below, with their migration `20261019020000_funnel_counters.sql` and `PLAY_EVENTS` in `platform/site/netlify/functions/card.mts`.
+Out: any migration for the first counts (their names are in production since `20261017200000_benchmark_counters.sql`); Stripe's `checkout.session.expired`; scoreboard rows for the funnel; any cookie, local storage key, identifier, fingerprint or address; distinct referrers on /broadcast and contributions from the QR source, which need a record of a visit; clicks from links inside Discord posts back to the site, which need a source tag on the posts' links and a counter name for it; scoreboard rows for the broadcast and Discord counts, whose benchmarks are counted per stream, contribution or member; the board panel's play counts table, which still lists the four play counts.
 
 ## Behaviour
 
@@ -32,6 +32,16 @@ Every count is the event's name alone, `{"event": "<name>"}`, posted to `/api/co
 - The QR code on /broadcast opens `https://mobmachine.games/contribute?from=broadcast`. A page that opens with `from=broadcast` in its query counts `broadcast_qr` once and drops the tag from the address (keeping the rest of the query and the hash), so a reload or a copied address does not count again.
 - `discord_click`: a press (a click, or a middle-button press) on any link to the site's Discord invite or to Discord's own hosts (discord.gg, discord.com, discordapp.com), once per page load. The press is not held: the beacon goes as the link opens.
 
+### The funnel
+
+The step from interest to payment: how many reach /contribute, how many press through to Stripe's checkout, and how many of home's views go on to the game.
+
+- `contribute_load`: /contribute is shown, once per page load, whether the page opened there or the visitor moved to it inside the site. A QR or channel landing on /contribute counts it beside the landing.
+- `checkout_open`: a press (a click, or a middle-button press) on any Payment Link, a link to `https://buy.stripe.com/`, on any page (home's and a card page's Fund this card, /contribute's choices and the Machine card, /thanks), once per page load. The press is not held: the beacon goes as the link opens.
+- `home_play_click`: a press on a link into the game while home is shown (the play address's origin, at or under its path, with any query: Play free, Play Dust free, the top bar's Play, a shipped card's Play), once per view of home, the unit `home_load` counts, so `home_play_click / home_load` is the share of home's views that go on to play. Away from home, or with no play address, nothing is counted.
+- The live check is not a visitor for these either: every page it opens answers `/api/count` in the browser, so its load of /contribute sends nothing out, and it presses no link, so it sends no `checkout_open` or `home_play_click`.
+- The migration adds the three names to `play_counts_event_check` and `count_play_event`, the same list as `PLAY_EVENTS`; `refresh_daily_metrics` already copies every name into `daily_metrics` as `play.<name>`. Every statement runs twice without error.
+
 ### Privacy and the scoreboard
 
 - The Privacy page's Play and share counts section names every count above, says the browser decides whether a count applies from what it already holds, that the save's own time is never sent, and keeps the rule: no cookie, no identifier, no IP address, nothing new stored in the browser.
@@ -49,6 +59,12 @@ Every count is the event's name alone, `{"event": "<name>"}`, posted to `/api/co
 - [x] Every request is a POST to the page's own `/api/count` with the event's name alone, no query string and no cookie (`e2e/counts.spec.ts`, `seed-1/e2e/seed.spec.ts`).
 - [x] The Privacy page names the new counts and keeps the no cookie, identifier or address rule (`platform/site/src/lib/legal.ts`).
 - [x] The scoreboard measures the dwell rows from the counts, and reads them as not measured before any dwell count (`platform/dispatcher/test/benchmark-review.test.ts`).
+- [x] /contribute counts `contribute_load` once a page load, opened by address or reached inside the site, and beside a QR or channel landing (`platform/site/src/lib/count.test.tsx`, `e2e/counts.spec.ts`).
+- [x] A press on a Payment Link counts `checkout_open` once a page load and the link still opens checkout; a right-button press, or a link on another host that only starts like Stripe's, counts nothing (`count.test.tsx`, `e2e/counts.spec.ts`).
+- [x] A press on a link into the game counts `home_play_click` once a view of home, a middle-button press included, and nothing away from home or with no play address; the link still opens the game (`count.test.tsx`, `e2e/counts.spec.ts`).
+- [x] `PLAY_EVENTS` and `count_play_event` take the three names and still drop others; the migration applies a second time; `refresh_daily_metrics` writes `play.contribute_load`, `play.checkout_open` and `play.home_play_click` (`platform/site/netlify/card.test.ts`, `platform/supabase/functions/_shared/funnel_counters_test.ts`, `migration_test.ts`).
+- [x] The live check presses nothing and answers every count beacon in the browser (`platform/site/src/live-check-counts.test.ts`).
+- [x] The Privacy page names the three counts (`platform/site/src/lib/legal.ts`).
 
 ## Verification
 
@@ -61,6 +77,8 @@ Every count is the event's name alone, `{"event": "<name>"}`, posted to `/api/co
 - `pnpm test:docs`
 - `pnpm verify`
 - After merge, once both sites are deployed: the board's `board_daily_metrics` (or `daily_metrics_window`) shows `play.home_load` and `play.dust_session_2m` above 0 for the day after the deploy.
+- The funnel: `npx vitest run src/lib/count.test.tsx netlify/card.test.ts src/live-check-counts.test.ts` and `E2E_PORT=4462 npx playwright test e2e/counts.spec.ts e2e/money.spec.ts` in `platform/site`; `deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/funnel_counters_test.ts platform/supabase/functions/_shared/migration_test.ts`.
+- After the funnel merges, its migration applied and the site deployed: `board_daily_metrics` shows `play.contribute_load` above 0 for the day after the deploy, and the live check's first line still reads `PASS ... failed=0` with its beacon line held equal to sent.
 
 ## Evidence
 
@@ -73,4 +91,6 @@ Quoted in the branch's report.
 - 2026-10-17: `home_load` counts each view of home, not each page load, so the dwell buckets and their denominator count the same thing.
 - 2026-10-17: `discord_click` counts presses on the site's Discord links (site to Discord), as the counter's name in `20261017200000_benchmark_counters.sql` and the operations spec describe it. benchmarks.md's "Discord to site" row reads clicks the other way, from Discord posts to the site; that needs a source tag on the posts' links and a counter name the database does not take yet, so the row stays not measured.
 - 2026-10-17: the QR tag is `?from=broadcast`; the frame drops it on arrival, so it is never shared on.
+- 2026-10-19: the funnel's three counts (the full pass's finding M6). `contribute_load` and `checkout_open` count once a page load, as `broadcast_load` and `discord_click` do, so a visitor going back and forth counts once; `home_play_click` counts once a view of home, the unit of `home_load`, so the two divide.
+- 2026-10-19: `checkout_open` counts any link to buy.stripe.com, not only the configured Payment Link's exact address, so every path to checkout counts whatever its `client_reference_id`. Stripe's `checkout.session.expired` is left out by the board's call.
 - 2026-10-19: the live check is not a visitor. `platform/site/scripts/live-check.mjs` opened `/` at each width and once more at 1440, so each run added up to 3 `home_load` (19 runs on 18 October: up to 57 of 106). Every page it opens now answers `/api/count` with a 204 inside its own browser, and the run checks that no beacon got out. The check never read a count, so no check was dropped, and `count.ts` does not skip on `navigator.webdriver`, which the e2e suites need. Read `home_load` from before this change less 3 for each `live-check` workflow run that day.

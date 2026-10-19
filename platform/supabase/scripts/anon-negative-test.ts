@@ -48,6 +48,9 @@ const PRIVATE_TABLES = [
   "outbound_posts",
   // agent-upkeep (docs/specs/agent-upkeep.md): the Janitor's findings, read only by a board member.
   "findings",
+  // moderator-pause-only (docs/specs/moderator-pause-only.md): the kill switch's log, read only by the
+  // board and the moderator.
+  "studio_pause_log",
 ];
 
 const PUBLIC_RELATIONS = [
