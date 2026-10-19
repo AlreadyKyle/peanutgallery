@@ -65,4 +65,35 @@ describe('createAdapter', () => {
     expect(() => createAdapter({ ...unattended, managed: null }, adapterDeps())).toThrow('GITHUB_READ_TOKEN and the managed agent and environment ids are required: the dispatcher runs unattended only');
     expect(() => createAdapter(base, adapterDeps())).toThrow('STUDIO_ANTHROPIC_API_KEY is required');
   });
+
+  // docs/specs/launch-managed.md, Decisions: the startup probe proves the key, the agent, the
+  // environment and the metering, so it runs on the cheapest priced model, as the credit probe does.
+  // The toolchain check and every role keep their own model.
+  it('runs the startup probe on the cheapest priced model and the toolchain check on MODEL_BUILDER', async () => {
+    const rates = (input: number, output: number) => ({ input, output, cache_read: input / 10, cache_write_5m: input * 1.25, cache_write_1h: input * 2 });
+    const priceTable = parsePriceTable(JSON.stringify({ 'builder-class': rates(4, 20), 'small-class': rates(1, 5), 'middle-class': rates(3, 15) }));
+    const deps = adapterDeps();
+    const client = deps.client;
+    client.react = (session, event) => {
+      if (event.type !== 'user.message') return;
+      if (session.params.metadata?.purpose === 'toolchain') client.addOutput(session.id, 'toolchain.txt', Buffer.from('node=v22.11.0\npnpm=11.0.9\ninstall_exit=0\nbot_exit=0\n'));
+      session.emit(
+        { type: 'session.status_running' },
+        { type: 'agent.message', content: [{ type: 'text', text: 'ready' }] },
+        { type: 'span.model_request_end', id: `sevt_${session.id}`, is_error: false, model_request_start_id: 'x', model_usage: { input_tokens: 4700, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } },
+        { type: 'session.status_idle', stop_reason: { type: 'end_turn' } },
+      );
+    };
+    const adapter = createAdapter({ ...unattended, modelBuilder: 'builder-class', priceTable }, deps);
+    await adapter.probe();
+    const probe = client.last;
+    expect(probe.params.metadata).toMatchObject({ purpose: 'probe' });
+    expect((probe.params.agent as { model: { id: string } }).model).toEqual({ id: 'small-class', speed: 'standard' });
+    // 4,700 input and 5 output tokens at 1 and 5 USD per million, not at the builder's 4 and 20.
+    expect(deps.db.ledger.find((row) => row.request_id === `sevt_${probe.id}`)?.usd).toBe(0.0047);
+    const report = await adapter.toolchain('a'.repeat(40));
+    expect(report.ok).toBe(true);
+    expect(client.last.params.metadata).toMatchObject({ purpose: 'toolchain' });
+    expect((client.last.params.agent as { model: { id: string } }).model).toEqual({ id: 'builder-class', speed: 'standard' });
+  });
 });

@@ -126,8 +126,11 @@ export interface ManagedAdapterOptions {
   githubRepo: string;
   readToken: string;
   priceTable: PriceTable;
-  // The model the startup probe runs on (MODEL_BUILDER).
+  // The model the startup probe runs on: the cheapest the price table lists (factory.ts), since the
+  // probe proves the key, the agent, the environment and the metering, not a role's model.
   probeModel: string;
+  // The model the one-time toolchain check runs on (MODEL_BUILDER); left out, the probe's.
+  toolchainModel?: string;
   // recordUsage meters every request; getCard re-reads a card's spend after its earlier sessions are
   // settled, before the new session's budget is set.
   db: Pick<Db, 'recordUsage' | 'getCard'>;
@@ -1234,8 +1237,7 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
 
   // Creates a session that is not a card's, runs it to a stop on one message, settles it as overhead
   // and archives it. Config drift is fatal; an API error is fatal only when no retry can change it.
-  private async overheadSession(purpose: 'probe' | 'toolchain', message: string, cents: number, resources: Parameters<ManagedClient['sessions']['create']>[0]['resources']) {
-    const model = this.opts.probeModel;
+  private async overheadSession(purpose: 'probe' | 'toolchain', model: string, message: string, cents: number, resources: Parameters<ManagedClient['sessions']['create']>[0]['resources']) {
     let session: ManagedSession;
     try {
       session = await this.client.sessions.create({
@@ -1273,7 +1275,7 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
     // Not a card's or a role's session: those belong to a running dispatcher, whose startup recovery
     // closes any it left.
     await this.closeOrphans((session) => session.metadata?.purpose !== 'card' && session.metadata?.purpose !== 'role');
-    const { session, meter, drive } = await this.overheadSession('probe', PROBE_PROMPT, PROBE_BUDGET_CENTS, undefined);
+    const { session, meter, drive } = await this.overheadSession('probe', this.opts.probeModel, PROBE_PROMPT, PROBE_BUDGET_CENTS, undefined);
     const settled = await this.finish(session.id, meter, drive.lastUsage, 'startup probe', drive);
     if (settled.report && settled.report.unwritten.length > 0) {
       throw new StartupError(`the ledger refused probe rows: ${settled.report.unwritten.map((row) => `${row.request_id} ${row.usd} USD`).join(', ')}`, true);
@@ -1309,7 +1311,7 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
         checkout: { type: 'commit' as const, sha: mainSha },
       },
     ];
-    const { session, meter, drive } = await this.overheadSession('toolchain', message, TOOLCHAIN_BUDGET_CENTS, resources);
+    const { session, meter, drive } = await this.overheadSession('toolchain', this.opts.toolchainModel ?? this.opts.probeModel, message, TOOLCHAIN_BUDGET_CENTS, resources);
     let lines: Record<string, string> = {};
     let reason: string | null = null;
     const files = await this.outputs(session.id, TOOLCHAIN_FILE);

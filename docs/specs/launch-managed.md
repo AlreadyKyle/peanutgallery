@@ -46,7 +46,7 @@ Before any card, the dispatcher checks three things:
 - The agent at its pinned version matches `agent.yaml`.
 - The environment matches `environment.yaml`.
 
-A drifted config or a token that can write exits 78. An API that does not answer exits 1. Then one minimal probe session runs, billed as `overhead` with no card and no role, and the journal shows `containment verified`, `session metered` and `startup probe passed`. `provision.sh` runs the same write probe with curl before it builds anything.
+A drifted config or a token that can write exits 78. An API that does not answer exits 1. Then one minimal probe session runs on the cheapest model `PRICE_TABLE_JSON` lists, billed as `overhead` with no card and no role, and the journal shows `containment verified`, `session metered` and `startup probe passed`. `provision.sh` runs the same write probe with curl before it builds anything.
 
 **A card session.** In order:
 1. The dispatcher closes any earlier session for the card and re-checks the read token.
@@ -291,3 +291,4 @@ After any change to `platform/agents/managed/*.yaml`, run `managed:apply` again,
 - 22 September 2026: a failure that is not the card's pauses it with a named failing check rather than rejecting it: an earlier session not settled, a read-token check GitHub did not answer, a Managed Agents API or event stream that did not answer, a ledger that refused rows. Rejected is final, and a funded card should not be lost to a rate limit; the board resumes it. The adapter says so by throwing `SessionPaused`, which `session.ts` reports as `adapter_paused` and the pipeline turns into a paused card.
 - 22 September 2026: the stored patch goes into the DB workstream's `card_patches` columns as text with its sha256 and byte count, so a patch that is not valid UTF-8 is refused at submission rather than stored altered.
 - 22 September 2026: `sandbox:check` is a script run by hand on the Mac, not part of `pnpm verify`. It spends on the founder's plan and needs a real CLI, keychain and SSH key.
+- 19 October 2026: the startup probe runs on the cheapest model the price table lists (`cheapestModel`, as the credit probe picks it), not on `MODEL_BUILDER`. It proves the key, the agent, the environment and the metering, none of which needs a role's model, and each start sends about 4,700 uncached input tokens, so on Opus it cost about $4 a month of overhead. The toolchain check stays on `MODEL_BUILDER`, and no role's model changes (PLAN.md §10 decision 36). The cheapest row must be a model Managed Agents accepts: a session it refuses exits 78, and the deploy's wait for `startup probe passed` shows it.
