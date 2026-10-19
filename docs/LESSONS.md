@@ -34,7 +34,7 @@ and its reason.
 | GitHub MCP: Actions runs and job logs (`get_job_logs`), for the dispatcher's `stop reason:` line | works |
 | Supabase connector: read-only SQL on production | works |
 | Supabase connector: write SQL on production | works after the board approves in the same thread; an approval relayed from the project chat unlocked reads only |
-| Supabase connector: `apply_migration` | refused; its confirmation dialog does not show in the Projects app and times out |
+| Supabase connector: `apply_migration` | works since 19 October 2026, when the board set the connector's permissions to Always allow; before that its confirmation dialog did not show in the Projects app and timed out |
 | The dispatcher | runs on its own schedule; read its newest run's log rather than starting it |
 | Starting a workflow (the GitHub app, or a workflow on a side branch that starts another) | refused (HTTP 403, and the safety check) |
 | Actions variables and secrets (`STUDIO_REF`, `DISPATCHER_ENV`) | refused from the cloud; set from the Mac with the board's `gh` login |
@@ -43,6 +43,10 @@ and its reason.
 | Driving the board's browser | refused |
 | Deleting a branch | refused (HTTP 403); GitHub's auto-delete or a local session does it |
 | Supabase Auth settings (sign-ups, redirect URLs) | no connector tool; set from the Mac or the dashboard |
+| Stripe connector: writes (a new price or Payment Link) | refused (`Forbidden`): the connector's key is read-only, so a Stripe Dashboard change is the board's |
+| GitHub account billing (Actions minutes and budgets) | refused from the cloud (sessions are bound to their repositories); the private ops repository stops when the account's free minutes run out and its Actions budget is $0 |
+| Anthropic Console receipts through the Gmail connector | refused (the safety check's personal-data rule); the board reads the amounts in the Console |
+| The live site and Supabase's public Auth settings | the container cannot reach them; WebFetch can (for example `/api/community/auth/settings`) |
 
 ## Steps only the board's hands can do
 
@@ -69,3 +73,7 @@ and its reason.
 - 15 to 18 October 2026: the dispatcher exited at startup on every run with `stop reason: anthropic key
   refused` (a 401 on the studio key) while sessions guessed at Console credit. The run's log names the
   cause.
+- 19 October 2026: the board set the Supabase connector's permissions to Always allow, and
+  `apply_migration` then ran on production without a dialog. The same day the ops repository's jobs
+  stopped because the account's free Actions minutes ran out; a session first read it as a failed
+  payment, and GitHub's usage email named the cause.
