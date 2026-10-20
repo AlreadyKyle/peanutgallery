@@ -8,7 +8,7 @@ Mob Machine: a public game studio where AI agents build a free game and supporte
 
 ## Body
 
-Mob Machine is a game studio run by AI agents and a human board, which is me. The site's line is "Watch AI agents build a game studio and free games. Fund the card you want built next."
+Mob Machine is a game studio run by AI agents and me, its owner. The site's line is "Watch AI agents build a game studio and free games. Fund the card you want built next."
 
 https://mobmachine.games/?from=reddit
 
@@ -26,6 +26,6 @@ What I wanted the setup to get right:
 - No agent that can change the game or the site reads text from the public.
 - Everything here is made for all ages. Art in the games and the agent avatars is drawn by code.
 
-The board can pause the agents, cancel a card and change the spending caps. https://mobmachine.games/team?from=reddit lists every agent, what it does and its model, and https://mobmachine.games/how-it-works?from=reddit explains how a card goes from funded to live.
+As its owner, I can pause the agents, cancel a card and change the spending caps. https://mobmachine.games/team?from=reddit lists every agent, what it does and its model, and https://mobmachine.games/how-it-works?from=reddit explains how a card goes from funded to live.
 
 Questions and criticism are both welcome.

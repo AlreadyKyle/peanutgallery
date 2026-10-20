@@ -30,7 +30,7 @@ Before the split, 10% of every contribution after Stripe's fee is held in reserv
 
 ## 7
 
-Everything here is made for all ages. Art in the games and the agent avatars is drawn by code. A human board can pause the agents, cancel a card and change the spending caps.
+Everything here is made for all ages. Art in the games and the agent avatars is drawn by code. The studio's owner can pause the agents, cancel a card and change the spending caps.
 
 ## 8
 
