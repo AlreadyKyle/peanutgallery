@@ -172,6 +172,12 @@ describe('the you slot', () => {
       cleanup();
       renderAt(path);
       expect(document.querySelector('.you-slot'), path).toBeNull();
+      // What a kernel page holds in its place is blank: hidden from assistive technology, no link.
+      const held = document.querySelector('.you-slot-held');
+      if (held !== null) {
+        expect(held.getAttribute('aria-hidden'), path).toBe('true');
+        expect(held.querySelector('a, button'), path).toBeNull();
+      }
     }
   });
 });
@@ -208,7 +214,7 @@ describe('Site chrome', () => {
   it('shows the wordmark linking home, the Ledger link, the pitch line and the footer line', async () => {
     renderAt('/');
     // The you slot waits for the studio's answer on whether sign-in is open (lib/sign-in.ts).
-    await waitFor(() => expect(within(nav()).getByRole('link', { name: copy.you.signIn })).toBeTruthy());
+    await waitFor(() => expect(within(nav()).getAllByRole('link', { name: copy.you.signIn }).length).toBeGreaterThan(0));
     const banner = screen.getByRole('banner');
     const wordmark = within(banner).getByRole('link', { name: copy.studioName });
     expect(wordmark.getAttribute('href')).toBe('/');
@@ -237,8 +243,9 @@ describe('Site chrome', () => {
       [copy.howItWorksNav, '/how-it-works'],
       [copy.nav.faq, '/faq'],
       [legal.ledger, '/ledger'],
-      // The menu's own way to the desk, shown on phones where the slot keeps to the avatar.
-      [copy.nav.me, '/me'],
+      // The menu's own way in, shown on phones where a visitor's slot leaves the row: Sign in by name
+      // for a visitor (Your desk once signed in).
+      [copy.you.signIn, '/sign-in'],
     ]);
     expect(screen.getByText(copy.pitchBody)).toBeTruthy();
     expect(within(screen.getByRole('contentinfo')).getByText(`${copy.footer} ${legal.allAges}`)).toBeTruthy();

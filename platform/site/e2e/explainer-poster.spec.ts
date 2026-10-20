@@ -8,18 +8,24 @@ import { expect, test } from './fixtures';
 // pill, so it holds for any poster the explainer job draws.
 test.use({ reducedMotion: 'reduce' });
 
-// Both cuts (below 768 the 4:5 phone poster, from 768 the 16:9 one) and the widths around the hero's
-// two-column switch at 1024 and the frame's 544px limit at 1200.
-const WIDTHS = [320, 375, 414, 767, 768, 900, 1023, 1024, 1060, 1100, 1140, 1160, 1200, 1440, 1920];
+// Both cuts (below 768 the 4:5 phone poster, from 768 the 16:9 one), the widths around the hero's
+// two-column switch at 1024 and the frame's 544px limit at 1200, and home's showcase from 1280, where
+// the frame shares its row with the first game and is narrowest (342px at 1280).
+const WIDTHS = [320, 375, 414, 767, 768, 900, 1023, 1024, 1060, 1100, 1140, 1160, 1200, 1280, 1300, 1366, 1440, 1920];
 
 /** How many pixels of the poster under the pill differ from its background, and the pill's own size. */
 async function pictureUnderPill(page: import('@playwright/test').Page): Promise<{ ink: number; pixels: number; pill: { width: number; height: number } }> {
   return page.evaluate(async () => {
     const frame = document.querySelector('.explainer-frame')!;
-    const img = frame.querySelector<HTMLImageElement>('.explainer-poster img')!;
+    const shown = frame.querySelector<HTMLImageElement>('.explainer-poster img')!;
     const pill = frame.querySelector('.explainer-play')!;
+    await shown.decode();
+    // The file the picture chose (srcset), read at its own pixel size: a srcset image's naturalWidth
+    // is scaled by the density the browser picked it for, the canvas reads the file's pixels.
+    const img = new Image();
+    img.src = shown.currentSrc;
     await img.decode();
-    const box = img.getBoundingClientRect();
+    const box = shown.getBoundingClientRect();
     const at = pill.getBoundingClientRect();
     // object-fit: cover: the image is scaled to fill the box and the overflow is cut evenly.
     const scale = Math.max(box.width / img.naturalWidth, box.height / img.naturalHeight);
@@ -52,6 +58,8 @@ for (const path of ['/', '/how-it-works']) {
       await page.goto(path);
       const button = page.getByRole('button', { name: 'Play the video' });
       await expect(button).toBeVisible();
+      // Home's poster loads as it nears the view (loading=lazy): bring it there before reading it.
+      await button.scrollIntoViewIfNeeded();
       const { ink, pixels, pill } = await pictureUnderPill(page);
       expect(pixels).toBeGreaterThan(1000);
       expect(ink, `${ink} of ${pixels} poster pixels under the pill differ from its background`).toBe(0);

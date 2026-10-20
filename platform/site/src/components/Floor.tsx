@@ -169,7 +169,7 @@ export function StationCards({ cards, snapshot, planned = false, empty }: { card
   return (
     <ul className="card-grid station-cards">
       {cards.slice(0, FLOW_LANE_CARDS).map((card) => (
-        <CardFace key={card.id} card={card} snapshot={snapshot} compact face={planned ? 'planned' : undefined} />
+        <CardFace key={card.id} card={card} snapshot={snapshot} compact titleLevel={3} face={planned ? 'planned' : undefined} />
       ))}
     </ul>
   );

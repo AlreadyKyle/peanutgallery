@@ -26,7 +26,7 @@ import { useStudio } from '../lib/studio';
 // the real roles from the snapshot, and every colour and ratio is read from tokens.css on the page.
 
 const guide = copy.guide;
-export const GUIDE_PATH = '/design-kit-7q4m';
+export { GUIDE_PATH } from './paths';
 
 /** Ask search engines not to index this page, for as long as it is open. */
 function useNoIndex() {

@@ -6,7 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { readSession, useSignedIn } from '../lib/account';
 import { arrival, claimInBackground } from '../lib/arrive';
 import { copy } from '../lib/copy';
-import { useSignInOpen } from '../lib/sign-in';
+import { useSignInAnswer } from '../lib/sign-in';
 
 // The account pages (docs/specs/accounts.md): /sign-in, /sign-up, /forgot-password and
 // /reset-password. The plate names the page; under it the form, and on sign-in and sign-up what a
@@ -50,7 +50,9 @@ export function useArrive(): () => void {
 function AuthPage({ mode }: { mode: AuthMode }) {
   // Signed in when the page opened: nothing to do here. A sign-in on this page navigates itself.
   const [already] = useState(() => readSession() !== null);
-  const open = useSignInOpen();
+  // Until the studio answers, the form is drawn (no answer counts as open), so the page does not
+  // draw the closed note and then swap it for the form.
+  const open = useSignInAnswer() !== false;
   const arrive = useArrive();
   if (already) return <Navigate to="/me" replace />;
   const title = mode === 'sign-in' ? words.signInTitle : mode === 'sign-up' ? words.signUpTitle : words.forgotTitle;

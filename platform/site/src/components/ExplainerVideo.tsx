@@ -18,6 +18,18 @@ const REDUCED = '(prefers-reduced-motion: reduce)';
 const file = (cut: 'wide' | 'tall', ext: 'webm' | 'mp4' | 'jpg') => (ext === 'jpg' ? `/video/explainer-${cut}-poster.jpg` : `/video/explainer-${cut}.${ext}`);
 const loop = (cut: 'wide' | 'tall') => `/video/explainer-${cut}-loop.mp4`;
 
+// The poster at each width the explainer job writes (platform/explainer/scripts/poster-sizes.mjs, kept
+// equal to POSTER_WIDTHS there): the full-size JPEG, smaller JPEGs, and WebP at every width, so a
+// browser fetches the size its frame needs, not the 1920px still.
+const POSTERS = { wide: { full: 1920, smaller: [720, 1080] }, tall: { full: 1080, smaller: [720] } } as const;
+function posterSet(cut: 'wide' | 'tall', ext: 'jpg' | 'webp'): string {
+  const { full, smaller } = POSTERS[cut];
+  const at = (width: number) => (ext === 'jpg' && width === full ? file(cut, 'jpg') : `/video/explainer-${cut}-poster-${width}.${ext}`);
+  return [...smaller, full].map((width) => `${at(width)} ${width}w`).join(', ');
+}
+/** The wide poster's drawn width where the page says nothing narrower: the frame takes the row. */
+const WIDE_SIZES = '100vw';
+
 /** Whether the viewer asked for reduced motion; true until known, so first paint is the still. */
 function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(true);
@@ -32,7 +44,17 @@ function useReducedMotion(): boolean {
   return reduced;
 }
 
-export function ExplainerVideo({ still = false }: { still?: boolean }) {
+export function ExplainerVideo({
+  still = false,
+  lazy = false,
+  sizes = WIDE_SIZES,
+}: {
+  still?: boolean;
+  /** The poster sits below the fold (home): the browser fetches it as it nears the view. */
+  lazy?: boolean;
+  /** The wide poster's drawn width (the img sizes attribute) from 48rem, where the page knows it. */
+  sizes?: string;
+}) {
   const video = useRef<HTMLVideoElement>(null);
   const [started, setStarted] = useState(false);
   const reduced = useReducedMotion() || still;
@@ -85,8 +107,20 @@ export function ExplainerVideo({ still = false }: { still?: boolean }) {
           // and a keyboard or screen reader reaches the one button.
           <div className="explainer-poster" onClick={start}>
             <picture>
-              <source media={PHONE} srcSet={file('tall', 'jpg')} width={1080} height={1350} />
-              <img src={file('wide', 'jpg')} alt="" width={1920} height={1080} />
+              {/* Below 48rem the phone cut fills the frame, the full width of the window. */}
+              <source media={PHONE} type="image/webp" srcSet={posterSet('tall', 'webp')} sizes="100vw" width={1080} height={1350} />
+              <source media={PHONE} srcSet={posterSet('tall', 'jpg')} sizes="100vw" width={1080} height={1350} />
+              <source type="image/webp" srcSet={posterSet('wide', 'webp')} sizes={sizes} width={1920} height={1080} />
+              <img
+                src={file('wide', 'jpg')}
+                srcSet={posterSet('wide', 'jpg')}
+                sizes={sizes}
+                alt=""
+                width={1920}
+                height={1080}
+                loading={lazy ? 'lazy' : undefined}
+                decoding="async"
+              />
             </picture>
             {reduced ? null : (
               <video

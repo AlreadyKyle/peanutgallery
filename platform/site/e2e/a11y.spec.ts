@@ -135,6 +135,19 @@ test('the focus ring keeps 3:1 against the ground on paper and on the dark bands
   expect(rings.some(({ ground }) => contrast(ground, 'rgb(255, 255, 255)') > 3)).toBe(true);
 });
 
+// Headings step down one level at a time (axe heading-order, a moderate rule the scan above skips):
+// home's compact card titles sit straight under their station's h2, so they are h3s.
+for (const [label, width] of [['mobile', 375], ['desktop', 1440]] as const) {
+  test(`headings step down one level at a time on home and a card's page (${label})`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    for (const path of ['/', `/card/${LIVE_CARD_ID}`]) {
+      await settle(page, path);
+      const results = await new AxeBuilder({ page }).withRules(['heading-order']).analyze();
+      expect(results.violations.flatMap((v) => v.nodes.map((n) => `${path} ${n.target.join(' ')}`))).toEqual([]);
+    }
+  });
+}
+
 test('the cards say once, politely, how many arrived', async ({ page }) => {
   for (const path of ['/', '/contribute']) {
     await settle(page, path);
