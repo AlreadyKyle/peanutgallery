@@ -57,7 +57,7 @@ test.describe('/contribute follows the funding order', () => {
       await expect(fund).toHaveText('Fund $10');
       await expect(fund).toHaveAttribute('href', `${PAYMENT_LINK}?${reference}prefilled_amount=1000`);
       for (const usd of [5, 25, 50, 100]) {
-        await machine.getByRole('button', { name: `$${usd}` }).click();
+        await machine.getByRole('button', { name: `$${usd}`, exact: true }).click();
         await expect(fund).toHaveText(`Fund $${usd}`);
         await expect(fund).toHaveAttribute('href', `${PAYMENT_LINK}?${reference}prefilled_amount=${usd * 100}`);
         await expect(machine).toContainText(`Checkout opens on $${usd}, and you can change it there.`);
