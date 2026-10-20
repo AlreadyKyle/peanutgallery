@@ -285,22 +285,44 @@ export function refreshRequest(body: unknown): Parsed<string> {
  * Supabase Auth's own email limits are the real wall; this keeps one address from hammering them.
  */
 export class WindowLimiter {
+  /** Each key's hits in its window, in the order keys were last seen: the oldest first. */
   private readonly hits = new Map<string, number[]>();
   constructor(
     private readonly limit: number,
     private readonly windowMs: number,
+    /** The most keys kept, so a flood of addresses cannot grow the map without end. */
+    private readonly maxKeys = 10_000,
   ) {}
+
+  /** How many keys the limiter holds now. */
+  get size(): number {
+    return this.hits.size;
+  }
 
   allow(key: string, now: number): boolean {
     const recent = (this.hits.get(key) ?? []).filter((at) => now - at < this.windowMs);
-    if (recent.length >= this.limit) {
-      this.hits.set(key, recent);
-      return false;
-    }
-    recent.push(now);
+    const allowed = recent.length < this.limit;
+    if (allowed) recent.push(now);
+    // Delete then set, so the key moves to the end of the map's order: the map stays oldest first.
+    this.hits.delete(key);
     this.hits.set(key, recent);
-    if (this.hits.size > 10_000) this.hits.clear();
-    return true;
+    this.evict(now);
+    return allowed;
+  }
+
+  /**
+   * Over the cap, drop from the oldest end: every key whose window has ended, then the oldest keys
+   * still in theirs until the map is back at the cap. It stops at the first key it keeps, so it never
+   * empties the map and never resets an address that was seen recently. Hits come in time order
+   * (Date.now()), so the keys whose windows ended are the ones at the oldest end.
+   */
+  private evict(now: number): void {
+    if (this.hits.size <= this.maxKeys) return;
+    for (const [key, times] of this.hits) {
+      const expired = times.length === 0 || now - times[times.length - 1]! >= this.windowMs;
+      if (!expired && this.hits.size <= this.maxKeys) break;
+      this.hits.delete(key);
+    }
   }
 }
 
