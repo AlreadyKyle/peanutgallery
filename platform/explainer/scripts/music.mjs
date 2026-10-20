@@ -27,8 +27,23 @@ function chrome() {
   throw new Error('No headless Chromium found: run `pnpm exec playwright install chromium` in platform/site, or set REMOTION_CHROME');
 }
 
+// `--weekly <date>` renders that week's weekly video soundtrack (src/weekly/score.ts, laid on the
+// week's own timeline) to dist/public/weekly-soundtrack-<date>.wav instead.
+const weeklyAt = process.argv.indexOf('--weekly');
+const weekly = weeklyAt === -1 ? null : process.argv[weeklyAt + 1];
+const wavName = weekly === null ? 'soundtrack.wav' : `weekly-soundtrack-${weekly}.wav`;
+const entry =
+  weekly === null
+    ? { entryPoints: [join(root, 'src', 'music', 'score.ts')] }
+    : {
+        stdin: {
+          contents: `import { render as score } from './src/weekly/score'; import { WEEKS } from './src/weekly/weeks'; const week = WEEKS[${JSON.stringify(weekly)}]; if (week === undefined) throw new Error('no week ${weekly}'); export const render = () => score(week);`,
+          resolveDir: root,
+          loader: 'ts',
+        },
+      };
 const bundled = await build({
-  entryPoints: [join(root, 'src', 'music', 'score.ts')],
+  ...entry,
   bundle: true,
   format: 'iife',
   globalName: 'Score',
@@ -38,7 +53,7 @@ const bundled = await build({
 });
 const seed = `(() => { let a = 0x9e3779b9; Math.random = () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();`;
 
-const raw = join(root, 'dist', 'soundtrack.f32');
+const raw = join(root, 'dist', wavName.replace('.wav', '.f32'));
 const reuse = process.argv.includes('--reuse-raw') && existsSync(raw);
 let sampleRate = 48000;
 let channels = 2;
@@ -85,8 +100,8 @@ const PRE = 'alimiter=limit=0.5:attack=4:release=60:level=disabled';
 const measured = spawnSync('ffmpeg', ['-hide_banner', ...input, '-af', `${PRE},loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json`, '-f', 'null', '-'], { encoding: 'utf8' }).stderr;
 const m = JSON.parse(/\{[^{}]*"input_i"[^{}]*\}/.exec(measured)[0]);
 const filter = `${PRE},loudnorm=I=-16:TP=-1.5:LRA=11:measured_I=${m.input_i}:measured_TP=${m.input_tp}:measured_LRA=${m.input_lra}:measured_thresh=${m.input_thresh}:offset=${m.target_offset}:linear=true`;
-execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', ...input, '-af', filter, '-ar', '48000', '-c:a', 'pcm_s16le', join(out, 'soundtrack.wav')]);
+execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', ...input, '-af', filter, '-ar', '48000', '-c:a', 'pcm_s16le', join(out, wavName)]);
 if (!process.argv.includes('--keep-raw')) rmSync(raw);
-const check = spawnSync('ffmpeg', ['-hide_banner', '-i', join(out, 'soundtrack.wav'), '-af', 'loudnorm=print_format=json', '-f', 'null', '-'], { encoding: 'utf8' }).stderr;
+const check = spawnSync('ffmpeg', ['-hide_banner', '-i', join(out, wavName), '-af', 'loudnorm=print_format=json', '-f', 'null', '-'], { encoding: 'utf8' }).stderr;
 const final = JSON.parse(/\{[^{}]*"input_i"[^{}]*\}/.exec(check)[0]);
-console.log(`soundtrack: ${join(out, 'soundtrack.wav')} (${final.input_i} LUFS integrated, ${final.input_tp} dBTP peak, ${final.input_lra} LU range)`);
+console.log(`soundtrack: ${join(out, wavName)} (${final.input_i} LUFS integrated, ${final.input_tp} dBTP peak, ${final.input_lra} LU range)`);

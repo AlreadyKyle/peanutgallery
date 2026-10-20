@@ -66,3 +66,102 @@ body {
 .avatar-ground {
   fill: #d6d6d6;
 }
+
+/* The live studio room, drawn as the site draws it (platform/site/src/styles.css, the room rules
+   copied without the blueprint variant). IsoRoom sets the colour variables on its svg. */
+.room-fill,
+.room-side,
+.room-shade,
+.room-wall,
+.room-wall-lit,
+.room-window,
+.room-screen,
+.room-hole,
+.room-leaf,
+.room-edge {
+  stroke: var(--ink);
+  stroke-width: calc(1.5px * var(--room-ink, 1));
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.room-fill,
+.room-wall-lit,
+.room-leaf {
+  fill: var(--paper);
+}
+
+.room-side,
+.room-wall,
+.room-window {
+  fill: var(--paper-hover);
+}
+
+.room-shade {
+  fill: var(--line);
+}
+
+.room-screen,
+.room-hole {
+  fill: var(--ink);
+}
+
+.room-edge,
+.room-strong,
+.room-cap {
+  stroke-width: calc(2px * var(--room-ink, 1));
+}
+
+.room-edge {
+  fill: none;
+}
+
+.room-grid {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: calc(1px * var(--room-ink, 1));
+  vector-effect: non-scaling-stroke;
+}
+
+.room-line,
+.room-thin {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: calc(2px * var(--room-ink, 1));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.room-thin {
+  stroke-width: calc(1.25px * var(--room-ink, 1));
+}
+
+.room-hatch {
+  fill: var(--paper-hover);
+  stroke: var(--ink);
+  stroke-width: calc(1px * var(--room-ink, 1));
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The rug: a plain paper fill with a woven border, solid (a dashed line on this floor marks a zone). */
+.room-rug {
+  fill: var(--paper-hover);
+  stroke: var(--ink);
+  stroke-width: calc(1.25px * var(--room-ink, 1));
+  vector-effect: non-scaling-stroke;
+}
+
+.room-rug-border {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: calc(1.25px * var(--room-ink, 1));
+  vector-effect: non-scaling-stroke;
+}
+
+/* The blueprint (/studio/history): paper lines on the blueprint ground, nothing filled. */
+
+
+
+

@@ -329,6 +329,9 @@ for (const path of ['/', '/contribute']) {
     await page.goto(path);
     const amounts = page.locator('.machine-amounts .amount');
     await expect(amounts).toHaveCount(5);
+    // Measure once the card is laid out: on home it renders before its section has a size.
+    await expect(amounts.last()).toBeVisible();
+    await expect.poll(async () => (await amounts.last().boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(44);
     for (const box of await amounts.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON() as DOMRect))) {
       expect(box.width).toBeGreaterThanOrEqual(44);
       expect(box.height).toBeGreaterThanOrEqual(44);
