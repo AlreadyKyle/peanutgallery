@@ -12,8 +12,11 @@
 //
 // The database checks the token against a secret it never hands out, and writes only on a match, so
 // the function holds no secret. p or f must be a uuid and t 64 lowercase hex characters, or it answers
-// 400 before Supabase is called. Every answer is no-store, plain HTML with no script or style, so the
-// site's Content-Security-Policy holds. The body names no address, payment, profile or card.
+// 400 before Supabase is called. Every answer is no-store, plain HTML with no script or style. A
+// function's answer does not get netlify.toml's [[headers]], so each page carries its own: a policy
+// that loads nothing, lets the form post only to this origin and refuses every frame (the one button
+// cannot be clickjacked), with X-Frame-Options, nosniff and no referrer. The body names no address,
+// payment, profile or card.
 
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './public-env.ts';
 
@@ -24,6 +27,14 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const TOKEN = /^[0-9a-f]{64}$/;
 const HTML_TYPE = 'text/html; charset=utf-8';
 const NO_STORE = { 'Cache-Control': 'no-store', 'Netlify-CDN-Cache-Control': 'no-store' };
+/** The page has no script, style, image or font, so it loads nothing; its one form posts to this origin. */
+export const UNSUBSCRIBE_POLICY = "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+const PAGE_HEADERS = {
+  'Content-Security-Policy': UNSUBSCRIBE_POLICY,
+  'X-Frame-Options': 'DENY',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+};
 
 type Copy = { title: string; ask: string; button: string; done: string; invalid: string; failed: string; back: string };
 
@@ -71,7 +82,7 @@ ${body}
 </body>
 </html>
 `;
-  return new Response(html, { status, headers: { 'Content-Type': HTML_TYPE, ...NO_STORE, ...extra } });
+  return new Response(html, { status, headers: { 'Content-Type': HTML_TYPE, ...NO_STORE, ...PAGE_HEADERS, ...extra } });
 }
 
 const paragraph = (text: string) => `<p>${escapeHtml(text)}</p>`;

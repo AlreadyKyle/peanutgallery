@@ -5,7 +5,7 @@ import { detailDoc } from '../lib/card-detail.test-fixture';
 import { cardDetailFrom, type Milestones } from '../lib/card-source';
 import { copy } from '../lib/copy';
 import { formatClock, formatDateTime } from '../lib/format';
-import { buildClock, liveWhen, playFromCard } from './CardPage';
+import { buildClock, commitLine, liveWhen, playFromCard } from './CardPage';
 
 // The card page's state line: a shipped card's stamp and a building or checks card's build clock.
 
@@ -120,5 +120,27 @@ describe('playFromCard', () => {
 
   it('is null when the site has no play address', () => {
     expect(playFromCard('')).toBeNull();
+  });
+});
+
+describe('commitLine', () => {
+  it('says a shipped card was merged, and a stopped card was rolled back', () => {
+    expect(commitLine(cardDetailFrom(detailDoc()))).toBe(copy.cardPage.merged);
+    const stopped = {
+      card_id: '00000000-0000-4000-8000-000000000004',
+      title: 'A cheaper Cart',
+      stage: 'rejected',
+      failing_check: null,
+      spent_usd: '0.4200',
+      funded_usd: '3.0000',
+      credited_usd: '3.0000',
+      moved: [],
+      stopped_at: '2026-09-15T02:00:00Z',
+    };
+    const card = { ...(detailDoc().card as Record<string, unknown>), stage: 'rejected', live_at: null };
+    const line = commitLine(cardDetailFrom(detailDoc({ card, stopped })));
+    expect(line).toBe(copy.cardPage.rolledBack);
+    expect(line).toMatch(/^Rolled back/);
+    expect(line).not.toMatch(/merged/i);
   });
 });

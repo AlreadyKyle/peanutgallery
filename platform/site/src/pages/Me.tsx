@@ -25,7 +25,7 @@ import type { AvatarSpec, Profile } from '../lib/community-types';
 import { copy } from '../lib/copy';
 import { unfollowCard, useFollows } from '../lib/follows';
 import { legal } from '../lib/legal';
-import { useSignInOpen } from '../lib/sign-in';
+import { useSignInAnswer } from '../lib/sign-in';
 import { useStudio } from '../lib/studio';
 import { TIERS } from '../lib/xp';
 
@@ -450,7 +450,9 @@ export function Me() {
   const [linkError, setLinkError] = useState<LinkError | null>(null);
   const [claim, setClaim] = useState<'none' | 'wanted' | 'running' | 'done'>('none');
   const [claimed, setClaimed] = useState(0);
-  const open = useSignInOpen();
+  // Signed out, the sign-in form is drawn until the studio says sign-in is closed (no answer counts
+  // as open), so a first visit lays the page out once.
+  const open = useSignInAnswer() !== false;
   const me = useMyProfile();
   const { reload } = me;
   // /thanks's Keep this card (docs/specs/place.md): signed out, the claim waits for the magic link;
@@ -509,9 +511,11 @@ export function Me() {
     // Once, on landing: the address is read as it arrived.
   }, []);
   return (
-    <main className="wide">
+    // A signed-in player's desk loads after first paint: the lede is the desk's from the start, and the
+    // loading band holds the window's height (main.me-page), so the footer waits below the fold.
+    <main className="wide me-page">
       <div className="band">
-        <PageHeader title={copy.me.title} lede={me.state === 'ready' ? copy.desk.lede : open ? copy.me.lede : copy.me.ledeClosed} />
+        <PageHeader title={copy.me.title} lede={me.state === 'ready' || me.state === 'loading' ? copy.desk.lede : open ? copy.me.lede : copy.me.ledeClosed} />
       </div>
       <div className="band">
         {me.state === 'signed-out' ? (

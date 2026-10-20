@@ -17,7 +17,7 @@ Games meet an ESRB E / PEGI 3 bar: no sexual content, nudity or suggestive theme
 3. One small change: one mechanic, number or piece of content that a builder can make in one short session. More than that is not_one_small_change.
 4. A summary its check lines back: the public summary promises nothing the `check:` lines do not prove. Otherwise summary_not_backed.
 5. A plausible estimate. The estimate is also the funding target, set by the five-times rule in `docs/specs/launch-cards.md`: five times the change's expected cost, rounded up to the next 50 cents. At the measured costs a change the size of the launch cards is $0.50 for a config card and $1.50 for a code card; a bigger change within one mechanic costs more, so its estimate is higher. An estimate far from that for a change this size, either way, or one padded to reach a round figure, is estimate_implausible.
-6. Plain text a player and a builder read the same way. Otherwise unclear_text.
+6. Plain text a player and a builder read the same way. A number of 1,000 or more carries thousands separators in the title and summary ("1,000 dust", never "1000 dust"). The title is in the one style every card title uses: a short sentence-case phrase that describes the change as the player sees it in the game ("A cheaper first Gatherer"), never a file, a field or a config value. Otherwise unclear_text.
 7. Not a copy of an open card the prompt lists. Otherwise duplicate_card, and it is flagged.
 8. Nothing that touches the kernel or needs art other than procedural or vector art. Otherwise breaks_kernel_or_art_policy, and it is flagged.
 

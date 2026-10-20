@@ -55,6 +55,7 @@ export function LiveStudio({
   snapshot,
   pipeSize = 1,
   pipe = true,
+  unavailable = null,
 }: {
   /** Null while home's snapshot loads: the room is drawn empty in its own box and the pipe tells the feed. */
   snapshot: Snapshot | null;
@@ -62,6 +63,11 @@ export function LiveStudio({
   pipeSize?: number;
   /** Draw the pipe here; home's floor draws it beside the pitch instead (FloorPipe). */
   pipe?: boolean;
+  /**
+   * While snapshot is null: the line that says it will not come (it failed, or there is no database),
+   * or null while it is still loading. The pipe then stops saying it is loading and says so too.
+   */
+  unavailable?: string | null;
 }) {
   const studio = useStudioDoc();
   const feed = useFeed();
@@ -106,7 +112,8 @@ export function LiveStudio({
         <Pipe
           events={events}
           live={live}
-          loading={feed.state === 'loading' || (snapshot === null && !live)}
+          loading={feed.state === 'loading' || (snapshot === null && !live && unavailable === null)}
+          unavailable={snapshot === null && !live ? unavailable : null}
           hasOlder={feed.hasOlder}
           loadingOlder={feed.loadingOlder}
           onOlder={feed.loadOlder}

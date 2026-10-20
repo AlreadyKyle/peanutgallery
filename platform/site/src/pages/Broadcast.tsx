@@ -19,7 +19,7 @@ import { useStudio } from '../lib/studio';
 // smaller window, so a preview shows the whole of it. The room is the picture, as large as the frame's
 // height allows; the cards and the pipe share one ruled column beside it.
 
-export const BROADCAST_PATH = '/broadcast';
+export { BROADCAST_PATH } from './paths';
 // The QR code's address carries a source tag, so a landing from it counts as broadcast_qr (lib/count.ts,
 // docs/specs/counter-senders.md); the frame drops the tag on arrival.
 export const FUND_URL = withQrSource('https://mobmachine.games/contribute');

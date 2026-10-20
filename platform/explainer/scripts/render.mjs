@@ -20,6 +20,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bundle } from '@remotion/bundler';
 import { renderMedia, renderStill, selectComposition } from '@remotion/renderer';
+import { posterSizes } from './poster-sizes.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
@@ -80,6 +81,8 @@ async function main() {
         console.log(`published ${name} (${size(join(out, name))})`);
       }
     }
+    // The smaller and WebP posters the site's picture element offers (scripts/poster-sizes.mjs).
+    posterSizes(out);
     return;
   }
 
