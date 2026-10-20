@@ -1135,11 +1135,11 @@ for file in "$REPO_ROOT"/.github/workflows/*.yml "$REPO_ROOT"/.github/workflows/
     assert "workflow audit: dispatcher.yml names DISPATCHER_ENV and no other secret" test "$(grep -oE 'secrets\.[A-Za-z_]+' "$file" | sort -u)" = secrets.DISPATCHER_ENV
     assert "workflow audit: dispatcher.yml runs in the environment dispatcher" test "$(grep -cxE '    environment: dispatcher' "$file")" = 1
   elif [ "$name" = ops-jobs.yml ]; then
-    # The daily jobs (docs/PLAN.md §10 decision 78) are the other: they read their own secrets from the
+    # The daily jobs (docs/PLAN.md §10 decision 78) and the marketing engine are the other: they read their own secrets from the
     # environment ops, which only main can deploy to, and widen nothing.
     assert "workflow audit: ops-jobs.yml sets no job-level permissions" test "$(grep -cE '^ +permissions:' "$file")" = 0
     assert "workflow audit: ops-jobs.yml grants no write access" test "$(grep -cE ':[[:space:]]*write([[:space:]]|$)|write-all' "$file")" = 0
-    assert "workflow audit: ops-jobs.yml names the four job envs and NTFY_TOPIC_URL and no other secret" test "$(grep -oE 'secrets\.[A-Za-z_]+' "$file" | sort -u | tr '\n' ' ')" = "secrets.BACKUP_ENV secrets.CONTROLLER_ENV secrets.NOTICES_ENV secrets.NTFY_TOPIC_URL secrets.QUOTA_ENV "
+    assert "workflow audit: ops-jobs.yml names the five job envs and NTFY_TOPIC_URL and no other secret" test "$(grep -oE 'secrets\.[A-Za-z_]+' "$file" | sort -u | tr '\n' ' ')" = "secrets.BACKUP_ENV secrets.CONTROLLER_ENV secrets.MARKETING_ENV secrets.NOTICES_ENV secrets.NTFY_TOPIC_URL secrets.QUOTA_ENV "
     assert "workflow audit: ops-jobs.yml runs in the environment ops" test "$(grep -cxE '    environment: ops' "$file")" = 1
   else
     assert "workflow audit: $name sets no job-level permissions" test "$(grep -cE '^ +permissions:' "$file")" = 0
