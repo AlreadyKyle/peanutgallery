@@ -90,7 +90,10 @@ test.describe('home studio shrink', () => {
 
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.setViewportSize({ width: 768, height: 1000 });
-    await page.reload();
+    // A fresh navigation rather than page.reload(), once the first load has settled: on main's gate a
+    // reload here once aborted (net::ERR_ABORTED, frame detached) though the same code passed before.
+    await page.waitForLoadState('load');
+    await page.goto(page.url(), { waitUntil: 'load' });
     await expect(main.locator('.floor-plate .studio-agent').first()).toBeVisible();
     await page.evaluate(() => window.scrollTo(0, 600));
     await expect(main).not.toHaveAttribute('data-morph', /.*/);
