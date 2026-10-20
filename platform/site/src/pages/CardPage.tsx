@@ -236,6 +236,8 @@ function Detail({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }
           {words.cardHeading}
         </h2>
         {detail.stopped === null && isPlanned(detail.card) ? <Planned detail={detail} /> : <Replay detail={detail} snapshot={snapshot} />}
+        {/* Under Fund this card, as under /contribute's choices: money past the target goes on down the line. */}
+        {liveFundLink(detail.card, snapshot) ? <p className="muted small card-waterfall">{legal.waterfallLine}</p> : null}
         {liveFundLink(detail.card, snapshot) ? <FundAgreement /> : null}
         <FollowCard cardId={detail.card.id} stage={detail.card.stage} />
         {liveFundLink(detail.card, snapshot) ? (

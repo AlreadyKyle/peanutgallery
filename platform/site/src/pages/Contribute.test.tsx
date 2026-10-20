@@ -246,7 +246,12 @@ describe('Contribute split slider (docs/specs/split-slider.md)', () => {
     ]);
 
     // The Machine card takes no card id: the waterfall places it exactly as Fund the next card in line.
-    expect(machineLink()?.getAttribute('href')).toBe(`${STRIPE}?client_reference_id=split70`);
+    // Its preset is the amount checkout opens on: $10 until another is picked (docs/specs/machine-presets.md).
+    expect(machineLink()?.getAttribute('href')).toBe(`${STRIPE}?client_reference_id=split70&prefilled_amount=1000`);
+    fireEvent.click(screen.getByRole('button', { name: '$25' }));
+    expect(machineLink()?.getAttribute('href')).toBe(`${STRIPE}?client_reference_id=split70&prefilled_amount=2500`);
+    expect(machineLink()?.textContent).toBe('Fund $25');
+    fireEvent.click(screen.getByRole('button', { name: '$10' }));
 
     fireEvent.change(slider, { target: { value: '0' } });
     expect(checkoutLinks()[0]?.getAttribute('href')).toBe(`${STRIPE}?client_reference_id=split100`);

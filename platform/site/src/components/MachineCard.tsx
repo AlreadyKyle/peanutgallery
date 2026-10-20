@@ -9,8 +9,9 @@ import { Glyph, SuitTag } from './Glyph';
 // The Machine card (docs/specs/final-state.md, Card suits): general support for the whole studio,
 // always open, with no bar that fills and closes. It goes to the same checkout as "Fund the next card
 // in line" (lib/payment.ts fundLink with no card), so the waterfall places the money exactly as it
-// does there; nothing here changes where money goes. The preset amounts are a suggestion the reader
-// carries to checkout, which asks for the amount.
+// does there; nothing here changes where money goes. The preset picked is the amount checkout opens on
+// (Stripe's prefilled_amount, lib/payment.ts prefilledCents; docs/specs/machine-presets.md), which the
+// reader can still change there.
 
 export const MACHINE_AMOUNTS: readonly number[] = [5, 10, 25, 50, 100];
 
@@ -46,13 +47,13 @@ export function MachineCard({ studioPct, headingLevel = 3, agreement = true }: {
           ))}
       </div>
       <p className="machine-action">
-        <a className="button btn-coin" href={fundLink(env.stripePaymentLinkUrl, null, studioPct)} aria-describedby={`${id}-note`}>
+        <a className="button btn-coin" href={fundLink(env.stripePaymentLinkUrl, null, studioPct, amount)} aria-describedby={`${id}-note`}>
           <CoinMark />
           {copy.machine.fund.replace('{amount}', `$${amount}`)}
         </a>
       </p>
       <p className="muted small" id={`${id}-note`}>
-        {legal.pickForMeBody} {copy.machine.amountNote.replace('{amount}', `$${amount}`)}
+        {legal.pickForMeBody} {legal.waterfallLine} {copy.machine.amountNote.replace('{amount}', `$${amount}`)}
       </p>
       {/* Alone, the agreement sits with the link it binds, as under every fund grid (DESIGN.md, the card). */}
       {agreement ? <FundAgreement /> : null}

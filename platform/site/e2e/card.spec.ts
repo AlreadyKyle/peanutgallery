@@ -233,6 +233,18 @@ test('an open card says each figure once: the face has Funded and Contributors, 
   await expect(facts.locator('[data-fact="cost"] dt')).toHaveText('Drafting cost from contributions');
 });
 
+// docs/specs/machine-presets.md: under Fund this card, the line /contribute says under its choices.
+test("an open card says under Fund this card that anything beyond its target funds the next cards", async ({ page }) => {
+  await page.goto(`/card/${OPEN_CARD_ID}`);
+  const column = page.locator('.card-face-column');
+  await expect(column.getByRole('link', { name: 'Fund this card' })).toHaveCount(1);
+  const line = column.locator('p.card-waterfall');
+  await expect(line).toHaveText("Anything beyond a card's target funds the next cards in line.");
+  await expect(line.locator('+ p.fund-agreement')).toHaveCount(1);
+  await page.goto(`/card/${LIVE_CARD_ID}`);
+  await expect(page.locator('p.card-waterfall')).toHaveCount(0);
+});
+
 test('the supporters line up in columns at every width', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   for (const width of [375, 768, 1440]) {

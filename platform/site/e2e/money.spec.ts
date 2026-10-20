@@ -46,6 +46,27 @@ test.describe('/contribute follows the funding order', () => {
     expect(await overflowsHorizontally(page)).toBe(false);
   });
 
+  // docs/specs/machine-presets.md: the preset picked is the amount checkout opens on (Stripe's
+  // prefilled_amount, in cents), after the split's reference, on home and /contribute.
+  for (const path of ['/', '/contribute']) {
+    test(`the Machine card's presets set the amount checkout opens on, on ${path}`, async ({ page }) => {
+      await page.goto(path);
+      const machine = page.getByRole('main').locator('.machine-card');
+      const fund = machine.locator(`a[href^="${PAYMENT_LINK}"]`);
+      const reference = path === '/contribute' ? 'client_reference_id=split20&' : '';
+      await expect(fund).toHaveText('Fund $10');
+      await expect(fund).toHaveAttribute('href', `${PAYMENT_LINK}?${reference}prefilled_amount=1000`);
+      for (const usd of [5, 25, 50, 100]) {
+        await machine.getByRole('button', { name: `$${usd}` }).click();
+        await expect(fund).toHaveText(`Fund $${usd}`);
+        await expect(fund).toHaveAttribute('href', `${PAYMENT_LINK}?${reference}prefilled_amount=${usd * 100}`);
+        await expect(machine).toContainText(`Checkout opens on $${usd}, and you can change it there.`);
+      }
+      await expect(machine).toContainText("Anything beyond a card's target funds the next cards in line.");
+      await expect(machine).not.toContainText('enter $');
+    });
+  }
+
   test('counts and draws on home only the open cards in the order, each with its live Fund this card', async ({ page }) => {
     await page.goto('/');
     const fund = page.getByRole('region', { name: 'Pick a card to fund' });
