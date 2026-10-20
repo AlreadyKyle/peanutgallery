@@ -111,14 +111,39 @@ export function splitReference(id: string | null, studioPct?: number): string | 
 }
 
 /**
- * The Payment Link with client_reference_id set to the card id and, from /contribute's slider, the
- * split, both of which the webhook reads. With neither it is the Payment Link itself.
+ * The Payment Link's lowest amount (PLAN.md §10 decision 77): it takes any amount from $2, with $5
+ * preset. A prefilled amount below it is never sent, so checkout opens on the link's own $5.
  */
-export function fundLink(base: string, id: string | null, studioPct?: number): string {
+export const MIN_AMOUNT_USD = 2;
+
+/**
+ * The amount checkout opens on, in cents, for Stripe's prefilled_amount URL parameter on a
+ * pay-what-you-want Payment Link (docs/specs/machine-presets.md; https://docs.stripe.com/payment-links/customize,
+ * Customize checkout with URL parameters): a whole number of cents, at least MIN_AMOUNT_USD. Null
+ * for anything else, so the link carries no amount and checkout opens on its preset. The reader can
+ * still change it at checkout; the webhook credits what was paid, so the split never reads it.
+ */
+export function prefilledCents(amountUsd: number | undefined): number | null {
+  if (amountUsd === undefined || !Number.isFinite(amountUsd) || amountUsd < MIN_AMOUNT_USD) return null;
+  const cents = Math.round(amountUsd * 100);
+  return Number.isSafeInteger(cents) ? cents : null;
+}
+
+/**
+ * The Payment Link with client_reference_id set to the card id and, from /contribute's slider, the
+ * split, both of which the webhook reads, then, from the Machine card's presets, the amount checkout
+ * opens on (prefilledCents). With none of them it is the Payment Link itself.
+ */
+export function fundLink(base: string, id: string | null, studioPct?: number, amountUsd?: number): string {
   const reference = splitReference(id, studioPct);
-  if (reference === null) return base;
+  const cents = prefilledCents(amountUsd);
+  const params = [
+    ...(reference === null ? [] : [`client_reference_id=${encodeURIComponent(reference)}`]),
+    ...(cents === null ? [] : [`prefilled_amount=${cents}`]),
+  ];
+  if (params.length === 0) return base;
   const joiner = base.includes('?') ? '&' : '?';
-  return `${base}${joiner}client_reference_id=${encodeURIComponent(reference)}`;
+  return `${base}${joiner}${params.join('&')}`;
 }
 
 // The fixed rules behind the split (PLAN.md §4 Kernel): 10% reserve, the default 80/20 split and 5%

@@ -509,9 +509,9 @@ export const copy = {
     title: 'Keep the Machine running',
     always: 'Always open',
     body: 'General support for the whole studio. It has no bar to fill and never closes.',
-    amountsLabel: 'Pick an amount to bring to checkout',
+    amountsLabel: 'Pick the amount checkout opens on',
     fund: 'Fund {amount}',
-    amountNote: 'Checkout asks for the amount, so enter {amount} there.',
+    amountNote: 'Checkout opens on {amount}, and you can change it there.',
   },
   goals: {
     title: 'Goals',
