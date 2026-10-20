@@ -148,9 +148,19 @@ function faceShowsSpecRows(detail: CardDetail): boolean {
   return face === 'open' || face === 'picked' || face === 'funded';
 }
 
+/**
+ * The words around the card's commit. A stopped card's commit was merged and then rolled back (the
+ * pipeline keeps it as the record of what was reverted), so it never reads as merged beside Not
+ * built or Paused.
+ */
+export function commitLine(detail: CardDetail): string {
+  return detail.stopped === null ? words.merged : words.rolledBack;
+}
+
 function Facts({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }) {
   const m = detail.milestones;
   const sha = detail.card.commit_sha;
+  const commitWords = commitLine(detail);
   return (
     <section className="section" aria-labelledby="card-facts">
       <h2 id="card-facts">{words.factsHeading}</h2>
@@ -165,9 +175,9 @@ function Facts({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot })
       </CardFacts>
       {sha === null ? null : (
         <p className="card-meta" data-fact="commit">
-          {words.merged.split('{sha}')[0]}
+          {commitWords.split('{sha}')[0]}
           <code>{shortSha(sha)}</code>
-          {words.merged.split('{sha}')[1]}
+          {commitWords.split('{sha}')[1]}
         </p>
       )}
     </section>

@@ -143,7 +143,7 @@ test('while sign-in is closed the site offers no profile, and paying still works
   const fund = page.locator('[data-station-part="fund"]');
   await expect(fund.getByRole('link', { name: 'Fund this card' }).first()).toBeVisible();
   const ideas = page.locator('[data-station-part="ideas"]');
-  await expect(ideas.getByText('Pitching needs a profile, and profiles are not open yet.', { exact: false })).toBeVisible();
+  await expect(ideas.getByText('Pitching needs a profile, and sign-in is off right now.', { exact: false })).toBeVisible();
   await expect(ideas.getByRole('link', { name: 'Pitch an idea' })).toHaveCount(0);
   await page.goto('/contribute');
   const perks = page.locator('.perks');
@@ -151,11 +151,11 @@ test('while sign-in is closed the site offers no profile, and paying still works
   await expect(perks.getByText('With a free profile')).toHaveCount(0);
   await expect(perks.getByText('Paying never needs an account.', { exact: true })).toBeVisible();
   await page.goto('/faq');
-  await expect(page.getByText('Profiles, with a name, an avatar, XP and a collection of the cards you funded, are not open yet.')).toBeVisible();
+  await expect(page.getByText('An account gives you a name, an avatar, XP and a collection of the cards you funded, and sign-in is off right now.')).toBeVisible();
   await expect(page.getByRole('main').getByRole('link', { name: 'Your desk' })).toHaveCount(0);
   await expect(page.getByRole('main').getByRole('link', { name: 'Pitch an idea' })).toHaveCount(0);
   await page.goto('/me');
-  await expect(page.getByRole('heading', { level: 2, name: 'Profiles are not open yet' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Sign-in is off right now' })).toBeVisible();
   await expect(page.getByRole('textbox')).toHaveCount(0);
   await page.goto('/suggest');
   await expect(page.locator('[aria-labelledby="suggest-send"]').getByRole('link', { name: 'Sign in', exact: true })).toHaveCount(0);
@@ -191,7 +191,7 @@ test('while sign-in is closed the frame keeps the ideas board, links nothing tha
   // /seeds asks no one to sign in, and says publishing a seed needs a profile.
   await page.goto('/seeds');
   const how = page.locator('[aria-labelledby="seeds-how"]');
-  await expect(how.getByText('Publishing a seed here needs a profile, and profiles are not open yet.', { exact: false })).toBeVisible();
+  await expect(how.getByText('Publishing a seed here needs a profile, and sign-in is off right now.', { exact: false })).toBeVisible();
   await expect(how.getByText('joins your profile', { exact: false })).toHaveCount(0);
   await expect(how.getByRole('link', { name: 'Sign in to upvote and publish' })).toHaveCount(0);
   expect(await overflowsHorizontally(page)).toBe(false);

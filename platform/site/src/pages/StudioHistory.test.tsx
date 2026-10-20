@@ -38,7 +38,7 @@ describe('/studio/history', () => {
       for (let i = 0; i < 5; i += 1) await Promise.resolve();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(screen.getByText(copy.history.stations).nextElementSibling?.textContent).toBe('desks, whiteboard, test bench, gate, shipping dock');
+    expect(screen.getByText(copy.history.stations).nextElementSibling?.textContent).toBe('desks, whiteboard, test bench, automated checks, shipping dock');
     expect(screen.getByText(copy.history.decor).nextElementSibling?.textContent).toBe('trophy shelf, new thing');
     expect(document.querySelector('.blueprint-facts')?.textContent).not.toMatch(/_/);
   });

@@ -5,11 +5,14 @@
 //      the receipt address Stripe already holds, customer_details.email. The address is held in this
 //      process for the one send and never written, logged or printed;
 //   2. claims the (payment, card) pair with ship_notice_claim(), which answers true once only;
-//   3. sends one email through Resend's API from the studio's existing sender, with an Idempotency-Key
+//   3. sends one email through Resend's API from the studio's sender, with an Idempotency-Key
 //      of the pair, so a retried request inside Resend's window sends nothing new, and a one-click
 //      unsubscribe (List-Unsubscribe and List-Unsubscribe-Post, RFC 8058) to the site's
 //      /api/unsubscribe with the payment id and the token the database made for it;
 //   4. settles the pair as sent (with Resend's id), failed or no_address.
+// Each email names the game the card changed, and the next card open for funding in that game with
+// its funding bar's words, read once a run from public_money's funding order and the cards table with
+// the same service key; when that read fails, the emails go out without the next card.
 // A pair is claimed before its send and never claimed again, so no notice goes twice: a send whose
 // answer is lost is settled failed, not retried, and the board is told. Unsubscribed contributors are
 // left out by ship_notices_due() itself.
@@ -28,9 +31,9 @@
 import { readFileSync } from 'node:fs';
 import { alerter, JobEnvError, jobEnvProblems, round2, stripeApiVersion, stripeReader, supabaseClient } from './lib.mjs';
 
-// The studio's sender: the address Supabase Auth's sign-in email already uses through Resend
-// (BOARD-SETUP.md step 13), on the verified domain. Replies go to the public contact address.
-export const NOTICE_FROM = 'Mob Machine <board@mobmachine.games>';
+// The studio's sender, on the verified Resend domain mobmachine.games (any address on a verified
+// domain sends). Replies go to the public contact address.
+export const NOTICE_FROM = 'Mob Machine <studio@mobmachine.games>';
 export const NOTICE_REPLY_TO = 'hello@clayhouse.studio';
 export const SITE_URL = 'https://mobmachine.games';
 export const RESEND_URL = 'https://api.resend.com/emails';
@@ -58,17 +61,69 @@ export function followUnsubscribeUrl(userId, token) {
 }
 
 const usd = (value) => `$${round2(value).toFixed(2)}`;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// The game a card's folder changes, by its public name; null for a card that changes no game.
+const GAMES = { 'seed-1': 'Dust' };
+export function gameOf(folder) {
+  return Object.hasOwn(GAMES, folder) ? GAMES[folder] : null;
+}
+
+// The first card in the money's funding order for each game folder, with room left on its bar:
+// { folder: { id, title, funded_usd, funding_target_usd } }. Reads public_money and cards with the
+// service key; an answer it cannot read gives no next card rather than failing the run.
+export async function nextOpenCards(db) {
+  try {
+    const money = await db.select('public_money', 'select=funding_order');
+    const order = Array.isArray(money) && Array.isArray(money[0]?.funding_order) ? money[0].funding_order : [];
+    const ids = order.map((place) => place?.card_id).filter((id) => typeof id === 'string' && UUID.test(id));
+    if (ids.length === 0) return {};
+    const cards = await db.select('cards', `select=id,title,folder,funded_usd,funding_target_usd&id=in.(${ids.join(',')})`);
+    const byId = new Map((Array.isArray(cards) ? cards : []).map((card) => [card.id, card]));
+    const next = {};
+    for (const id of ids) {
+      const card = byId.get(id);
+      if (!card || gameOf(card.folder) === null || Object.hasOwn(next, card.folder)) continue;
+      const funded = Number(card.funded_usd);
+      const target = Number(card.funding_target_usd);
+      if (!Number.isFinite(funded) || !Number.isFinite(target) || target <= 0 || funded >= target) continue;
+      next[card.folder] = { id: card.id, title: oneLine(card.title), funded_usd: funded, funding_target_usd: target };
+    }
+    return next;
+  } catch {
+    return {};
+  }
+}
+
+// "Shipped in Dust: <title>", or "Shipped: <title>" for a card that changes no game.
+function shippedSubject(row, title) {
+  const game = gameOf(row.card_folder);
+  return game === null ? `Shipped: ${title}` : `Shipped in ${game}: ${title}`;
+}
+
+// The next card in the shipped card's game, as text lines and an HTML paragraph, or nothing.
+function nextParts(row, next) {
+  const game = gameOf(row.card_folder);
+  if (game === null || !next || next.id === row.card_id) return { lines: [], html: [] };
+  const url = `${SITE_URL}/card/${next.id}`;
+  const words = `Next for ${game}: ${next.title}, ${usd(next.funded_usd)} of ${usd(next.funding_target_usd)} funded.`;
+  return {
+    lines: [words, `Fund it: ${url}`, ''],
+    html: [`<p>${escapeHtml(words)} <a href="${escapeHtml(url)}">Fund it</a></p>`],
+  };
+}
 const oneLine = (text) => String(text).replace(/\s+/g, ' ').trim();
 const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 // The email for one due row: the card's title, that it is live, what the agents spent, its page and
 // the game's play address, and the unsubscribe. Pure: no address in it, the caller adds the recipient.
-export function composeNotice(row, play) {
+export function composeNotice(row, play, next = null) {
   const title = oneLine(row.card_title);
   const cardUrl = `${SITE_URL}/card/${row.card_id}`;
   const stop = unsubscribeUrl(row.payment_id, row.unsubscribe_token);
   const spent = usd(row.cost_usd);
-  const subject = `Shipped: ${title}`;
+  const subject = shippedSubject(row, title);
+  const after = nextParts(row, next);
   const lines = [
     'A card you funded has shipped.',
     '',
@@ -78,6 +133,7 @@ export function composeNotice(row, play) {
     `See the card: ${cardUrl}`,
     `Play the game: ${play}`,
     '',
+    ...after.lines,
     'Thank you for funding it.',
     'Mob Machine',
     '',
@@ -88,6 +144,7 @@ export function composeNotice(row, play) {
     '<p>A card you funded has shipped.</p>',
     `<p><strong>${escapeHtml(title)}</strong> is live. The agents spent ${escapeHtml(spent)} building it.</p>`,
     `<p><a href="${escapeHtml(cardUrl)}">See the card</a> · <a href="${escapeHtml(play)}">Play the game</a></p>`,
+    ...after.html,
     '<p>Thank you for funding it.<br>Mob Machine</p>',
     `<p>You get this email once for each card your contribution reached when it ships. <a href="${escapeHtml(stop)}">Stop ship notices</a></p>`,
   ].join('\n');
@@ -102,11 +159,12 @@ export function composeNotice(row, play) {
 
 // The email for one follow that shipped: as the ship notice, for a card the player followed rather
 // than funded, with its own unsubscribe, which ends every follow of the profile.
-export function composeFollowNotice(row, play) {
+export function composeFollowNotice(row, play, next = null) {
   const title = oneLine(row.card_title);
   const cardUrl = `${SITE_URL}/card/${row.card_id}`;
   const stop = followUnsubscribeUrl(row.user_id, row.unsubscribe_token);
   const spent = usd(row.cost_usd);
+  const after = nextParts(row, next);
   const lines = [
     'A card you follow has shipped.',
     '',
@@ -116,6 +174,7 @@ export function composeFollowNotice(row, play) {
     `See the card: ${cardUrl}`,
     `Play the game: ${play}`,
     '',
+    ...after.lines,
     'Mob Machine',
     '',
     'You asked to be told when this card ships, so this is the one email for it.',
@@ -125,11 +184,12 @@ export function composeFollowNotice(row, play) {
     '<p>A card you follow has shipped.</p>',
     `<p><strong>${escapeHtml(title)}</strong> is live. The agents spent ${escapeHtml(spent)} building it.</p>`,
     `<p><a href="${escapeHtml(cardUrl)}">See the card</a> · <a href="${escapeHtml(play)}">Play the game</a></p>`,
+    ...after.html,
     '<p>Mob Machine</p>',
     `<p>You asked to be told when this card ships, so this is the one email for it. <a href="${escapeHtml(stop)}">Stop emails for cards you follow</a></p>`,
   ].join('\n');
   return {
-    subject: `Shipped: ${title}`,
+    subject: shippedSubject(row, title),
     text: `${lines.join('\n')}\n`,
     html,
     headers: { 'List-Unsubscribe': `<${stop}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
@@ -191,6 +251,12 @@ export async function runNotices({ env, dryRun = false, fetchFn = fetch, now = n
   const due = await db.rpc('ship_notices_due', { p_limit: NOTICES_PER_RUN });
   if (!Array.isArray(due)) throw new Error('ship_notices_due did not answer a list');
   const counts = { due: due.length, sent: 0, no_address: 0, failed: 0, skipped: 0, stripe_unread: 0 };
+  // The next open card per game, read once, only when there is an email to write.
+  let nextCards = null;
+  const nextFor = async (folder) => {
+    nextCards ??= await nextOpenCards(db);
+    return nextCards[folder] ?? null;
+  };
   const failures = [];
   let sends = 0;
   for (const row of due) {
@@ -204,7 +270,7 @@ export async function runNotices({ env, dryRun = false, fetchFn = fetch, now = n
       continue;
     }
     const to = sessionEmail(session);
-    const notice = composeNotice(row, play);
+    const notice = composeNotice(row, play, await nextFor(row.card_folder));
     if (dryRun) {
       counts[to ? 'sent' : 'no_address'] += 1;
       continue;
@@ -284,7 +350,7 @@ export async function runNotices({ env, dryRun = false, fetchFn = fetch, now = n
     }
     if (sends > 0) await sleep(SEND_GAP_MS);
     sends += 1;
-    const result = await sendNotice({ key: env.RESEND_API_KEY, fetchFn, to, notice: composeFollowNotice(row, play) });
+    const result = await sendNotice({ key: env.RESEND_API_KEY, fetchFn, to, notice: composeFollowNotice(row, play, await nextFor(row.card_folder)) });
     await db.rpc('follow_notice_settle', { ...pair, p_status: result.ok ? 'sent' : 'failed', p_provider_id: result.ok ? result.id : null });
     if (result.ok) follows.sent += 1;
     else {

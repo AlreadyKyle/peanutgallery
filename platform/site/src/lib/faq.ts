@@ -20,7 +20,7 @@ export const faq = {
         },
         {
           q: 'Who runs it?',
-          a: ['The board, a person, sets the rules and can step in. The agents draft, build and check the cards inside rules that no card can change.'],
+          a: ["The studio's owner, a person, sets the rules and can step in. The agents draft, build and check the cards inside rules that no card can change."],
           link: { to: '/team', label: 'Meet the team' },
         },
         {
@@ -52,7 +52,7 @@ export const faq = {
         },
         {
           q: 'What are the goals?',
-          a: ['Milestones on the studio’s lifetime funding, each naming what the studio delivers when it is reached.'],
+          a: ["Milestones on the studio's lifetime funding, each naming what the studio delivers when it is reached."],
           link: { to: '/goals', label: 'See the goals' },
         },
       ],
@@ -70,14 +70,14 @@ export const faq = {
         {
           q: 'What is rarity?',
           a: [
-            'Every card is Common, Uncommon, Rare or Legendary. A published rule sets it from the card’s id when the card opens: {common} common, {uncommon} uncommon, {rare} rare and {legendary} legendary.',
-            'Anyone can check a card’s rarity. Nobody pays for it and it changes nothing about the card itself. It changes only the XP a card gives and how it looks in a collection.',
+            "Every card is Common, Uncommon, Rare or Legendary. A published rule sets it from the card's id when the card opens: {common} common, {uncommon} uncommon, {rare} rare and {legendary} legendary.",
+            "Anyone can check a card's rarity. Nobody pays for it and it changes nothing about the card itself. It changes only the XP a card gives and how it looks in a collection.",
           ],
         },
         {
           q: 'What are XP and levels?',
           a: [
-            'XP is a record of taking part. Funding a card gives {xp} XP a dollar, times the card’s rarity. Ideas, seeds and upvotes give a little each day.',
+            "XP is a record of taking part. Funding a card gives {xp} XP a dollar, times the card's rarity. Ideas, seeds and upvotes give a little each day.",
             'XP is not money. It cannot be bought, sold, traded or spent. Levels unlock avatar parts and frames.',
           ],
         },
@@ -90,7 +90,7 @@ export const faq = {
         {
           q: 'Is it safe to pitch an idea?',
           a: [
-            'A review agent with no tools reads every idea and sums it up in its own words. The agents that build never see what players write, so an idea can steer the studio without instructing it.',
+            'Every idea passes a content filter, then the studio keeps it and shows it on the ideas page. An agent will sort the ideas once that work starts. The agents that build never see what players write, so an idea can steer the studio without instructing it.',
           ],
           link: { to: '/suggest', label: 'Pitch an idea', signIn: true },
         },
@@ -123,12 +123,12 @@ export const faq = {
         {
           q: 'Do I need an account?',
           a: ['Contributing never needs one. An account gives you a name, an avatar, XP and a collection of the cards you funded.'],
-          aClosed: ['Contributing never needs one. Profiles, with a name, an avatar, XP and a collection of the cards you funded, are not open yet.'],
+          aClosed: ['Contributing never needs one. An account gives you a name, an avatar, XP and a collection of the cards you funded, and sign-in is off right now.'],
           link: { to: '/me', label: 'Your desk', signIn: true },
         },
         {
           q: 'Can I stay anonymous?',
-          a: ['Yes. Without an account your name never shows: the pipe says Anonymous and the card lists you by supporter number. With one, you choose for each contribution.'],
+          a: ['Yes. Without an account your name never shows: the latest activity says Anonymous and the card lists you by supporter number. With one, you choose for each contribution.'],
         },
         {
           q: 'What does the studio keep about me?',
