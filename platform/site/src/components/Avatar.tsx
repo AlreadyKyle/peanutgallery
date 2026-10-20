@@ -288,7 +288,7 @@ export function avatarParts(features: AvatarFeatures): ReactNode[] {
 
 /**
  * An agent's picture, drawn from its species note. The note is also the picture's text alternative,
- * so a screen reader hears what the drawing shows. Its eyes are always open (the board, 19 October
+ * so a screen reader hears what the drawing shows. Its eyes are always open (the owner, 19 October
  * 2026), whether it works, waits, is paused or the agents are offline.
  * `idle` gives it the live studio's idle bob (lib/idle.ts): the body rises and settles over its
  * ground shadow on its own rhythm, seeded from the note, and is drawn still under reduced motion.

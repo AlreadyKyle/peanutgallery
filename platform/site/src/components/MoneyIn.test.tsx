@@ -119,10 +119,10 @@ function snapshotWith(money: Money | null): Snapshot {
 }
 
 describe('the Funding band', () => {
-  it("names the board's test payment by the part of it in the pool, as public_money has it", () => {
+  it("names the studio's test payment by the part of it in the pool, as public_money has it", () => {
     // Production: a $1.00 payment whose agent credit, $0.5019, is board_test_usd (docs/specs/money-logic.md).
     render(<FundingLines snapshot={snapshotWith(books([], { board_test_usd: 0.5019 }))} />);
-    expect(screen.getByText("The pool includes $0.50 of the board's own test payment; it funds no card.")).toBeTruthy();
+    expect(screen.getByText("The pool includes $0.50 of the studio's own test payment; it funds no card.")).toBeTruthy();
     expect(document.body.textContent).not.toContain('$1.00');
     cleanup();
     render(<FundingLines snapshot={snapshotWith(books([], { board_test_usd: 0 }))} />);

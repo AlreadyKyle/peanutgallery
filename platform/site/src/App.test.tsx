@@ -120,7 +120,7 @@ describe('Terms, Privacy, Refunds and Contact', () => {
         expect(within(main).getByRole('region', { name: section.heading })).toBeTruthy();
       }
       expect(main.textContent).not.toMatch(/[{}]/);
-      // The pages go to the board for review, but nothing public says draft.
+      // The pages are the studio's own drafts, but nothing public says draft.
       expect(main.textContent).not.toMatch(/draft/i);
       expect(within(main).queryAllByText(legal.privacyUpdated)).toHaveLength(footer === null ? 0 : 1);
       expect(screen.queryByText(copy.pitchBody)).toBeNull();

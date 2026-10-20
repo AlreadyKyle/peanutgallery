@@ -50,7 +50,7 @@ export function NotOnCardStat({ snapshot }: { snapshot: Snapshot }) {
  * Under the Funding band's figures: the one case where Not on a card yet funds a card that is not the
  * next to open (a rule, so it is said whether or not the figures loaded; a full-width line, since
  * beside the figure it would stand a tall column against a one-line amount), then the shortfall while
- * there is one and the board's test payment while it is booked.
+ * there is one and the studio's test payment while it is booked.
  */
 export function FundingLines({ snapshot }: { snapshot: Snapshot }) {
   const money = loadedMoney(snapshot);

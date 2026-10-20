@@ -376,7 +376,7 @@ describe('no display name (docs/specs/legal-copy.md)', () => {
 });
 
 describe('the card page state line and who made what', () => {
-  it('says who made what in two or three short sentences: the agents, the code they wrote and the board', () => {
+  it('says who made what in two or three short sentences: the agents, the code they wrote and the owner', () => {
     const body = copy.whoMadeWhat.body;
     expect(body.length).toBeGreaterThanOrEqual(2);
     expect(body.length).toBeLessThanOrEqual(3);
@@ -388,7 +388,8 @@ describe('the card page state line and who made what', () => {
     // It sits under the art-policy line on /how-it-works, so it does not say that line again.
     expect(text).not.toContain(legal.artPolicy);
     expect(text).not.toMatch(/drawn by code/);
-    expect(text).toMatch(/board/);
+    expect(text).toMatch(/owner/);
+    expect(text).not.toMatch(/board/i);
   });
 
   it('keeps the build clock to whole minutes, with no seconds and no countdown', () => {

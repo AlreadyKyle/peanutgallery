@@ -134,7 +134,7 @@ describe('fundableCards, nextInLine and inFundingOrder (payment.ts, kernel)', ()
     // The vetoed card takes no money, so home neither counts it as open nor draws it; the refunded
     // card is funded, so it stays queued.
     expect(groupCards(cards, fundingPlace(loaded)).fund.map((c) => c.id)).toEqual(['picked', 'open']);
-    // Home draws the waterfall's order, the one /contribute offers: a card picked by the board that
+    // Home draws the waterfall's order, the one /contribute offers: a card picked by the studio that
     // the order puts second is second.
     const reordered = snapshot(cards, books(['open', 'picked']));
     expect(groupCards(cards, fundingPlace(reordered)).fund.map((c) => c.id)).toEqual(['open', 'picked']);
@@ -167,7 +167,7 @@ describe('shippedOrder', () => {
 });
 
 describe("home's fund group with the order unread", () => {
-  it("draws the roadmap's order: the board's rank, unranked last, then the oldest", () => {
+  it("draws the roadmap's order: the backlog's rank, unranked last, then the oldest", () => {
     const cards = [
       card({ id: 'unranked-new', created_at: '2026-09-14T00:00:02Z' }),
       card({ id: 'rank-2-voted', stage: 'voted', rank: 2 }),
@@ -303,7 +303,7 @@ describe('visibleFilters', () => {
 
 
 describe("nextUp (home's Next up lane)", () => {
-  it('holds only approved agent cards waiting to open, the soonest first: the backlog and board work stay off the site', () => {
+  it('holds only approved agent cards waiting to open, the soonest first: the backlog and kernel work stay off the site', () => {
     const cards = [
       card({ id: 'board-next', horizon: 'next', rank: 1, board_work: true }),
       card({ id: 'plan-later', horizon: 'later', rank: 1 }),

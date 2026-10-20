@@ -424,7 +424,7 @@ async function moneyBandsDrawn(page: Page, label: string, path: string): Promise
     await expect(stopped.getByText('Not available right now.')).toBeVisible();
     return;
   }
-  await expect(funding.getByText("The pool includes $0.50 of the board's own test payment; it funds no card.")).toBeVisible();
+  await expect(funding.getByText("The pool includes $0.50 of the studio's own test payment; it funds no card.")).toBeVisible();
   if (label === 'a shortfall') await expect(funding.getByText('Waiting cards are short by $0.45 until new money arrives.')).toBeVisible();
   await expect(page.getByRole('region', { name: 'Money in' }).locator('.stat')).not.toHaveCount(0);
   await expect(stopped.getByRole('region', { name: 'Paused' }).locator('.tag[data-state="paused"]')).toBeVisible();

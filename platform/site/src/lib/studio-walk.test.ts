@@ -86,7 +86,7 @@ describe('the studio floor', () => {
         const offline: Snapshot = { ...room, cards: [building], supply: { drafting: true, offline: true, short: true, reason: null, runs_today: 0, run_limit: 12, next_check_at: null } };
         const places = placeAgents(offline, plan);
         expect(places).toHaveLength(count);
-        // Never asleep (the board, 19 October 2026): each one is idle, so it wanders, and says the agents are offline.
+        // Never asleep (the owner, 19 October 2026): each one is idle, so it wanders, and says the agents are offline.
         for (const place of places) {
           expect(['chatting', 'reading', 'resting']).toContain(place.activity);
           expect([place.card, place.doing]).toEqual([null, copy.agentsOffline]);
@@ -99,7 +99,7 @@ describe('the studio floor', () => {
       }
     });
 
-    it(`has a role the board paused putter about the room with the rest, saying it is paused, in the ${era}`, () => {
+    it(`has a role the owner paused putter about the room with the rest, saying it is paused, in the ${era}`, () => {
       const room = idleRoom(3);
       const paused: Snapshot = { ...room, roles: room.roles.map((role, i) => (i === 1 ? { ...role, paused: true, paused_reason: 'A fix first.' } : role)) };
       const places = placeAgents(paused, plan);

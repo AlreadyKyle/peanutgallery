@@ -49,7 +49,7 @@ const PLAIN_PATH_DEEP = /^\/[a-z0-9-]+(\/[a-z0-9-]+)?$/;
 
 // While sign-in is closed (lib/sign-in.ts) the frame drops the footer's Your desk, which needs a profile
 // (the Menu's own desk link already waits on the same answer). The top bar keeps Ideas: anyone can read
-// the board and how the review agent works, and the page says pitching waits on profiles.
+// the ideas and how the review agent works, and the page says pitching waits on profiles.
 const FOOTER_NEEDS_PROFILE: readonly string[] = ['/me'];
 
 /**
@@ -97,12 +97,6 @@ function useRouteChange(onRouteChange: (() => void) | undefined) {
 }
 
 /**
- * The skip link's words. copy.ts is where the site's words live; this one waits here until it moves
- * there, so the frame's first focus stop is never missing.
- */
-const SKIP_TO_CONTENT = 'Skip to content';
-
-/**
  * The first focus stop on every page (WCAG 2.4.1): hidden until focused, it moves focus past the top
  * bar to the page's main element. Each page draws its own main, so the link finds it when pressed.
  */
@@ -119,7 +113,7 @@ function SkipLink() {
         main.focus();
       }}
     >
-      {SKIP_TO_CONTENT}
+      {copy.skipToContent}
     </a>
   );
 }

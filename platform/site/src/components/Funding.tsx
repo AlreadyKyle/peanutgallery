@@ -10,7 +10,7 @@ import type { Card, Snapshot } from '../lib/source';
 import { Stat } from './Stat';
 import { LinkedText } from './TextPage';
 
-// A card's money: its funding bar and spec rows (and the "$0.00 of $3.00 · 0 contributors" line a
+// A card's money: its funding bar and spec rows (and the "$0.00 of $3.00 · 0 supporters" line a
 // /contribute choice shows), what a building or shipped card has spent, the Fund this card link, the
 // coin mark, and the worked example's figures.
 // Kernel (docs/specs/board-site.md): the card's own layout (Card.tsx) places these and cannot change
@@ -21,7 +21,7 @@ export function contributorsLine(count: number): string {
 }
 
 /**
- * "$0.00 of $3.00 · 0 contributors" for a card with a target, or null. The count is left out when
+ * "$0.00 of $3.00 · 0 supporters" for a card with a target, or null. The count is left out when
  * the funding figures did not load, instead of showing 0.
  */
 export function fundingCaption(card: Card, snapshot: Snapshot): string | null {
@@ -76,7 +76,7 @@ export function cardContributors(card: Card, snapshot: Snapshot): number | null 
 export type SpecRow = 'funded' | 'contributors';
 
 /**
- * A card's spec rows: "Funded $1.50 of $3.00", then "Contributors 2" when the count is known. A row
+ * A card's spec rows: "Funded $1.50 of $3.00", then "Supporters 2" when the count is known. A row
  * in `changed` carries the change marker until the next poll (DESIGN.md, the change rule).
  */
 export function SpecRows({ card, snapshot, changed = [] }: { card: Card; snapshot: Snapshot; changed?: readonly SpecRow[] }) {
@@ -199,7 +199,7 @@ export function CardMoney({
   } else if (liveFundLink(card, snapshot, mode)) {
     // A sample or example card links nowhere. The link covers its whole card (styles.css, The whole
     // card funds), so a press anywhere on it funds. The agreement is said once beside the cards
-    // (FundAgreement), not on every card (the board, 27 Sep 2026).
+    // (FundAgreement), not on every card (the owner, 27 Sep 2026).
     action = (
       <a className="button button-secondary button-block card-fund" href={fundLink(env.stripePaymentLinkUrl, card.id)} aria-describedby={titleId}>
         {legal.fundThis}
@@ -221,7 +221,7 @@ export function CardMoney({
 }
 
 /**
- * "$1.23 spent · 3 contributors · shipped 15 Sep 2026"; a card nobody funded names its source
+ * "$1.23 spent · 3 supporters · shipped 15 Sep 2026"; a card nobody funded names its source
  * instead. Only studio-billed spend is public, so a card built on the founder's time shows none.
  * When the funding figures did not load, a goal card leaves its count out instead of showing 0.
  */
@@ -230,7 +230,7 @@ export function shippedCaption(card: Card, snapshot: Snapshot, source: string): 
 }
 
 /**
- * A shipped row's money line when its date sits in the row's rail: "$1.23 spent · 3 contributors",
+ * A shipped row's money line when its date sits in the row's rail: "$1.23 spent · 3 supporters",
  * or the card's source when nobody funded it. The same parts as shippedCaption, without the date.
  */
 export function shippedMeta(card: Card, snapshot: Snapshot, source: string): string {
@@ -325,7 +325,7 @@ export function CardFacts({ detail, onFace = false, children }: { detail: CardDe
 }
 
 /**
- * A shipped card's stamp line over its facts (the board's card-page pass): the page's own time words
+ * A shipped card's stamp line over its facts (the owner's card-page pass): the page's own time words
  * ("Live 40 minutes after work started, 14:00 to 14:40") with what studio-billed work on it cost, the
  * cost row's figure. A card that cost nothing leaves the cost out, as its shipped caption does.
  */

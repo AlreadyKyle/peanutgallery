@@ -22,7 +22,7 @@ import { StudioRoom, type StationPiece, type StationTag } from './StudioRoom';
 // Home's floor (docs/specs/place.md): the studio is the place, and its stations are the page's map.
 // Each station stands on a piece of the room (the whiteboard, the hopper, the desks, the dock, the
 // lounge's sofa) and is a link to its part of the page; the part in view lights its station, in the
-// room on the plate and in the rail's small map beside the stations. The order keeps the board's
+// room on the plate and in the rail's small map beside the stations. The order keeps the owner's
 // (decisions 67 and 70): the cards to fund first, one scroll from the top, then the first game, then
 // the players' ideas, then how the cards move (Next up, Building, Shipped). Next up has no piece of its
 // own in the room, so it has no tag; the rail lists it.
@@ -143,7 +143,7 @@ export function FloorRail({ snapshot, lit, counts, ideas = true }: { snapshot: S
 
 /**
  * A station's part of the floor: its head (glyph and where in the room), its heading and what it is,
- * then its body. No number is drawn (the board, 18 October 2026: no 01, 02 over sections); `index`
+ * then its body. No number is drawn (the owner, 18 October 2026: no 01, 02 over sections); `index`
  * is the station's place on the walk, kept for the callers' order. A quiet part has no cards to show:
  * its heading is set a step smaller, and two quiet parts in a row sit side by side from 48rem, so an
  * empty station never takes a screen of its own.
@@ -175,7 +175,7 @@ export function StationCards({ cards, snapshot, planned = false, empty }: { card
   );
 }
 
-/** The ideas board's top ideas, read from the cached public list, declined ones left out. */
+/** The top ideas, read from the cached public list, declined ones left out. */
 export const FLOOR_IDEAS = 3;
 
 export function useTopIdeas() {
@@ -185,7 +185,7 @@ export function useTopIdeas() {
 }
 
 /**
- * Home always walks past the Ideas station. While sign-in is closed it reads the board and says that
+ * Home always walks past the Ideas station. While sign-in is closed it reads the ideas and says that
  * pitching waits on profiles, rather than leaving the players' ideas off the floor, the rail and the map.
  */
 export function useIdeasStation() {
@@ -204,7 +204,7 @@ export function useIdeasStation() {
  */
 export function IdeasStation({ index, station }: { index: number; station: ReturnType<typeof useIdeasStation> }) {
   const signedIn = useSignedIn();
-  // While sign-in is closed nobody can pitch, so the station reads the board and says why.
+  // While sign-in is closed nobody can pitch, so the station reads the ideas and says why.
   const { pitching, ideas } = station;
   return (
     <StationPart id="ideas" index={index} title={copy.ideas.title} intro={copy.ideas.intro}>
@@ -227,7 +227,7 @@ export function IdeasStation({ index, station }: { index: number; station: Retur
           ))}
         </ol>
       )}
-      {/* An empty board's tile already says why nobody can pitch; a board with ideas says it under them. */}
+      {/* An empty list's tile already says why nobody can pitch; a list with ideas says it under them. */}
       {pitching || ideas.items.length === 0 ? null : <p className="small station-note">{copy.ideas.closed}</p>}
       <p className="hero-actions station-actions">
         {pitching ? (

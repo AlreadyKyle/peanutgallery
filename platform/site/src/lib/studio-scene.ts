@@ -115,8 +115,8 @@ export function roomPlan(era: EraKey, decor?: readonly string[]): RoomPlan {
   };
 }
 
-// Every activity is awake (the board, 19 October 2026): an agent with no work, the agents offline or a role
-// the board paused, putters about the room like any idle agent; only work changes what it does.
+// Every activity is awake (the owner, 19 October 2026): an agent with no work, the agents offline or a role
+// the owner paused, putters about the room like any idle agent; only work changes what it does.
 export type AgentActivity = 'drafting' | 'building' | 'checks' | 'review' | 'shipping' | 'chatting' | 'reading' | 'resting';
 
 export type AgentPlace = {
@@ -157,7 +157,7 @@ export function placeAgents(snapshot: Snapshot, plan: RoomPlan, now: number = Da
   const idle: Role[] = [];
   const say = (text: string, card: Pick<Card, 'title'> | null) => (card === null ? text : text.replace('{title}', card.title));
   // While the agents are offline nobody works: every agent putters about the room as an idle one does,
-  // and says the agents are offline (docs/specs/honest-status.md). A role the board paused putters too.
+  // and says the agents are offline (docs/specs/honest-status.md). A role the owner paused putters too.
   const offline = agentsOffline(snapshot);
   const says = new Map<string, string>();
   for (const role of roomRoles(snapshot)) {

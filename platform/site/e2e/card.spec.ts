@@ -206,7 +206,7 @@ test.describe('a planned card', () => {
     for (const [id, label, reason] of [
       [PLANNED_CARD_ID, 'Planned and not built yet', null],
       [OPENS_SOON_ID, 'Approved, opens soon', null],
-      [VETOED_ID, 'Held by the board', VETO_REASON],
+      [VETOED_ID, 'Held by the studio', VETO_REASON],
     ] as const) {
       await page.goto(`/card/${id}`);
       const state = page.locator(`[data-planned="${id}"]`);
@@ -220,7 +220,7 @@ test.describe('a planned card', () => {
   });
 });
 
-test('an open card says each figure once: the face has Funded and Contributors, the facts the rest', async ({ page }) => {
+test('an open card says each figure once: the face has Funded and Supporters, the facts the rest', async ({ page }) => {
   await page.goto(`/card/${OPEN_CARD_ID}`);
   const face = page.locator('.replay .card-solo li.card');
   await expect(face).toHaveAttribute('data-face', 'open');

@@ -74,7 +74,7 @@ for (const viewport of WIDTHS) {
       await expect(money.locator('.pool-line svg.coin')).toHaveCount(1);
       // The split is told on /how-it-works and /contribute, not again on home.
       await expect(money.getByText('Unless you change it on the Fund a card page', { exact: false })).toHaveCount(0);
-      await expect(money.getByText("The agents' share pays only for the AI model time that builds funded cards", { exact: false })).toHaveCount(0);
+      await expect(money.getByText("The agents' share pays for the AI model time that drafts, grades and builds cards", { exact: false })).toHaveCount(0);
       await expect(money.locator('ul.rows li')).toHaveCount(3);
       await expect(money.getByRole('link', { name: 'Full ledger' })).toHaveAttribute('href', '/ledger');
 

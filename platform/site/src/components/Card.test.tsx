@@ -302,10 +302,10 @@ describe('the AI-agent byline (docs/specs/agent-workflows.md)', () => {
     expect(li.querySelector('.card-summary')?.nextElementSibling).toBe(byline);
   });
 
-  it('says an AI agent wrote it when the roles did not load, and nothing on a card the board filed', () => {
+  it('says an AI agent wrote it when the roles did not load, and nothing on a card the studio filed', () => {
     expect(face(card({ source: 'agent', drafter_role_id: 'r-designer' }), []).querySelector('.card-byline')?.textContent).toBe(copy.writtenByAgent);
     cleanup();
-    const board = face(card({ source: 'board', summary: 'Filed by the board.', drafter_role_id: null }), [designer]);
+    const board = face(card({ source: 'board', summary: 'Filed by the studio.', drafter_role_id: null }), [designer]);
     expect(board.querySelector('.card-byline')).toBeNull();
     expect(board.textContent).not.toContain('AI agent');
   });
@@ -321,7 +321,7 @@ describe('the AI-agent byline (docs/specs/agent-workflows.md)', () => {
     const parts = (el: Element) => [...el.children].map((child) => child.className).filter((name) => !name.startsWith('rarity-'));
     expect(parts(li)).toEqual(['card-index', '', 'card-text', 'card-bottom']);
     cleanup();
-    const board = face(card({ source: 'board', summary: 'Filed by the board.', drafter_role_id: null }), [designer]);
+    const board = face(card({ source: 'board', summary: 'Filed by the studio.', drafter_role_id: null }), [designer]);
     expect(board.querySelector('.card-text')).toBeNull();
     expect(parts(board)).toEqual(['card-index', '', 'card-summary', 'card-bottom']);
   });

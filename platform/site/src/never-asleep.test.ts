@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// The board, 19 October 2026, asked twice: the agents are never drawn asleep, in the studio room, on
+// The owner, 19 October 2026, asked twice: the agents are never drawn asleep, in the studio room, on
 // /team, on home or anywhere else. With no work, while a role is paused and while the agents are
 // offline, they putter about the room like any idle agent; only work changes what they do. No closed
 // eyes, no sleep mark and no sleeping words. This scan fails if any of them comes back.

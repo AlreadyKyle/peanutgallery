@@ -410,7 +410,7 @@ main > .band:first-child,
 /* Top bar ---------------------------------------------------------------
    The mark (the name beside it from 32rem), Play, Contribute and Menu in a 60px row on the
    first band's ink. Menu opens the page links as an inline list under the row; from 64rem the links
-   sit in the row and Menu goes. Below 22.5rem Play moves into the list. Sticky (the board,
+   sit in the row and Menu goes. Below 22.5rem Play moves into the list. Sticky (the owner,
    18 October 2026: the bar went away once the page scrolled): it stays at the window's top on every
    page, over everything, on its own ground. App.tsx measures it into --bar, and every other sticky
    block and every link to a section stops under it. */
@@ -691,7 +691,7 @@ nav a.active {
 
 /* The index: every section after the first band opens on a 2px rule in the text colour, the brand's
    spec-sheet line: it gives each section an edge, so a wide band reads as ruled, never as empty
-   ground. No number sits over it (the board, 18 October 2026): the heading under it is the label. */
+   ground. No number sits over it (the owner, 18 October 2026): the heading under it is the label. */
 /* Blocks whose heading is not a section's first child take the same rule: how it works' video and
    steps, home's first game with the explainer (one rule over the pair) and /contribute's two
    headings. */
@@ -788,7 +788,7 @@ main.sheet > .band:not(:first-child) > .section > h2:first-child + .faq-item {
 
 /* The ledger's funding figures load into the page's first screen: while they load, their line holds
    about the room the figures take, so the note and the band under them do not jump when the figures
-   arrive (the board, 18 October 2026: the ledger shifted as it loaded). The room is a little under the
+   arrive (the owner, 18 October 2026: the ledger shifted as it loaded). The room is a little under the
    figures' height at each width, so a short list never leaves a gap. */
 .section:has(> #funding) > p[aria-busy='true'] {
   min-height: calc(50rem - 40vw);
@@ -802,7 +802,7 @@ main.sheet > .band:not(:first-child) > .section > h2:first-child + .faq-item {
 
 /* A community list's loading line holds the room of the answer that takes its place, so the sections
    under it do not jump when it arrives (the full pass: /suggest and /seeds moved 104px at 768px,
-   /goals 48px). The ideas board and the seed gallery hold their empty tile (its dashed edges, padding,
+   /goals 48px). The ideas list and the seed gallery hold their empty tile (its dashed edges, padding,
    line and button), the least a first answer draws; the goals track holds the total and the line
    under it. The line ends its section as the answer does, with no lede's margin under it (on the
    sheet's grid that margin does not collapse and would hold 40px more than the answer). */
@@ -988,7 +988,7 @@ main.card-page .section > h2 {
 }
 
 /* The brief the agents get: a native disclosure, closed by default, its summary a 44px target that
-   takes one line of layout (as the roadmap's board work). */
+   takes one line of layout (as the roadmap's kernel work). */
 .card-brief > summary {
   padding-block: max(0px, calc((var(--target) - 1lh) / 2));
   margin-block: calc(-1 * max(0px, calc((var(--target) - 1lh) / 2)));
@@ -1214,7 +1214,7 @@ button.link:hover:not(:disabled) {
   color: var(--ink);
 }
 
-/* The whole card funds (the board, 27 Sep 2026): on a card with a live Fund this card link, the
+/* The whole card funds (the owner, 27 Sep 2026): on a card with a live Fund this card link, the
    link's box covers the card, so a press anywhere on it goes to checkout. On hover the card lifts a
    few pixels straight up, its edge thickens to 3px (an outline, so nothing moves; no shadow, by the
    colour rules), and its Fund button takes its hover colour. */
@@ -1879,7 +1879,7 @@ button.link:hover:not(:disabled) {
   text-wrap: pretty;
 }
 
-/* /roadmap: each horizon's cards in groups, for players, the studio, then board work in a closed
+/* /roadmap: each horizon's cards in groups, for players, the studio, then kernel work in a closed
    disclosure, drawn open as a plain group when it is all the horizon holds (docs/specs/copy-pass.md).
    A group's heading keeps more space above than below, like a section's; the disclosure's summary is
    a 44px target around its heading. */
@@ -2184,7 +2184,7 @@ button.link:hover:not(:disabled) {
   margin-top: var(--space-1);
 }
 
-/* The team: every member, running or still to come, in the same box, one to a grid cell (the board,
+/* The team: every member, running or still to come, in the same box, one to a grid cell (the owner,
    26 Sep 2026; PLAN §10 decision 49). A box is a 1px hairline and the standard radius, never a
    card's 2px ink edge. From 48rem every box in a section is as tall as the tallest (Grid cells, below). */
 .team-grid {
@@ -2882,7 +2882,7 @@ input[type='radio'] {
 
 /* Home ---------------------------------------------------------------------- */
 
-/* Home's plate is one picture (docs/specs/brand.md, Home; the board, 18 October 2026): the pitch, its
+/* Home's plate is one picture (docs/specs/brand.md, Home; the owner, 18 October 2026): the pitch, its
    ask, the actions and the studio's state on the left; the live studio on the right, the room whole
    and in view when the page opens; and the pipe's newest row at the pitch's foot. Below 64rem they
    stack in that order. One headline: the ask is the lede, set at the lead size under the pitch,
@@ -2910,7 +2910,7 @@ input[type='radio'] {
 
 
 /* The live studio on the plate: the room stands in the dark band itself, with no screen around it
-   (the board, 18 October 2026: the white box set it apart from the scene). Its own walls and floor
+   (the owner, 18 October 2026: the white box set it apart from the scene). Its own walls and floor
    are paper's, so the room and the role cards draw exactly as they do on paper; only the era label,
    is told to screen readers only (below). */
 .home > .band:first-child > .live-studio {
@@ -2942,7 +2942,7 @@ input[type='radio'] {
 }
 
 
-/* The plate says only what the page needs at first sight (the board, 18 October 2026: the plate read
+/* The plate says only what the page needs at first sight (the owner, 18 October 2026: the plate read
    as wordy): the pitch, its ask and the two actions on the left; the room on the right; and the
    newest row of the pipe at the pitch's foot. The status line opens the Fund station instead. The
    room's label, how to read it and what the pipe is are told to screen readers, not drawn. */
@@ -2970,7 +2970,7 @@ input[type='radio'] {
   margin: 0 0 var(--space-3);
 }
 
-/* The room's label and its era are not drawn on the plate either (the board, 18 October 2026): the
+/* The room's label and its era are not drawn on the plate either (the owner, 18 October 2026): the
    room says what it is. Screen readers still hear both. */
 .home .live-studio-head > h2,
 .home .floor-plate .studio-era,
@@ -3511,7 +3511,7 @@ input[type='radio'] {
   }
 }
 
-/* Grid cells (the board, 26 Sep 2026; PLAN §10 decision 49): a grid of like items (the card grids,
+/* Grid cells (the owner, 26 Sep 2026; PLAN §10 decision 49): a grid of like items (the card grids,
    the team's grid and any .fill-grid) puts one item in each cell, so every item in a grid is one
    width. One column on a phone, two from 48rem, three from 72rem (below 72rem a third column squeezes
    card text until a short card is left hollow beside a long one). Nothing spans two columns and a
@@ -4178,7 +4178,7 @@ ol.timeline {
 }
 
 /* The written facts under the room are for screen readers and the keyboard: hidden until focus is in
-   them, then drawn as rows (the board, 17 October 2026: the role cards carry them for the eye). */
+   them, then drawn as rows (the owner, 17 October 2026: the role cards carry them for the eye). */
 .studio-facts:not(:focus-within) {
   position: absolute;
   width: 1px;
@@ -5701,7 +5701,7 @@ main.broadcast .broadcast-side > * {
 /* The floor (docs/specs/place.md) -------------------------------------------
    Home is the studio as a place: the room's stations are the page's map. The floor is wider than the
    reading pages (--wrap-floor). The top bar and footer take the floor's width on every page, so the
-   wordmark, the nav and the buttons never move from one page to the next (the board, 18 October
+   wordmark, the nav and the buttons never move from one page to the next (the owner, 18 October
    2026: leaving home moved the whole bar 48px), and home keeps one left edge. */
 
 .topbar > .wrap,

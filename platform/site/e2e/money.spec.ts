@@ -246,7 +246,7 @@ test.describe('/ledger Funding: Not on a card yet, the shortfall and the board t
       const funding = page.getByRole('region', { name: 'Funding' });
       await expect(funding.locator('.stat', { hasText: 'Not on a card yet' }).locator('dd')).toHaveText('$0.00');
       await expect(await ledgerLine(page, 'Waiting cards are short by $0.45 until new money arrives.')).toBeVisible();
-      await expect(await ledgerLine(page, "The pool includes $0.50 of the board's own test payment; it funds no card.")).toBeVisible();
+      await expect(await ledgerLine(page, "The pool includes $0.50 of the studio's own test payment; it funds no card.")).toBeVisible();
     });
   });
 });

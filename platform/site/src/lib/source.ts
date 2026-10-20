@@ -27,13 +27,13 @@ export type Card = {
   folder: string;
   /** Only a card on horizon now takes money or runs; next and later cards are planned, not built. */
   horizon: Horizon;
-  /** Order within a horizon, lowest first; null when the board has not ranked it. */
+  /** Order within a horizon, lowest first; null when it has no rank yet. */
   rank: number | null;
   /** The role that builds the card, or null. */
   executor_role_id: string | null;
   /**
    * The role that drafted the card when an agent wrote it (docs/specs/agent-workflows.md); null or
-   * absent for a card the board filed. The card then carries 'Written by the <role>, an AI agent'.
+   * absent for a card the studio filed. The card then carries 'Written by the <role>, an AI agent'.
    */
   drafter_role_id?: string | null;
   funding_target_usd: number;
@@ -54,12 +54,13 @@ export type Card = {
    * absent for a card that is not waiting to be dealt.
    */
   opens_at?: string | null;
-  /** The board has held the card back, with its reason; absent reads as not vetoed. */
+  /** The owner has held the card back, with its reason; absent reads as not vetoed. */
   board_vetoed?: boolean;
   board_veto_reason?: string | null;
   /**
-   * Board work (docs/specs/copy-pass.md, PLAN.md §4 Work): a change to how the studio runs, which the
-   * board makes itself and no card funds. /roadmap groups it apart. Absent reads as not board work.
+   * Kernel work (docs/specs/copy-pass.md, PLAN.md §4 Work; the column keeps its old name): a change to
+   * how the studio runs, made in a kernel pull request, which no card funds. /roadmap groups it apart.
+   * Absent reads as not kernel work.
    */
   board_work?: boolean;
   /**
@@ -126,9 +127,9 @@ export type FundingPlace = {
 
 /**
  * The books in one row, from public_money (docs/specs/money-logic.md): the money-in figures, which
- * leave out the board's own test payment and add up (received - fees - refunded - disputed +
+ * leave out the studio's own test payment and add up (received - fees - refunded - disputed +
  * corrections = reserve + studio + emergency fund + held + agent credit); Not on a card yet and the
- * shortfall; the board's test payment; the last reconcile with Stripe; and the order money fills
+ * shortfall; the studio's test payment; the last reconcile with Stripe; and the order money fills
  * cards in.
  */
 export type Money = {
@@ -191,7 +192,7 @@ export type Role = {
   status?: string | null;
   /** When a role that does not run yet starts, in one sentence; null when unset. */
   trigger?: string | null;
-  /** The board or the moderator has paused the role (docs/specs/agent-system-core.md), with its reason. */
+  /** The owner or the moderator has paused the role (docs/specs/agent-system-core.md), with its reason. */
   paused?: boolean;
   paused_reason?: string | null;
   /**
@@ -240,7 +241,7 @@ export type Snapshot = {
   cards: Card[];
   funding: Record<string, CardFunding>;
   launchedAt: string | null;
-  /** True while the board has paused the agents. False when the studio row did not load. */
+  /** True while the studio is paused. False when the studio row did not load. */
   paused: boolean;
   /**
    * True once the platform code lane is open (studio_state.platform_lane_open, docs/specs/board-site.md).
@@ -249,7 +250,7 @@ export type Snapshot = {
   platformLaneOpen?: boolean;
   /**
    * Why the studio is paused (public_studio.pause_reason): awaiting_credit, spend_limit, incident or
-   * board; null while it is not paused, when the reason is missing or when the studio row did not load.
+   * the code 'board' (the owner's pause); null while it is not paused, when the reason is missing or when the studio row did not load.
    */
   pauseReason?: string | null;
   totals: LedgerTotals;

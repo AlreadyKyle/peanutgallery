@@ -10,7 +10,9 @@ import { Refunds, RefundsVersion, Terms, TermsVersion } from './Legal';
 // Times are asserted in Toronto time, so the file passes whatever the process time zone is; the
 // Verification runs it with TZ=UTC and TZ=Pacific/Auckland too.
 
-const [V1, V2, V3] = TERMS_VERSIONS;
+const [V1, V2] = TERMS_VERSIONS;
+// The newest bundled version (version 4, docs/specs/governance-copy.md).
+const NEWEST = TERMS_VERSIONS[TERMS_VERSIONS.length - 1];
 const V1_AT = '2026-09-23T01:32:51+00:00';
 const V2_AT = '2026-09-24T15:00:00+00:00';
 const V1_TIME = '22 Sep 2026 at 21:32 Toronto time';
@@ -100,19 +102,20 @@ describe('/terms and /refunds', () => {
       expect(loading.getAttribute('aria-busy')).toBe('true');
       // In the header, where the version line goes, so the page keeps its full height and only this
       // line changes when the read answers.
-      expect(loading.closest('.hero')?.querySelector('h1')?.textContent, kind).toBe(V3![kind].title);
-      expect(h1(), kind).toEqual([V3![kind].title]);
-      expect(h2(screen.getByRole('main')), kind).toEqual(V3![kind].sections.map((section) => section.heading));
+      expect(loading.closest('.hero')?.querySelector('h1')?.textContent, kind).toBe(NEWEST![kind].title);
+      expect(h1(), kind).toEqual([NEWEST![kind].title]);
+      expect(h2(screen.getByRole('main')), kind).toEqual(NEWEST![kind].sections.map((section) => section.heading));
       cleanup();
     }
   });
 
   it('show the newest bundled words with the cannot-confirm notice when the read fails, returns no row or runs ahead of the build', async () => {
     const three = { version: 3, posted_at: '2026-09-25T15:00:00+00:00' };
-    for (const load of [fails(), answers([]), answers([...BOTH, three, { version: 4, posted_at: '2027-01-01T00:00:00Z' }])]) {
+    const four = { version: 4, posted_at: '2026-10-21T15:00:00+00:00' };
+    for (const load of [fails(), answers([]), answers([...BOTH, three, four, { version: 5, posted_at: '2027-01-01T00:00:00Z' }])]) {
       renderAt('/terms', load);
       const main = await settled();
-      expect(h2(main)).toEqual(V3!.terms.sections.map((section) => section.heading));
+      expect(h2(main)).toEqual(NEWEST!.terms.sections.map((section) => section.heading));
       expect(main.textContent).toContain('Mob Machine is operated by');
       const notice = main.querySelector('p.notice');
       expect(notice?.textContent).toBe(legal.termsUnconfirmed.replace('{email}', legal.contactEmail));
@@ -135,7 +138,7 @@ describe('/terms and /refunds', () => {
     });
     expect(screen.queryByText(legal.termsLoading)).toBeNull();
     expect(screen.getByRole('main').querySelector('p.notice')).not.toBeNull();
-    expect(h1()).toEqual([V3!.refunds.title]);
+    expect(h1()).toEqual([NEWEST!.refunds.title]);
   });
 });
 

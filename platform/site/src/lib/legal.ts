@@ -572,7 +572,7 @@ export const legal = {
         paragraphs: [
           'Supporter numbers are public on the cards your money reached.',
           'A number belongs to one receipt email, which the studio stores only as a one-way hash, so paying with two email addresses gives two numbers.',
-          "A profile's display name and avatar are public when you choose. Without a profile, nothing public shows a name or an email address.",
+          "A profile's name and avatar are public when you choose. Without a profile, nothing public shows a name or an email address.",
         ],
       },
       {
