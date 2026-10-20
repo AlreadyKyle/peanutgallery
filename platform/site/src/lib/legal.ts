@@ -62,7 +62,7 @@ export const legal = {
   contributorsOne: '1 contributor',
   contributorsMany: '{n} contributors',
   // One plain line under each figure, so nothing needs a tap to explain it.
-  describeAvailable: 'Agent money from contributions that is not spent yet, including the money on card bars.',
+  describeAvailable: 'Agent credit not spent yet: what is on card bars and what is waiting for a card.',
   // Added to the In the pool description when agent work has cost more than came in; the figure shows $0.00.
   shortfall: 'Agent work has cost {amount} more than contributions have paid in.',
   describeReserve: "10% of every contribution after Stripe's fee. It covers disputes first. Agents never spend it.",
@@ -70,6 +70,8 @@ export const legal = {
   describeHeld:
     "Agent credit above $50 from one person in one day, or above the studio's daily limit across everyone. It moves to In the pool after 14 days.",
   describeAgentSpend: 'Model usage paid for with contributions, priced at list rates.',
+  // Under Agent spend when part of it is on cards the site does not show yet (docs/specs/ledger-figures.md).
+  agentSpendUnlisted: 'Includes {usd} spent on cards not shown on the site yet.',
   tokensLine: '{in} in · {cached} cached · {out} out tokens',
   meterUnavailable: 'Figures are not available yet.',
   staleFigures: 'These figures could not refresh and may be out of date.',
@@ -260,11 +262,24 @@ export const legal = {
   notOnCard: 'Not on a card yet',
   describeNotOnCard: 'Agent credit that no open card could take, waiting for the next card to open.',
   notOnCardTopUp: CEILING_TOP_UP,
-  shortBy: 'Waiting cards are short by {usd} until new money arrives.',
-  // {usd} is public_money.board_test_usd: the part of the board's test payment that sits in the pool
-  // (its agent credit), not the payment itself; its reserve and emergency fund shares sit in those
-  // figures and its Stripe fee in none (docs/specs/money-logic.md).
-  boardTestLine: "The pool includes {usd} of the board's own test payment; it funds no card.",
+  shortBy:
+    'Not on a card yet is {usd} below zero: agent work spent that before any money on a card covered it, or a refund took back money already spent.',
+  // {usd} is public_money.board_test_usd: the part of the studio's test payment that sits in the pool
+  // (its agent credit), not the payment itself. The line for a document without the test payment's
+  // shares; testSharesLine names them (docs/specs/ledger-figures.md).
+  boardTestLine: "The pool includes {usd} of the studio's own test payment; it funds no card.",
+  // The balances hold the test payment's shares beyond the Money in figures: {paid} is what it paid,
+  // then its agent credit in the pool, its reserve and its emergency fund share.
+  testSharesLine:
+    "The pool, the reserve and the emergency fund include the studio's own {paid} test payment: {pool}, {reserve} and {incident}. It funds no card.",
+  // How the pool is made up, two ways, so a reader can add it up from the other figures
+  // (docs/specs/ledger-figures.md): what came in less what was spent, then where it is now.
+  poolFromLine: 'In the pool: {credit} of agent credit{test}, less {spend} of agent spend.',
+  poolFromTest: ' and {test} from the test payment',
+  poolSplitLine: 'That is {bars} unspent on card bars{test}{rest}.',
+  poolSplitTest: ', {test} of the test payment',
+  poolSplitFree: ' and {free} not on a card yet',
+  poolSplitShort: ', less the {short} by which Not on a card yet is below zero',
   // /ledger's Money in band: what supporters paid and where it went. The figures add up: received -
   // Stripe fees - refunded - disputed + corrections = reserve + studio + emergency fund + held + agent
   // credit (docs/specs/money-logic.md). The board's own test payment is in none of them.
@@ -282,7 +297,7 @@ export const legal = {
   disputed: 'Disputed',
   describeDisputed: "Contributions taken back through a bank dispute, less any the studio got back when the bank ruled for it.",
   corrections: 'Corrections',
-  describeCorrections: 'Changes the board recorded by hand to correct the books.',
+  describeCorrections: 'Changes the studio recorded by hand to correct the books.',
   toReserve: 'To the reserve',
   describeToReserve: "10% of every contribution after Stripe's fee. It covers disputes first.",
   toStudio: 'To the studio',
@@ -299,13 +314,17 @@ export const legal = {
   // /ledger's Stopped band: the rejected and paused cards, each with why and where its money is. The
   // one public list of them (docs/specs/money-surfaces.md); they appear on no other page.
   stoppedHeading: 'Stopped cards',
-  stoppedLede: 'Cards that stopped before they shipped, why, and where their money is.',
+  stoppedLede:
+    'Cards that stopped before they shipped, why, and where their money is. Money that moves from one card to the next is counted on each card it reaches.',
   pausedHeading: 'Paused',
   didntShipHeading: "Didn't ship",
-  pausedMoneyStays: 'Its money stays on it until it resumes or the board cancels it.',
-  fundedByOne: 'funded by {usd} from 1 supporter',
-  fundedByMany: 'funded by {usd} from {n} supporters',
-  fundedByAmount: 'funded by {usd}',
+  pausedMoneyStays: 'Its money stays on it until it resumes or is cancelled.',
+  // What reached a stopped card, which can include money released to it from another card; where it
+  // went is movedTo (docs/specs/ledger-figures.md).
+  fundedByOne: '{usd} reached it from 1 supporter',
+  fundedByMany: '{usd} reached it from {n} supporters',
+  fundedByAmount: '{usd} reached it',
+  fromOtherCards: '{usd} of it from other cards',
   movedTo: 'Its unspent money went to {places}.',
   movedPlace: '{place} ({usd})',
   anotherCard: 'another card',
@@ -370,6 +389,10 @@ export const legal = {
   costLabel: 'Cost from contributions',
   // The same figure on a card the agents have not started building: what drafting it cost.
   draftCostLabel: 'Drafting cost from contributions',
+  // What reached the card = its cost + what is unspent on its bar + what moved on to other cards or to
+  // Not on a card yet (docs/specs/ledger-figures.md). Each shows only when above zero.
+  unspentOnBarLabel: 'Unspent on its bar',
+  movedOnLabel: 'Moved on',
   supportersHeading: 'Supporters',
   supportersLede: 'Everyone whose money reached this card, by supporter number.',
   supporter: 'Supporter {n}',

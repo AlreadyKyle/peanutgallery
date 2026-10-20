@@ -72,7 +72,7 @@ No post uses an em dash (`docs/COPY.md`), names a supporter or gives a figure be
 - `deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/marketing_posts_test.ts platform/supabase/functions/_shared/migration_test.ts`
 - A dry run of the message builders over production's current cards, read with the publishable key through `site_cards()` (the due function does not exist in production until the migration is applied), printing each post and its length.
 - `pnpm verify`
-- After merge: the migration applied in production (`supabase_migrations.schema_migrations` lists `20261020000000`), then `gh workflow run ops-jobs.yml --repo AlreadyKyle/peanutgallery -f job=marketing` with no channel keys set prints `PASS: marketing: no channel has its keys; nothing to post` in the encrypted log.
+- After merge: the migration applied in production (`supabase_migrations.schema_migrations` lists `20261020200000`), then `gh workflow run ops-jobs.yml --repo AlreadyKyle/peanutgallery -f job=marketing` with no channel keys set prints `PASS: marketing: no channel has its keys; nothing to post` in the encrypted log.
 
 ## Evidence
 

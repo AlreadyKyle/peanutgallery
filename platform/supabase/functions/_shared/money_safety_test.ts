@@ -424,7 +424,11 @@ Deno.test("the money tables are append-only, and corrections are new rows", {
       const file = all.find((m) => m.name === "20260923000010_backup_role.sql")!;
       await db.exec(file.sql);
       // The file replaces ledger_identity and controller_figures; money-logic's versions come back.
+      // ledger-figures added columns to two of money-logic's views, which a view cannot drop, so they
+      // go first and ledger-figures' versions come back after (docs/specs/ledger-figures.md).
+      await db.exec(`drop view public.public_money; drop view public.public_stopped_cards;`);
       await db.exec(all.find((m) => m.name === "20260924200000_money_logic.sql")!.sql);
+      await db.exec(all.find((m) => m.name === "20261020100000_ledger_figures.sql")!.sql);
       assertEquals((await row(`select rolpassword is not null as kept from pg_authid where rolname = 'peanutgallery_backup'`)).kept, true);
     });
 
