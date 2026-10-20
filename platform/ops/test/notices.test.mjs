@@ -5,7 +5,7 @@ import { describe, test } from 'node:test';
 import { envFileProblems } from '../jobs/check-env.mjs';
 import { jobEnvProblems } from '../jobs/lib.mjs';
 import { main } from '../jobs/main.mjs';
-import { accountEmail, composeFollowNotice, composeNotice, followUnsubscribeUrl, NOTICE_FROM, NOTICES_PER_RUN, playUrl, runNotices, sessionEmail, unsubscribeUrl } from '../jobs/notices.mjs';
+import { accountEmail, composeFollowNotice, composeNotice, followUnsubscribeUrl, gameOf, nextOpenCards, NOTICE_FROM, NOTICE_REPLY_TO, NOTICES_PER_RUN, playUrl, runNotices, sessionEmail, unsubscribeUrl } from '../jobs/notices.mjs';
 
 const NOW = new Date('2026-10-11T09:07:00Z');
 const PLAY = 'https://play.mobmachine.games';
@@ -41,6 +41,13 @@ const follow = (n, extra = {}) => ({
   ...extra,
 });
 const FOLLOWER = (n) => `follower${n}@example.com`;
+const NEXT = { id: '00000000-0000-4000-8000-0000000000c2', title: 'A <faster> Cart', funded_usd: 0.52, funding_target_usd: 0.78 };
+const ORDER = [{ position: 1, card_id: '00000000-0000-4000-8000-0000000000d1', room_usd: 1 }, { position: 2, card_id: NEXT.id, room_usd: 0.26 }, { position: 3, card_id: '00000000-0000-4000-8000-0000000000d3', room_usd: 2 }];
+const ORDER_CARDS = [
+  { id: '00000000-0000-4000-8000-0000000000d1', title: 'A clearer ledger', folder: 'platform', funded_usd: '0.0000', funding_target_usd: '1.0000' },
+  { id: NEXT.id, title: 'A <faster>\nCart', folder: 'seed-1', funded_usd: '0.5200', funding_target_usd: '0.7800' },
+  { id: '00000000-0000-4000-8000-0000000000d3', title: 'Later Dust card', folder: 'seed-1', funded_usd: '0.0000', funding_target_usd: '2.0000' },
+];
 const ACCOUNTS = {
   [follow(1).user_id]: { id: follow(1).user_id, email: FOLLOWER(1), email_confirmed_at: '2026-10-01T00:00:00Z' },
   [follow(2).user_id]: { id: follow(2).user_id, email: FOLLOWER(2), email_confirmed_at: '2026-10-01T00:00:00Z' },
@@ -61,6 +68,8 @@ function fake({
   authDown = new Set(),
   followStuck = [],
   followClaimed = new Set(),
+  money = null,
+  cards = [],
 } = {}) {
   const calls = [];
   const settled = [];
@@ -110,6 +119,9 @@ function fake({
       return json(200, true);
     }
     if (url.pathname === '/rest/v1/rpc/follow_notices_stuck') return json(200, followStuck);
+    // The next open card: unanswered (money null) falls through to the plain 'ok' below.
+    if (url.pathname === '/rest/v1/public_money' && money !== null) return json(200, money);
+    if (url.pathname === '/rest/v1/cards' && money !== null) return json(200, cards);
     if (url.pathname.startsWith('/auth/v1/admin/users/')) {
       const id = decodeURIComponent(url.pathname.slice('/auth/v1/admin/users/'.length));
       if (authDown.has(id)) return json(500, { msg: 'down' });
@@ -145,7 +157,7 @@ describe('the ship notices env', () => {
 describe('the ship notice', () => {
   test('names the card, that it is live, what the agents spent, its page, the play address and the unsubscribe, and no address', () => {
     const notice = composeNotice(row(1), PLAY);
-    assert.equal(notice.subject, 'Shipped: Dust storms on the map');
+    assert.equal(notice.subject, 'Shipped in Dust: Dust storms on the map');
     assert.match(notice.text, /Dust storms on the map is live\./);
     assert.match(notice.text, /The agents spent \$1\.23 building it\./);
     assert.ok(notice.text.includes('See the card: https://mobmachine.games/card/00000000-0000-4000-8000-0000000000c1'));
@@ -156,6 +168,23 @@ describe('the ship notice', () => {
     assert.deepEqual(notice.headers, { 'List-Unsubscribe': `<${stop}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' });
     assert.equal(notice.idempotencyKey, 'ship-notice/00000000-0000-4000-8000-000000000001/00000000-0000-4000-8000-0000000000c1');
     assert.doesNotMatch(`${notice.text}${notice.html}`, /@/);
+  });
+
+  test('names no game for a card that changes none', () => {
+    assert.equal(gameOf('seed-1'), 'Dust');
+    assert.equal(gameOf('platform'), null);
+    assert.equal(composeNotice(row(1, { card_folder: 'platform' }), PLAY).subject, 'Shipped: Dust storms on the map');
+    assert.equal(composeNotice(row(1, { card_folder: 'platform' }), PLAY, NEXT).text.includes('Next for'), false);
+  });
+
+  test('points to the next open card in the game, with its funding', () => {
+    const notice = composeNotice(row(1), PLAY, NEXT);
+    assert.ok(notice.text.includes('Next for Dust: A <faster> Cart, $0.52 of $0.78 funded.\nFund it: https://mobmachine.games/card/00000000-0000-4000-8000-0000000000c2\n'));
+    assert.ok(notice.html.includes('<p>Next for Dust: A &lt;faster&gt; Cart, $0.52 of $0.78 funded. <a href="https://mobmachine.games/card/00000000-0000-4000-8000-0000000000c2">Fund it</a></p>'));
+    assert.equal(composeNotice(row(1), PLAY).text.includes('Next for'), false);
+    // The shipped card is never its own next card.
+    assert.equal(composeNotice(row(1), PLAY, { ...NEXT, id: row(1).card_id }).text.includes('Next for'), false);
+    assert.ok(composeFollowNotice(follow(1), PLAY, NEXT).text.includes('Next for Dust: A <faster> Cart, $0.52 of $0.78 funded.'));
   });
 
   test('escapes the card title in the HTML part', () => {
@@ -187,6 +216,9 @@ describe('the ship notices run', () => {
     for (const c of sends) {
       assert.equal(c.method, 'POST');
       assert.equal(c.body.from, NOTICE_FROM);
+      assert.equal(c.body.from, 'Mob Machine <studio@mobmachine.games>');
+      assert.equal(c.body.reply_to, NOTICE_REPLY_TO);
+      assert.equal(c.body.reply_to, 'hello@clayhouse.studio');
       assert.equal(c.headers.Authorization, `Bearer ${ENV.RESEND_API_KEY}`);
       assert.match(c.headers['Idempotency-Key'], /^ship-notice\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/);
       assert.equal(c.body.headers['List-Unsubscribe-Post'], 'List-Unsubscribe=One-Click');
@@ -198,6 +230,24 @@ describe('the ship notices run', () => {
     // No address is ever printed, posted to ntfy or sent to Supabase.
     assert.doesNotMatch(out.text(), /@/);
     for (const c of f.calls.filter((c) => c.url.origin !== 'https://api.resend.com')) assert.doesNotMatch(JSON.stringify(c.body ?? ''), /example\.com/);
+  });
+
+  test('reads the next open card once a run and names it in each email; an unread order sends without it', async () => {
+    const f = fake({ money: [{ funding_order: ORDER }], cards: ORDER_CARDS, follows: [follow(1)] });
+    const result = await run(f);
+    assert.equal(result.ok, true);
+    assert.equal(f.calls.filter((c) => c.url.pathname === '/rest/v1/public_money').length, 1);
+    const read = f.calls.filter((c) => c.url.pathname === '/rest/v1/cards');
+    assert.equal(read.length, 1);
+    assert.equal(read[0].method, 'GET');
+    assert.equal(read[0].url.searchParams.get('id'), `in.(${ORDER.map((p) => p.card_id).join(',')})`);
+    const sends = f.calls.filter((c) => c.url.origin === 'https://api.resend.com');
+    assert.equal(sends.length, 3);
+    for (const c of sends) assert.ok(c.body.text.includes('Next for Dust: A <faster> Cart, $0.52 of $0.78 funded.'), c.body.text);
+    assert.deepEqual(await nextOpenCards({ select: async () => { throw new Error('down'); } }), {});
+    const g = fake();
+    await run(g);
+    for (const c of g.calls.filter((c) => c.url.origin === 'https://api.resend.com')) assert.equal(c.body.text.includes('Next for'), false);
   });
 
   test('never sends twice: a second run over the same pairs finds them claimed and sends nothing', async () => {
@@ -280,7 +330,7 @@ describe('the ship notices run', () => {
 describe('the follow email (docs/specs/card-follows.md)', () => {
   test('names the card, that it is live, what the agents spent, its page, the play address and its own unsubscribe, and no address', () => {
     const notice = composeFollowNotice(follow(1), PLAY);
-    assert.equal(notice.subject, 'Shipped: Dust storms on the map');
+    assert.equal(notice.subject, 'Shipped in Dust: Dust storms on the map');
     assert.match(notice.text, /^A card you follow has shipped\./);
     assert.match(notice.text, /Dust storms on the map is live\./);
     assert.match(notice.text, /The agents spent \$1\.23 building it\./);
@@ -333,7 +383,7 @@ describe('the follow emails in the notices run', () => {
     assert.deepEqual(sends.map((c) => c.body.to), [[EMAIL(1)], [FOLLOWER(1)], [FOLLOWER(2)]]);
     for (const c of sends.slice(1)) {
       assert.equal(c.body.from, NOTICE_FROM);
-      assert.equal(c.body.subject, 'Shipped: Dust storms on the map');
+      assert.equal(c.body.subject, 'Shipped in Dust: Dust storms on the map');
       assert.match(c.headers['Idempotency-Key'], /^card-follow\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/);
       assert.match(c.body.headers['List-Unsubscribe'], /\/api\/unsubscribe\?f=[0-9a-f-]{36}&t=[0-9a-f]{64}>$/);
     }
