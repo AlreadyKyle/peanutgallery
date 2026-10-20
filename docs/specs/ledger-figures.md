@@ -72,7 +72,7 @@ On every card, what reached it = what it spent + what is unspent on its bar + wh
 
 ### The reconciliation line
 
-"Reconciled with Stripe on {date}." when the latest Controller run's books checks all passed, with the date of the latest run whose did; else "Not yet reconciled with Stripe." The books checks are every check of the run but `minimum_balance`. Production: the 20 October 2026 run, so "Reconciled with Stripe on 20 October 2026."
+"Reconciled with Stripe on {date}." when the latest Controller run's books checks all passed, with the date of the latest run whose did; else "Not yet reconciled with Stripe." The books checks are every check of the run but `minimum_balance`. Production: the 20 October 2026 run, so "Reconciled with Stripe on 20 Oct 2026."
 
 ### Before and after, production on 20 October 2026
 
