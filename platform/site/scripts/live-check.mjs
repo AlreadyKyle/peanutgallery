@@ -557,7 +557,20 @@ try {
   const machineLinks = await page.getByRole('main').locator('.machine-card a[href^="https://buy.stripe.com/"]').evaluateAll((as) => as.map((a) => a.href));
   if (machineLinks.length > 0) {
     check(
-      machineLinks.every((href) => STRIPE_LINK.test(href.split('?')[0]) && href.split('?')[1] === 'client_reference_id=split20'),
+      // The chosen preset rides along as prefilled_amount, whole cents and never under the $2 minimum
+      // (docs/specs/machine-presets.md); the split stays the default.
+      machineLinks.every((href) => {
+        const [base, query = ''] = href.split('?');
+        const params = new URLSearchParams(query);
+        const keys = [...params.keys()].sort().join(',');
+        const amount = params.get('prefilled_amount');
+        return (
+          STRIPE_LINK.test(base) &&
+          params.get('client_reference_id') === 'split20' &&
+          (keys === 'client_reference_id' ||
+            (keys === 'client_reference_id,prefilled_amount' && /^\d+$/.test(amount ?? '') && Number(amount) >= 200))
+        );
+      }),
       `the Machine card funds the next card in line with the default split -> ${machineLinks.join(' | ')}`,
     );
   }
