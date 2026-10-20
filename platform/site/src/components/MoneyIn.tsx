@@ -49,24 +49,73 @@ export function NotOnCardStat({ snapshot }: { snapshot: Snapshot }) {
 /**
  * Under the Funding band's figures: the one case where Not on a card yet funds a card that is not the
  * next to open (a rule, so it is said whether or not the figures loaded; a full-width line, since
- * beside the figure it would stand a tall column against a one-line amount), then the shortfall while
- * there is one and the board's test payment while it is booked.
+ * beside the figure it would stand a tall column against a one-line amount), then how the pool is made
+ * up, the shortfall while there is one and the studio's test payment while it is booked.
  */
 export function FundingLines({ snapshot }: { snapshot: Snapshot }) {
   const money = loadedMoney(snapshot);
   return (
     <>
       <p className="muted small">{legal.notOnCardTopUp}</p>
-      {money === null ? null : <FundingFigureLines money={money} />}
+      {money === null ? null : <FundingFigureLines money={money} snapshot={snapshot} />}
     </>
   );
 }
 
-function FundingFigureLines({ money }: { money: Money }) {
+/**
+ * Unspent on card bars: the pool less the test payment's credit less Not on a card yet, which may be
+ * below zero (money.not_on_card_usd() is that difference by its definition; docs/specs/ledger-figures.md).
+ */
+export function unspentOnBars(balance: number, money: Money): number {
+  return balance - money.board_test_usd - (money.not_on_card_usd - money.short_usd);
+}
+
+/**
+ * How the pool is made up, two ways (docs/specs/ledger-figures.md): agent credit and the test payment's
+ * credit less agent spend; then unspent on card bars, the test payment's and Not on a card yet (or the
+ * shortfall). Null when the pool or the totals did not load, since then the figures cannot be shown.
+ */
+export function poolLines(snapshot: Snapshot, money: Money): [string, string] | null {
+  if (snapshot.pool === null || snapshot.missing.includes('totals')) return null;
+  const test = money.board_test_usd;
+  const from = legal.poolFromLine
+    .replace('{credit}', formatUsd(money.agent_credit_usd))
+    .replace('{test}', test > 0 ? legal.poolFromTest.replace('{test}', formatUsd(test)) : '')
+    .replace('{spend}', formatUsd(snapshot.totals.usd_total));
+  const rest =
+    money.short_usd > 0
+      ? legal.poolSplitShort.replace('{short}', formatUsd(money.short_usd))
+      : legal.poolSplitFree.replace('{free}', formatUsd(money.not_on_card_usd));
+  const split = legal.poolSplitLine
+    .replace('{bars}', formatUsd(Math.max(0, unspentOnBars(snapshot.pool.balance_usd, money))))
+    .replace('{test}', test > 0 ? legal.poolSplitTest.replace('{test}', formatUsd(test)) : '')
+    .replace('{rest}', rest);
+  return [from, split];
+}
+
+/** The test payment's line: its three shares when the document carries them, else its pool figure alone. */
+export function testPaymentLine(money: Money): string | null {
+  if (money.board_test_usd <= 0) return null;
+  if (money.test === undefined || money.test === null) return legal.boardTestLine.replace('{usd}', formatUsd(money.board_test_usd));
+  return legal.testSharesLine
+    .replace('{paid}', formatUsd(money.test.paid_usd))
+    .replace('{pool}', formatUsd(money.board_test_usd))
+    .replace('{reserve}', formatUsd(money.test.reserve_usd))
+    .replace('{incident}', formatUsd(money.test.incident_usd));
+}
+
+function FundingFigureLines({ money, snapshot }: { money: Money; snapshot: Snapshot }) {
+  const pool = poolLines(snapshot, money);
+  const test = testPaymentLine(money);
   return (
     <>
+      {pool === null ? null : (
+        <p className="muted small" data-pool="made-up">
+          {pool.join(' ')}
+        </p>
+      )}
       {money.short_usd > 0 ? <p className="muted small">{legal.shortBy.replace('{usd}', formatUsd(money.short_usd))}</p> : null}
-      {money.board_test_usd > 0 ? <p className="muted small">{legal.boardTestLine.replace('{usd}', formatUsd(money.board_test_usd))}</p> : null}
+      {test === null ? null : <p className="muted small">{test}</p>}
     </>
   );
 }

@@ -278,6 +278,24 @@ describe('createSnapshotSource.load', () => {
     expect(snapshotFrom(both.live, both.cards).missing).toEqual(['money', 'stopped']);
   });
 
+  it("reads ledger-figures' columns when the document carries them, and leaves them out when it does not (docs/specs/ledger-figures.md)", () => {
+    const docs = toDocuments(
+      studioWith({
+        totals: { ...DEFAULT_STUDIO.totals, unlisted_usd: '0.2631' },
+        money: moneyRow({ test_paid_usd: '1.0000', test_reserve_usd: '0.0734', test_incident_usd: '0.0264' }),
+        stopped: [{ card_id: 'c9', title: 'Stopped', stage: 'rejected', failing_check: null, spent_usd: '0.1530', funded_usd: '0.1530', credited_usd: '1.5000', moved: [], stopped_at: '2026-09-22T10:00:00Z', from_cards_usd: '1.5000' }],
+      }),
+    );
+    const snapshot = snapshotFrom(docs.live, docs.cards);
+    expect(snapshot.totals.unlisted_usd).toBe(0.2631);
+    expect(snapshot.money?.test).toEqual({ paid_usd: 1, reserve_usd: 0.0734, incident_usd: 0.0264 });
+    expect(snapshot.stopped?.[0]?.from_cards_usd).toBe(1.5);
+    const before = toDocuments(DEFAULT_STUDIO);
+    const old = snapshotFrom(before.live, before.cards);
+    expect('unlisted_usd' in old.totals).toBe(false);
+    expect(old.money === null || old.money === undefined || !('test' in old.money)).toBe(true);
+  });
+
   it('rejects the load on a malformed figure, never showing zero', () => {
     const cases: Partial<StudioFixture>[] = [
       { pool: { ...DEFAULT_STUDIO.pool, balance_usd: 'abc' } },

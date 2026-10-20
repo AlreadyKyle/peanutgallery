@@ -17,14 +17,23 @@ export function stopReason(card: Pick<StoppedCard, 'stage' | 'failing_check'>): 
   return words ?? (card.stage === 'paused' ? legal.pausedFallback : legal.rejectedFallback);
 }
 
-/** "funded by $1.20 from 2 supporters", the count left out when the funding figures did not load; null when nothing reached it. */
+/**
+ * "$1.20 reached it from 2 supporters", the count left out when the funding figures did not load, then
+ * ", $0.40 of it from other cards" when some was released to it from another card; null when nothing
+ * reached it. Money that moves on is counted on each card it reaches, so per card what reached it is
+ * what it spent plus where its unspent money went (docs/specs/ledger-figures.md).
+ */
 export function fundedBy(card: StoppedCard, snapshot: Snapshot): string | null {
   if (card.credited_usd <= 0) return null;
   const usd = formatUsd(card.credited_usd);
-  if (snapshot.missing.includes('funding')) return legal.fundedByAmount.replace('{usd}', usd);
-  const count = snapshot.funding[card.card_id]?.contributors ?? 0;
-  if (count === 0) return legal.fundedByAmount.replace('{usd}', usd);
-  return (count === 1 ? legal.fundedByOne : legal.fundedByMany.replace('{n}', formatInteger(count))).replace('{usd}', usd);
+  const count = snapshot.missing.includes('funding') ? 0 : (snapshot.funding[card.card_id]?.contributors ?? 0);
+  const reached =
+    count === 0
+      ? legal.fundedByAmount.replace('{usd}', usd)
+      : (count === 1 ? legal.fundedByOne : legal.fundedByMany.replace('{n}', formatInteger(count))).replace('{usd}', usd);
+  const fromCards = card.from_cards_usd ?? 0;
+  if (formatUsd(fromCards) === formatUsd(0)) return reached;
+  return `${reached}, ${legal.fromOtherCards.replace('{usd}', formatUsd(fromCards))}`;
 }
 
 /** "Its unspent money went to A cheaper Cart ($0.40) and Not on a card yet ($0.10).", or null when none moved. */

@@ -9,6 +9,15 @@ import { Stat } from './Stat';
 /** The ledger shows this many agent actions until the reader asks for the rest. */
 export const LEDGER_ACTIONS = 10;
 
+/**
+ * Agent spend's description, with the part spent on cards the site does not show yet when there is any
+ * (docs/specs/ledger-figures.md): the total is what the pool paid, so it can be added up with it.
+ */
+export function agentSpendDescription(unlisted: number): string {
+  if (formatUsd(unlisted) === formatUsd(0)) return legal.describeAgentSpend;
+  return `${legal.describeAgentSpend} ${legal.agentSpendUnlisted.replace('{usd}', formatUsd(unlisted))}`;
+}
+
 // Kernel (docs/specs/board-site.md). Agent spend, with its tokens as a second line under the figure,
 // then the latest agent actions: the newest ten, and "Show all n agent actions", which shows the rest
 // and moves focus to the eleventh. A part that did not load says so instead of showing zero or an
@@ -44,7 +53,7 @@ export function LedgerSummary({ studio }: { studio: StudioState }) {
         <p className="muted">{legal.partUnavailable}</p>
       ) : (
         <dl className="stats">
-          <Stat label={legal.agentSpend} description={legal.describeAgentSpend} note={tokens} value={formatUsd(totals.usd_total)} />
+          <Stat label={legal.agentSpend} description={agentSpendDescription(totals.unlisted_usd ?? 0)} note={tokens} value={formatUsd(totals.usd_total)} />
         </dl>
       )}
       <h3 className="rows-heading">{legal.latestActions}</h3>
