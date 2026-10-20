@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // Beside the functions folders, not in them: Netlify deploys every file there.
 import { cardIdFrom, metaFrom, STUDIO_NAME, withCardMeta } from './lib/card-meta';
-import { clip, draftToLive, HEIGHT, previewCardFrom, renderPreview, STAGE_WORDS, supporterLine, TOKENS, WIDTH } from './lib/card-preview';
+import { clip, draftToLive, face, fundingLine, HEIGHT, previewCardFrom, renderPreview, STAGE_WORDS, stageWord, supporterLine, TOKENS, WIDTH } from './lib/card-preview';
 
 const SITE_DIR = join(__dirname, '..');
 const ID = '00000000-0000-4000-8000-000000000004';
@@ -26,11 +26,46 @@ describe('the preview face', () => {
     for (const word of new Set(Object.values(STAGE_WORDS))) expect(copy, word).toContain(`: '${word}'`);
   });
 
-  it('lists supporters by number, never by amount', () => {
+  it("lists supporters by number, never by amount, in the site's words", () => {
     expect(supporterLine([], 0)).toBe('No supporters yet');
-    expect(supporterLine([3], 1)).toBe('#3');
-    expect(supporterLine([1, 4, 9], 3)).toBe('#1, #4 and #9');
-    expect(supporterLine([1, 2, 3, 4, 5, 6, 7, 8, 9], 30)).toBe('#1, #2, #3, #4, #5, #6, #7, #8 and 22 more');
+    expect(supporterLine([3], 1)).toBe('Funded by Supporter 3');
+    expect(supporterLine([1, 4, 9], 3)).toBe('Funded by Supporter 1, 4 and 9');
+    expect(supporterLine([1, 2, 3, 4, 5, 6, 7, 8, 9], 30)).toBe('Funded by Supporter 1, 2, 3, 4, 5, 6, 7, 8 and 22 more');
+    expect(supporterLine([1204], 1)).toBe('Funded by Supporter 1,204');
+  });
+
+  it("says each stage in the site's state words", () => {
+    expect(stageWord({ stage: 'proposed', horizon: 'now' })).toBe('Open for funding');
+    expect(stageWord({ stage: 'voted', horizon: 'now' })).toBe('Open for funding');
+    expect(stageWord({ stage: 'designing', horizon: 'next' })).toBe('Planned');
+    expect(stageWord({ stage: 'funded', horizon: 'now' })).toBe('Funded');
+    expect(stageWord({ stage: 'gated', horizon: 'now' })).toBe('Being checked');
+    expect(stageWord({ stage: 'rejected', horizon: 'now' })).toBe('Not built');
+    expect(stageWord({ stage: 'live', horizon: 'now' })).toBe('Live');
+  });
+
+  it('shows the funding bar before building starts, and what the agents spent after', () => {
+    expect(fundingLine({ fundedUsd: 0.52, targetUsd: 0.78 })).toBe('$0.52 of $0.78 funded');
+    expect(fundingLine({ fundedUsd: 0, targetUsd: 0 })).toBeNull();
+    const open = previewCardFrom(
+      JSON.stringify({
+        card: { title: 'Cheaper Carts', summary: 'Carts cost less.', stage: 'proposed', horizon: 'now', funded_usd: 0.4, funding_target_usd: 0.78, created_at: '2026-10-01T10:00:00Z' },
+        funding: { credited_usd: 0.52 },
+        spent_usd: 0.28,
+        supporters: [{ number: 1, founding: true }],
+        supporter_count: 1,
+      }),
+    )!;
+    const openText = JSON.stringify(face(open));
+    expect(openText).toContain('$0.52 of $0.78 funded');
+    expect(openText).toContain('Open for funding');
+    expect(openText).toContain('Funded by Supporter 1');
+    expect(openText).not.toContain('Agents spent');
+    expect(openText).not.toContain('$0.28');
+    const live = JSON.stringify(face(previewCardFrom(BODY)!));
+    expect(live).toContain('Agents spent');
+    expect(live).toContain('$12.35');
+    expect(live).not.toContain(' funded"');
   });
 
   it('gives draft to live only once a card is live', () => {
@@ -42,7 +77,7 @@ describe('the preview face', () => {
   });
 
   it('reads site_card and refuses a body with no card', () => {
-    expect(previewCardFrom(BODY)).toMatchObject({ title: 'A dash for the robot', spentUsd: 12.345, supporters: [1, 4], supporterCount: 2 });
+    expect(previewCardFrom(BODY)).toMatchObject({ title: 'A dash for the robot', spentUsd: 12.345, supporters: [1, 4], supporterCount: 2, fundedUsd: 0, targetUsd: 0 });
     expect(previewCardFrom('{"card":null}')).toBeNull();
     expect(previewCardFrom('[]')).toBeNull();
   });
@@ -74,6 +109,17 @@ describe('the card page tags', () => {
     expect(out).toContain('<meta property="og:description" content="Crisp." />');
     expect(out).toContain('<title>Fish &amp; &quot;chips&quot; &lt;b&gt; · Mob Machine</title>');
     expect(out).toContain('<meta property="og:image:width" content="1200" />');
+  });
+
+  it('names the game a card changes, or this site', () => {
+    const dust = withCardMeta(html, ID, metaFrom(JSON.stringify({ card: { title: 'Cheaper Carts', summary: 'Carts cost less.', folder: 'seed-1' } }))!);
+    expect(dust).toContain('<title>Cheaper Carts · Dust · Mob Machine</title>');
+    expect(dust).toContain('<meta property="og:title" content="Cheaper Carts · Dust · Mob Machine" />');
+    expect(dust).toContain('<meta property="og:description" content="A change to Dust. Carts cost less." />');
+    expect(dust).toContain('<meta name="description" content="A change to Dust. Carts cost less." />');
+    const site = withCardMeta(html, ID, { title: 'A clearer ledger', summary: '', folder: 'platform' });
+    expect(site).toContain('<title>A clearer ledger · Mob Machine</title>');
+    expect(site).toContain('<meta property="og:description" content="A change to this site." />');
   });
 
   it('writes a title holding $ replacement patterns as it is, once', () => {
