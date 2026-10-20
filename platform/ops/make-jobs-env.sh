@@ -9,7 +9,7 @@
 #   export NTFY_TOPIC_URL=...           # the ntfy topic URL
 #   export BACKUP_HEALTHCHECK_URL=...   # the healthchecks.io ping URL of the backup check
 #   export VPS_GITHUB_TOKEN=...         # the dispatcher's token; its Plan read feeds the quota check
-#   platform/ops/make-jobs-env.sh [backup|backup-mac|controller|quota|notices ...]
+#   platform/ops/make-jobs-env.sh [backup|backup-mac|controller|quota|notices|marketing ...]
 # With no job named it writes the server's three. CONTROLLER_HEALTHCHECK_URL and QUOTA_HEALTHCHECK_URL
 # are copied when exported. The files go to a new temporary folder, or to JOBS_ENV_DIR when it names an
 # existing folder only its owner can open (the Mac host's ~/peanutgallery-host/env). DOTENV names
@@ -21,8 +21,8 @@ REPO_ROOT=$(cd "$OPS_DIR/../.." && pwd)
 DOTENV=${DOTENV:-$REPO_ROOT/.env}
 
 for job in "$@"; do
-  case "$job" in backup | backup-mac | controller | quota | notices) ;; *)
-    echo "usage: platform/ops/make-jobs-env.sh [backup|backup-mac|controller|quota|notices ...]" >&2
+  case "$job" in backup | backup-mac | controller | quota | notices | marketing) ;; *)
+    echo "usage: platform/ops/make-jobs-env.sh [backup|backup-mac|controller|quota|notices|marketing ...]" >&2
     exit 2
     ;;
   esac
