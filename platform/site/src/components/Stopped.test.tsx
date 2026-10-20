@@ -134,7 +134,7 @@ describe('Stopped', () => {
     // platform/dispatcher/src (pipeline.ts's CardStop and InfraStop, PAUSING_OUTCOMES and the gate's
     // infrastructure checks; worktree.ts's commit checks; credit.ts's REFUSAL_CHECK; recovery.ts;
     // adapters/managed.ts's SessionPaused; the visual review's, docs/specs/design-review.md) and the
-    // board's cancel (cancelled_by_board). A code added
+    // owner's cancel (cancelled_by_board). A code added
     // later shows its stage's fallback until it gets words here.
     const rejected = [
       'git_tamper', 'acceptance_grammar', 'lane_unsupported', 'acceptance_already_true', 'tool_allowlist', 'session',
