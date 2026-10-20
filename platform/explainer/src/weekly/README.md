@@ -2,6 +2,8 @@
 
 The weekly update video (`docs/specs/weekly-video.md`): the explainer's plate, type and band, then a few segments of short beats, each beside a drawn scene that acts out the change (the explainer's own agents, cards, coins, phone and glyphs, moving), then the closing lines. No browser frames and no screenshots. A week is one props file; nothing else changes.
 
+**The studio.** The studio's beats (`agents`, `agent-card`, `curator-joins`) draw the real live studio: `IsoRoom.tsx` renders the site's own room (`RoomDrawing.tsx`, `lib/studio-scene.ts`) with the running agents wandering between its idle spots on a seeded route worked out from the frame, so it renders the same every time.
+
 **Scenes.** Each beat names a scene in `shot: { scene: '<name>' }` (`SceneName` in `schema.ts`, drawn in `Scenes.tsx`): `agents`, `agent-card`, `curator-joins`, `ideas-pitch`, `ideas-vote`, `signup`, `reset`, `follow`, `dust`, `daily`, `seed`, `rates`, `ledger`, `terms`, `checkout`, `shield`, `fast`, `email`, `social`. A week with a change no scene fits adds one to `Scenes.tsx`: one main movement, a pointer where a player would press, the explainer's springs (`anim.ts`), real titles and figures only. Step 2 below (captures) is optional and only for a beat that needs a capture; most weeks need none.
 
 ## Make next week's video

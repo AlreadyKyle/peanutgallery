@@ -10,6 +10,7 @@ import { roster } from '../data';
 import { C, EASE_IN, EASE_IN_OUT, EASE_OUT, FONT } from '../theme';
 import { BEAT } from '../timeline';
 import type { WeeklyGeometry } from './geometry';
+import { agentAt, CURATOR, IsoRoom, project } from './IsoRoom';
 import type { Layout } from './layout';
 import type { SceneName } from './schema';
 
@@ -23,10 +24,9 @@ const H = 690;
 const FADE = 16;
 
 /**
- * The stage every scene stands on: a large rounded panel to the right of the words, from under the
- * top bar to the foot of the frame, tinted for its segment with a faint dot grid, so each scene is
- * anchored and the picture has colour without a frame round it. The scene's own 1040 by 690 space is
- * centred on it, scaled to fill.
+ * The stage every scene stands on: the space to the right of the words, from under the
+ * top bar to the foot of the frame, on bare paper. The scene's own 1040 by 690 space is centred on
+ * it, scaled to fill.
  */
 function stageOf(g: WeeklyGeometry) {
   const f = g.format;
@@ -36,17 +36,6 @@ function stageOf(g: WeeklyGeometry) {
   const height = f.height - top - 48;
   const scale = Math.min((width - 24) / W, (height - 40) / H);
   return { left, top, width, height, scale };
-}
-
-/** Pale tints of the brand's own colours, one a segment (the intro takes the first). */
-const TINTS = ['#e6eff9', '#fdf3dc', '#efe9fb', '#f9e5ef', '#e9f4ec', '#eef0f2'];
-
-function hex(c: string): [number, number, number] {
-  return [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)) as [number, number, number];
-}
-function mixHex(a: string, b: string, k: number): string {
-  const [x, y] = [hex(a), hex(b)];
-  return `rgb(${x.map((v, i) => Math.round(v + (y[i]! - v) * k)).join(',')})`;
 }
 
 /** A child placed by its centre. */
@@ -161,49 +150,39 @@ const curator = roster.find((r) => r.title === 'Curator')!;
 // ---------------------------------------------------------------------------------------------
 // The scenes. `local` is frames from the beat's start; `len` is the beat's length.
 
-function AgentsScene({ local }: { local: number }) {
-  const rows = [roster.slice(0, 5), roster.slice(5)];
+function AgentsScene({ frame, local }: { frame: number; local: number }) {
+  // The room itself, its agents wandering round the furniture, with a slow push in.
+  const push = 1 + progress(local, 0, 240, EASE_IN_OUT) * 0.04;
   return (
-    <>
-      {rows.map((row, r) =>
-        row.map((agent, i) => {
-          const n = r * 5 + i;
-          const up = pop(local, 4 + n * 4, 'bouncy');
-          const x = 130 + i * 195 + (r === 1 ? 97 : 0);
-          const y = 190 + r * 260;
-          return (
-            <div key={agent.title} style={{ opacity: Math.min(1, up * 1.5), transform: `scale(${0.6 + up * 0.4})`, transformOrigin: `${x}px ${y}px`, position: 'absolute', inset: 0 }}>
-              <Walker note={agent.note} x={x} y={y} size={172} local={local} seed={n} range={55} />
-            </div>
-          );
-        }),
-      )}
-      <At x={W / 2} y={630} opacity={progress(local, 50, 20)} scale={0.9 + 0.1 * pop(local, 50, 'soft')}>
-        <div style={pill({ fontSize: 28, padding: '10px 24px', borderColor: C.live, color: C.live })}>Nine agents, all running</div>
-      </At>
-    </>
+    <div style={{ position: 'absolute', inset: 0, transform: `scale(${push})`, transformOrigin: '50% 55%' }}>
+      <IsoRoom frame={frame} width={W} height={H} />
+    </div>
   );
 }
 
-function AgentCardScene({ local }: { local: number }) {
-  const T = 70;
+function AgentCardScene({ frame, local }: { frame: number; local: number }) {
+  const T = 64;
+  const start = frame - local;
+  const at = project(agentAt(CURATOR, start + T).spot, W, H);
   const ptr = glide(local, [
-    { x: 900, y: 600, at: 0 },
-    { x: 330, y: 360, at: T },
+    { x: W - 80, y: H - 60, at: 0 },
+    { x: at.x, y: at.y - 26, at: T },
   ]);
   const card = pop(local, T + 4, 'snappy');
+  const cx = Math.min(W - 250, Math.max(250, at.x));
+  const below = at.y < 300;
   return (
     <>
-      <Walker note={curator.note} x={330} y={330} size={260} local={local} seed={8} range={Math.max(0, 40 * (1 - progress(local, T - 30, 20)))} />
-      <Ripple x={330} y={330} local={local} t={T} />
-      <At x={720} y={330} scale={0.7 + card * 0.3} opacity={Math.min(1, card * 1.6)}>
-        <div style={{ width: 460, boxSizing: 'border-box', padding: 34, border: `4px solid ${C.ink}`, borderRadius: 26, background: C.paper, fontFamily: FONT, color: C.ink }}>
+      <IsoRoom frame={frame} width={W} height={H} hold={{ agent: CURATOR, from: start + T - 20 }} ring={{ agent: CURATOR, k: pop(local, T, 'snappy') }} />
+      <Ripple x={at.x} y={at.y - 26} local={local} t={T} />
+      <At x={cx} y={below ? at.y + 150 : at.y - 190} scale={0.7 + card * 0.3} opacity={Math.min(1, card * 1.6)}>
+        <div style={{ width: 440, boxSizing: 'border-box', padding: 30, border: `4px solid ${C.ink}`, borderRadius: 24, background: C.paper, fontFamily: FONT, color: C.ink }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <Avatar note={curator.note} size={64} />
-            <div style={{ fontSize: 36, fontWeight: 700 }}>{curator.title}</div>
+            <Avatar note={curator.note} size={60} />
+            <div style={{ fontSize: 34, fontWeight: 700 }}>{curator.title}</div>
+            <div style={{ marginLeft: 'auto', ...pill({ padding: '6px 14px', fontSize: 22, borderColor: C.live, color: C.live, borderWidth: 3 }) }}>Running</div>
           </div>
-          <div style={{ marginTop: 18, display: 'inline-flex', ...pill({ padding: '6px 16px', fontSize: 22, borderColor: C.live, color: C.live, borderWidth: 3 }) }}>Running</div>
-          <div style={{ marginTop: 20, fontSize: 26, lineHeight: 1.35 }}>Reads the ideas players pitch and sorts them into clear summaries.</div>
+          <div style={{ marginTop: 18, fontSize: 26, lineHeight: 1.35 }}>Reads the ideas players pitch and sorts them into clear summaries.</div>
         </div>
       </At>
       <Pointer x={ptr.x} y={ptr.y} press={press(local, T)} opacity={progress(local, 0, 12) * (1 - progress(local, T + 30, 16))} />
@@ -211,44 +190,32 @@ function AgentCardScene({ local }: { local: number }) {
   );
 }
 
-function CuratorJoinsScene({ local }: { local: number }) {
-  const team = roster.filter((r) => r.title !== 'Curator');
-  const join = pop(local, 40, 'bouncy');
+function CuratorJoinsScene({ frame, local }: { frame: number; local: number }) {
+  const T = 30;
+  const join = pop(local, T, 'bouncy');
+  const at = project(agentAt(CURATOR, frame).spot, W, H);
+  const tag = pop(local, T + 14, 'snappy');
   return (
     <>
-      {team.map((agent, i) => {
-        const x = 150 + (i % 4) * 245;
-        const y = 170 + Math.floor(i / 4) * 230;
-        const make = 0.92 + 0.08 * (1 - progress(local, 40, 30));
-        return (
-          <At key={agent.title} x={x} y={y - Math.abs(Math.sin((((local + i * 9) % BEAT) / BEAT) * Math.PI)) * 6} scale={make}>
-            <Avatar note={agent.note} size={130} />
-          </At>
-        );
-      })}
-      <At x={W / 2} y={560 - (1 - join) * 220} scale={0.4 + join * 0.6} opacity={Math.min(1, join * 2)}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-          <Avatar note={curator.note} size={170} />
-          <div style={{ fontFamily: FONT, color: C.ink }}>
-            <div style={{ fontSize: 40, fontWeight: 700 }}>Curator</div>
-            <div style={{ ...pill({ padding: '6px 16px', fontSize: 22, borderColor: C.live, color: C.live, borderWidth: 3 }), marginTop: 8 }}>Running</div>
-          </div>
-        </div>
-      </At>
-      {[0, 1, 2, 3, 4, 5].map((i) => {
-        const k = progress(local, 44 + i, 26, EASE_OUT);
-        const a = (i / 6) * Math.PI * 2;
+      <IsoRoom frame={frame} width={W} height={H} show={(i) => (i === CURATOR ? join : 1)} ring={{ agent: CURATOR, k: tag }} />
+      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+        const k = progress(local, T + 2 + (i % 2) * 3, 30, EASE_OUT);
+        const a = (i / 8) * Math.PI * 2;
         return k > 0 && k < 1 ? (
-          <At key={i} x={W / 2 - 90 + Math.cos(a) * 150 * k} y={560 + Math.sin(a) * 110 * k} opacity={1 - k} rotate={k * 90}>
-            <Glyph name="spark" size={40} colour={C.coin} />
+          <At key={i} x={at.x + Math.cos(a) * 110 * k} y={at.y - 30 + Math.sin(a) * 80 * k} opacity={1 - k} rotate={k * 120}>
+            <Glyph name="spark" size={34} colour={C.coin} />
           </At>
         ) : null;
       })}
+      <At x={at.x} y={at.y - 120 - (1 - tag) * 20} scale={0.6 + tag * 0.4} opacity={Math.min(1, tag * 1.6)}>
+        <div style={pill({ fontSize: 28, padding: '10px 22px' })}>
+          Curator <span style={{ ...pill({ padding: '4px 12px', fontSize: 20, borderColor: C.live, color: C.live, borderWidth: 3 }) }}>Running</span>
+        </div>
+      </At>
     </>
   );
 }
 
-/** An idea note: a card with the pencil, a line of grey for its words, and a vote count. */
 function IdeaNote({ label, votes, voteK = 0, style }: { label?: string; votes?: number; voteK?: number; style?: CSSProperties }) {
   return (
     <div style={{ width: 460, height: 128, boxSizing: 'border-box', padding: '22px 28px', border: `4px solid ${C.ink}`, borderRadius: 20, background: C.paper, fontFamily: FONT, color: C.ink, display: 'flex', alignItems: 'center', gap: 20, ...style }}>
@@ -771,7 +738,7 @@ function SocialScene({ local }: { local: number }) {
   );
 }
 
-const SCENES: Record<SceneName, (p: { local: number; len: number }) => ReactNode> = {
+const SCENES: Record<SceneName, (p: { frame: number; local: number; len: number }) => ReactNode> = {
   agents: AgentsScene,
   'agent-card': AgentCardScene,
   'curator-joins': CuratorJoinsScene,
@@ -799,12 +766,6 @@ export function Scenes({ frame, g, plan }: { frame: number; g: WeeklyGeometry; p
   const first = plan.beats[0]!.start;
   const enter = pop(frame, first - 8, 'soft');
   const exit = progress(frame, plan.outro - 30, 30, EASE_IN);
-  // The tint follows the segment, shifting over half a second as each one starts.
-  const current = [...plan.beats].reverse().find((b) => frame >= b.start) ?? plan.beats[0]!;
-  const prev = plan.beats.filter((b) => b.start < current.start && b.segment !== current.segment).pop();
-  const tintOf = (seg: number) => TINTS[Math.max(0, seg) % TINTS.length]!;
-  const segStart = plan.beats.find((b) => b.segment === current.segment)!.start;
-  const tint = prev === undefined ? tintOf(current.segment) : mixHex(tintOf(prev.segment), tintOf(current.segment), progress(frame, segStart, 30, EASE_IN_OUT));
   const ox = (st.width - W * st.scale) / 2;
   const oy = (st.height - H * st.scale) / 2;
   return (
@@ -815,12 +776,6 @@ export function Scenes({ frame, g, plan }: { frame: number; g: WeeklyGeometry; p
         top: st.top,
         width: st.width,
         height: st.height,
-        borderRadius: 56,
-        background: tint,
-        backgroundImage: 'radial-gradient(rgba(17,17,17,0.07) 2.2px, transparent 2.6px)',
-        backgroundSize: '34px 34px',
-        backgroundPosition: `${(frame * 0.25) % 34}px ${(frame * 0.12) % 34}px`,
-        overflow: 'hidden',
         opacity: Math.min(1, enter * 1.3) * (1 - exit),
         transform: `translateY(${(1 - enter) * 50 + exit * 40}px) scale(${0.96 + enter * 0.04})`,
       }}
@@ -835,7 +790,7 @@ export function Scenes({ frame, g, plan }: { frame: number; g: WeeklyGeometry; p
           return (
             <Sequence key={i} from={placed.start} durationInFrames={end - placed.start + FADE} layout="none">
               <SceneLayer frame={frame} start={placed.start} end={end} last={next === undefined}>
-                <Scene local={frame - placed.start} len={end - placed.start} />
+                <Scene frame={frame} local={frame - placed.start} len={end - placed.start} />
               </SceneLayer>
             </Sequence>
           );
