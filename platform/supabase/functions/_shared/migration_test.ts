@@ -324,6 +324,9 @@ Deno.test("migrations on PGlite", {
         "20261019030000_hold_drafting.sql",
         // The Game Designer drafts on its own, cheaper model (PLAN.md §10 decision 77).
         "20261019040000_designer_model.sql",
+        // governance-copy (docs/specs/governance-copy.md): six roles' words on /team, then Terms version 4.
+        "20261020110000_governance_role_copy.sql",
+        "20261020110100_terms_version_4.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -4385,20 +4388,22 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "terms_versions posts version 1 at #47's merge and versions 2 and 3 when applied, append-only, readable only through public_terms_versions",
+      "terms_versions posts version 1 at #47's merge and versions 2, 3 and 4 when applied, append-only, readable only through public_terms_versions",
       async () => {
         const versions = async () =>
           await rows<{ version: number; posted_at: Date }>(`select version, posted_at from public.terms_versions order by version`);
         const posted = await versions();
-        assertEquals(posted.map((r) => r.version), [1, 2, 3]);
+        assertEquals(posted.map((r) => r.version), [1, 2, 3, 4]);
         assertEquals(posted[0]!.posted_at.toISOString(), "2026-09-23T01:32:51.000Z");
-        // Versions 2 and 3 are posted at the time their migrations are applied: at the start of this run.
+        // Versions 2, 3 and 4 are posted at the time their migrations are applied: at the start of this run.
         assert(Math.abs(posted[1]!.posted_at.getTime() - Date.now()) < 10 * 60_000, "version 2 posted when applied");
         assert(Math.abs(posted[2]!.posted_at.getTime() - Date.now()) < 10 * 60_000, "version 3 posted when applied");
         assert(posted[2]!.posted_at.getTime() >= posted[1]!.posted_at.getTime(), "version 3 posted after version 2");
+        assert(Math.abs(posted[3]!.posted_at.getTime() - Date.now()) < 10 * 60_000, "version 4 posted when applied");
+        assert(posted[3]!.posted_at.getTime() >= posted[2]!.posted_at.getTime(), "version 4 posted after version 3");
         // Each migration runs again without changing a row.
         const migrations = await readMigrations();
-        for (const name of ["20260924100000_terms_versions.sql", "20260924100100_terms_version_2.sql", "20260925000000_terms_version_3.sql"]) {
+        for (const name of ["20260924100000_terms_versions.sql", "20260924100100_terms_version_2.sql", "20260925000000_terms_version_3.sql", "20261020110100_terms_version_4.sql"]) {
           await db.exec(migrations.find((m) => m.name === name)!.sql);
           const again = await versions();
           assertEquals(again.map((r) => [r.version, r.posted_at.toISOString()]), posted.map((r) => [r.version, r.posted_at.toISOString()]), name);
@@ -4406,7 +4411,7 @@ Deno.test("migrations on PGlite", {
 
         // Append-only, through the money tables' guard; an update that changes nothing passes.
         await refuses(`update public.terms_versions set posted_at = now() where version = 1`, "terms_versions is append-only: UPDATE of posted_at is refused");
-        await refuses(`update public.terms_versions set version = 4 where version = 3`, "terms_versions is append-only: UPDATE of version is refused");
+        await refuses(`update public.terms_versions set version = 5 where version = 4`, "terms_versions is append-only: UPDATE of version is refused");
         await refuses(`delete from public.terms_versions where version = 2`, "terms_versions is append-only: DELETE is refused");
         // contributions.terms_version references it (money-logic.md), so a plain
         // truncate is refused by that foreign key, and one that cascades by the guard.
@@ -4471,7 +4476,7 @@ Deno.test("migrations on PGlite", {
         }
         await db.exec(`set role service_role`);
         try {
-          assertEquals((await rows(`select version from public.terms_versions`)).length, 3);
+          assertEquals((await rows(`select version from public.terms_versions`)).length, 4);
           assertEquals(await row(`select public.terms_version_at('2026-09-23T01:32:51Z') as v`), { v: 1 });
           await refusedWith42501(`insert into public.terms_versions (version) values (9999)`);
           await refusedWith42501(`update public.terms_versions set posted_at = now() where version = 1`);

@@ -25,12 +25,16 @@ describe("readRoleSpecs against platform/agents", () => {
   it("carries each role's place in the launch roster, with a trigger for every role that is not running", async () => {
     const specs = await readRoleSpecs(AGENTS_DIR);
     const byStatus = (status: string) => specs.filter((s) => s.status === status).map((s) => s.name).sort();
-    // The Janitor runs, as code only (docs/specs/agent-upkeep.md).
-    expect(byStatus("running")).toEqual(["Builder A", "Builder B", "Game Designer", "Game Director", "Janitor", "Platform Builder", "Platform Director", "QA"]);
-    expect(byStatus("starts")).toEqual(["Art Director", "Biz Dev", "Community", "Curator", "HR", "Head of Finance", "Head of Product", "Tech Artist"]);
+    // The Janitor runs, as code only (docs/specs/agent-upkeep.md), and the Curator since suggestion
+    // triage is on (docs/specs/governance-copy.md).
+    expect(byStatus("running")).toEqual(["Builder A", "Builder B", "Curator", "Game Designer", "Game Director", "Janitor", "Platform Builder", "Platform Director", "QA"]);
+    expect(byStatus("starts")).toEqual(["Art Director", "Biz Dev", "Community", "HR", "Head of Finance", "Head of Product", "Tech Artist"]);
     expect(byStatus("planned")).toEqual(["Host", "Studio Head"]);
     for (const spec of specs) expect(spec.trigger === null, spec.name).toBe(spec.status === "running");
-    expect(specs.find((s) => s.name === "Head of Finance")?.trigger).toMatch(/first Stripe payout/);
+    // Its real start: the backlog entry that brings the review team into the benchmark review.
+    expect(specs.find((s) => s.name === "Head of Finance")?.trigger).toMatch(/benchmark review, a backlog entry/);
+    // No role's public words name the retired board (docs/specs/governance-copy.md).
+    for (const spec of specs) expect(`${spec.description} ${spec.trigger ?? ""}`, spec.name).not.toMatch(/board/i);
   });
 
   it("gives every role a description of its job, and leaves whether it runs to the site", async () => {

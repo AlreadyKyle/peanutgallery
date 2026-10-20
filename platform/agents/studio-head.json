@@ -12,5 +12,5 @@
   "class": "planner",
   "write_access": true,
   "status": "planned",
-  "trigger": "Starts when its backlog entries are built: drafting cards from the roadmap and triaging board notes."
+  "trigger": "Starts when its backlog entry is built: drafting cards from the roadmap."
 }
