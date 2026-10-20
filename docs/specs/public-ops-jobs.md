@@ -13,11 +13,11 @@ Out: the promotion and itch.io workflows, which stay in the private repository o
 
 ## Behaviour
 
-The four jobs run at their old times (backup 06:17, the Controller 07:07, the quota check 07:37, the notices 09:07 UTC) and on `workflow_dispatch`, on main only, in the GitHub environment `ops`, whose deployment branch policy allows main alone. The step that runs a job reads that job's secret alone. The job's output goes to a 0600 file that is encrypted with age to `vars.BACKUP_AGE_RECIPIENT` and kept for 14 days; the public log shows the job, its exit and PASS, FAIL or done. The backup's `.tar.age` is kept for 90 days. A failure posts to ntfy. The job code is the run's own commit of main.
+The four jobs run at their old times (backup 06:17, the Controller 07:07, the quota check 07:37, the notices 09:07 UTC) and on `workflow_dispatch`, on main only, in the GitHub environment `ops`, whose deployment branch policy allows main alone. The step that runs a job reads that job's secret alone. The job's output goes to a 0600 file that is encrypted with age to `vars.BACKUP_AGE_RECIPIENT` and kept for 14 days; the public log shows the job, its exit and PASS, FAIL or done. The backup's `.tar.age` is kept for 90 days, and a second job, `offsite`, copies it to the Google Cloud Storage bucket `gs://mobmachine-backups` as a service account that can only create objects, through Workload Identity Federation with no key; it is the only job that may ask for an OIDC token, and it reads no job secret. A failure posts to ntfy. The job code is the run's own commit of main.
 
 ## Acceptance criteria
 
-- [x] The workflow runs the four jobs at their times and on dispatch, on main in this repository only, in the environment `ops`, with contents: read and no job-level permissions.
+- [x] The workflow runs the four jobs at their times and on dispatch, on main in this repository only, in the environment `ops`, with contents: read; the one job-level permission is `id-token: write` on `offsite`.
 - [x] Every action is pinned to a commit sha and the checkout of the run sha keeps no credential.
 - [x] Only the run step reads a job env, each job its own; only the alert step reads `NTFY_TOPIC_URL`; no step puts an expression in its script.
 - [x] The job's output reaches the public log only as the script's fixed lines; the full log is encrypted before upload and deleted when no recipient is set; every env value of eight characters or more is masked.
@@ -25,6 +25,7 @@ The four jobs run at their old times (backup 06:17, the Controller 07:07, the qu
 - [ ] The board has created the environment `ops` (main only) and set its five secrets.
 - [ ] A backup run on main ends `ops-job: backup exited 0 (done)` and keeps `backup-<run id>`.
 - [ ] The private repository's `jobs.yml` is removed, so the jobs never run twice.
+- [ ] A backup run on main copies its `.tar.age` to `gs://mobmachine-backups`, and `gcloud storage ls gs://mobmachine-backups/` as the owner account lists it.
 
 ## Verification
 
@@ -36,6 +37,8 @@ The four jobs run at their old times (backup 06:17, the Controller 07:07, the qu
 - `node --test platform/ops/test/ops.test.mjs`, "the daily jobs on GitHub Actions" and "shell scripts" (shellcheck over `actions/run-ops-job.sh`); `bash platform/gate/test/run-tests.sh`, "workflow audit: ops-jobs.yml ...".
 
 ## Decisions
+
+- 2026-10-20: the backup is also copied to a Google Cloud Storage bucket outside the GitHub account, with an object-create-only service account behind Workload Identity Federation, so that one account's loss or compromise cannot remove every copy. The copy runs in its own job so that no job holding a secret can mint the Google token.
 
 - 2026-10-19 (board): the daily jobs move to this public repository (PLAN.md §10 decision 78), reversing the 6 October 2026 ruling that no job secret sits here. Twelve days without an off-site backup is the bigger risk, and the secrets sit where `DISPATCHER_ENV` already does, under the same main-only environment.
 - 2026-10-19: one step reads the job's env through an expression that picks that job's secret and ends in an empty string, so no job can fall through to another's secret.

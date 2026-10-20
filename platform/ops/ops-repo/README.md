@@ -6,7 +6,7 @@ The nightly backup, the Controller, the quota check, the ship notices and the ma
 
 | Job | Schedule (UTC) | Does |
 |---|---|---|
-| `backup` | 06:17 daily | `platform/ops/mac/backup-mac.sh` with `postgresql-client-17` from the PostgreSQL apt repository and `BACKUP_DIR` in the runner's temporary folder, up to 3 attempts a minute apart, then the `.tar.age` kept as the artifact `backup-<run id>` for 90 days |
+| `backup` | 06:17 daily | `platform/ops/mac/backup-mac.sh` with `postgresql-client-17` from the PostgreSQL apt repository and `BACKUP_DIR` in the runner's temporary folder, up to 3 attempts a minute apart, then the `.tar.age` kept as the artifact `backup-<run id>` for 90 days and copied by the job `offsite` to the bucket `gs://mobmachine-backups` (Backups off GitHub, below) |
 | `controller` | 07:07 daily | `jobs/check-env.mjs controller`, then `node --env-file jobs/main.mjs controller` |
 | `quota` | 07:37 daily | `jobs/check-env.mjs quota`, then `node --env-file jobs/main.mjs quota` |
 | `notices` | 09:07 daily | `jobs/check-env.mjs notices`, then `node --env-file jobs/main.mjs notices`: the ship notices (`docs/specs/ship-notices.md`), then the emails for cards players follow (`docs/specs/card-follows.md`), at most 50 a run in all, payers first |
@@ -19,6 +19,12 @@ The nightly backup, the Controller, the quota check, the ship notices and the ma
 The job runs in the GitHub environment `ops`, which only main can deploy to, so a card branch, a pull request or a fork never receives a job's env, as for the dispatcher's environment `dispatcher`. Only the step that runs the job reads a secret, and only that job's own; the alert step reads `NTFY_TOPIC_URL`. The job code is the run's own commit of main: `.github` and `platform/ops` are kernel paths, so only a board pull request changes what runs, and a merge reaches the jobs at their next run (the private repository's `STUDIO_REF` pin is retired with it).
 
 Actions logs of a public repository are public, so the job's output goes to a file that is encrypted with age to `vars.BACKUP_AGE_RECIPIENT`, the board's backup key, and kept as the artifact `ops-log-<job>-<run id>-<attempt>` for 14 days; every value of eight characters or more in the job's env is masked as well. The public log shows the job, its exit and the first word of its result: `PASS` or `FAIL` for the Controller, the quota check, the notices and the marketing engine, `done` for the backup. Anyone signed in to GitHub can download the artifacts; only the board's private key, which stays offline, opens them.
+
+## Backups off GitHub
+
+The artifact is in the same GitHub account as everything else, and anyone who holds that account can delete it. So after a backup the job `offsite` copies the same `.tar.age` to the Google Cloud Storage bucket `gs://mobmachine-backups` in the Google Cloud project `mob-machine` (number 1072097120782), which no GitHub credential can touch. The job reads no job secret, and it is the only job in the workflow that may ask GitHub for an OIDC token (`id-token: write`). `google-github-actions/auth` trades that token, through Workload Identity Federation (pool `github`, provider `peanutgallery`), for the service account `backup-writer@mob-machine.iam.gserviceaccount.com`. The provider admits a token only from this repository (id 1369060201, owner id 193827447), the environment `ops` and `refs/heads/main`, and the service account holds `roles/storage.objectCreator` on the bucket alone: it can create an object, and cannot read, list, overwrite or delete one. The copy is `gcloud storage cp --if-generation-match=0`, which refuses a name that already exists without reading it. No key exists, so nothing here is a secret. A failed copy fails the job and posts "Mob Machine job backup failed to reach the bucket on GitHub Actions: <run URL>" to ntfy.
+
+The bucket (us-central1) has uniform access and public access prevented, a retention policy of 90 days, so no one can delete or replace a backup younger than that, and a lifecycle rule that deletes objects at 365 days. The retention policy is not locked: the project's owner can still shorten or remove it. A budget alert at 7 CAD a month is on the project.
 
 ## Set it up (the board, once)
 
@@ -42,8 +48,8 @@ From the board's checkout of main on the Mac, with `.env` and `.env.vps` in plac
 
 ## Restore
 
-Download the artifact (`gh run download <run id> --repo AlreadyKyle/peanutgallery -n backup-<run id>`), then follow `platform/ops/README.md`, Restore a Mac backup, from step 2. A job's log: download `ops-log-<job>-<run id>-<attempt>` the same way and `age -d -i <the backup key> ops-job-log.age`. The weekly restore check is not on Actions yet (`docs/BACKLOG.md`, Weekly restore check on Actions).
+Download the artifact (`gh run download <run id> --repo AlreadyKyle/peanutgallery -n backup-<run id>`), or, when the artifact is gone or GitHub is out of reach, take it from the bucket, signed in with `gcloud auth login` as the project's owner account: `gcloud storage ls gs://mobmachine-backups/`, then `gcloud storage cp gs://mobmachine-backups/peanutgallery-<UTC time>.tar.age .`. Then follow `platform/ops/README.md`, Restore a Mac backup, from step 2. A job's log: download `ops-log-<job>-<run id>-<attempt>` the same way and `age -d -i <the backup key> ops-job-log.age`. The weekly restore check is not on Actions yet (`docs/BACKLOG.md`, Weekly restore check on Actions).
 
 ## What it costs
 
-Nothing: a public repository's standard runners are free, with no monthly cap, and its artifact storage is free.
+Nothing on GitHub: a public repository's standard runners are free, with no monthly cap, and its artifact storage is free. The bucket is Google Cloud Storage's standard class, a few cents a month for a year of nightly backups; the project's budget alert is 7 CAD a month.
