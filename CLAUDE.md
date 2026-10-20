@@ -8,6 +8,7 @@ A public game studio run by AI agents, directed by its audience and funded by th
 2. `docs/VISION.md`: the product vision, goals and the order of bets; `docs/strategy/` holds the final state's strategy (PRD, benchmarks, game quality bar, team, operations, roadmap), and `docs/specs/final-state.md` is its contract.
 3. The sections of `docs/PLAN.md` the work touches: §4 mechanics, work, kernel and The Board (the operator console); §5 money; §6 architecture; §10 decisions; Appendix A technical spec.
 4. The specs under `docs/specs/` the work touches.
+5. `docs/build/README.md` and `docs/build/NOW.md`: the build rhythm (a daily build Kyle reviews, the Monday release candidate, the Tuesday release) and the current order of work (`docs/PLAN.md` §10 decision 79). The routines are `.claude/skills/daily`, `rc`, `release`, `sweep` and `scout`.
 
 `docs/BACKLOG.md` lists what is planned and not built. `docs/LESSONS.md` records which routes work from a cloud session, which are refused, and how sessions avoid stalling on the board.
 
@@ -48,6 +49,7 @@ Sessions that died mid-run (a usage limit or the machine shutting down stops a s
 - Every agent commits and pushes its branch at least every 20 minutes. Nothing lives only in a worktree or in `/tmp`.
 - At most three agents run `pnpm verify` or e2e at once, each on its own port (`E2E_PORT`, 4400 to 4499).
 - Before pushing, run the e2e specs the change touches; the Actions gate is the full check, so do not also run the local gate. A full gate run takes about 8 minutes on Actions and 8 to 9 locally (`docs/ROADMAP.md`, Merging), so a predictable failure is expensive.
+- **The train.** Every pull request a Claude session opens targets `next`, not `main`, and ships in the Tuesday release (`docs/build/README.md`). The exceptions are a hotfix (an S1 or S2, a red live check, or a broken production job), which targets `main` and is merged back into `next`, and the dispatcher's card pull requests, which merge into `main` as they always have. A pull request into `next` merges the same way as below, on a green gate at its exact head.
 - One session merges to `main` at a time, on a green gate workflow run at the pull request's exact head (or, when Actions is down, a local gate PASS whose `base=` is still `origin/main`, quoted in the merge body): `gh api -X PUT repos/AlreadyKyle/peanutgallery/pulls/<pr>/merge -f merge_method=squash -f sha=<head>`, then `gh api -X DELETE repos/AlreadyKyle/peanutgallery/git/refs/heads/<branch>`. The REST form works in cloud sessions, whose GitHub proxy refuses the GraphQL `gh pr` commands; `sha` refuses a head that moved. If `main` moved, run the gate again.
 - After each merge, comment on the merged pull request with the merge sha and the live-check line (`gh api repos/AlreadyKyle/peanutgallery/issues/<pr>/comments -f body=...`). Merged branches and their worktrees are deleted. (`~/peanutgallery-launch/STATUS.md` is history up to #149.)
 

@@ -4,7 +4,7 @@ How Mob Machine runs day to day without waiting on the board: the review team th
 
 ## 1. Event-driven cadences
 
-Nothing here runs because it is Monday. Each process starts on an event the studio can detect, with a backstop so a quiet studio is still checked.
+Nothing here runs because it is Monday. Each process starts on an event the studio can detect, with a backstop so a quiet studio is still checked. The one calendar is the Claude-session team's build rhythm (a daily build, a release candidate on Monday night and the release on Tuesday), which the board set for the team's own work (`docs/PLAN.md` §10 decision 79, `docs/build/README.md`); funded cards and every process below stay on their events.
 
 | Event | What runs | Who |
 |---|---|---|
