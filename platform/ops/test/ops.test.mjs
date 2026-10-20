@@ -1593,10 +1593,13 @@ describe('the daily jobs on GitHub Actions', () => {
     });
     assert.equal(copy, offsiteStep('Copy the encrypted backup to the bucket'));
     assert.match(copy.run, /^set -euo pipefail$/m);
-    assert.match(copy.run, /gcloud storage cp --if-generation-match=0 "\$\{files\[0\]\}" "gs:\/\/mobmachine-backups\/\$name"/);
+    assert.match(copy.run, /"https:\/\/storage\.googleapis\.com\/upload\/storage\/v1\/b\/mobmachine-backups\/o\?uploadType=media&ifGenerationMatch=0&name=\$name"$/m);
+    assert.match(copy.run, /^ *curl -fsS [^\n]*-H @<\(printf 'Authorization: Bearer %s\\n' "\$token"\)/m, 'the token reaches curl on a file descriptor, not its command line');
+    assert.match(copy.run, /^echo "::add-mask::\$token"$/m);
+    assert.equal([...copy.run.matchAll(/https:\/\//g)].length, 1, 'one request');
     assert.equal(copy.if, undefined, 'a failed copy fails the job');
-    const gcloud = [...copy.run.matchAll(/gcloud [a-z]+ [a-z-]+/g)].map((match) => match[0]);
-    assert.deepEqual(gcloud, ['gcloud storage cp'], 'it creates the object and reads, lists or deletes nothing');
+    const gcloud = [...copy.run.replace(/^ *#.*$/gm, '').matchAll(/gcloud [a-z]+ [a-z-]+/g)].map((match) => match[0]);
+    assert.deepEqual(gcloud, ['gcloud auth print-access-token'], 'gcloud only hands over the token: gcloud storage cp reads the object first');
     assert.equal(alert, offsiteStep('Send the failure alert'));
     assert.equal(alert.if, 'failure()');
     assert.deepEqual(Object.keys(alert.env), ['NTFY_TOPIC_URL', 'RUN_URL']);
