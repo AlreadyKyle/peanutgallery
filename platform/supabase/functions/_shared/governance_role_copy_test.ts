@@ -8,7 +8,7 @@ import { assertEquals } from "jsr:@std/assert@1";
 
 const MIGRATIONS_DIR = new URL("../../migrations/", import.meta.url);
 const AGENTS_DIR = new URL("../../../agents/", import.meta.url);
-const MIGRATION = "20261020110000_governance_role_copy.sql";
+const MIGRATION = "20261020210000_governance_role_copy.sql";
 const PGCRYPTO_LINE = "create extension if not exists pgcrypto;";
 const OPTS = { sanitizeOps: false, sanitizeResources: false };
 

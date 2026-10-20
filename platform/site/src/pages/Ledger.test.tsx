@@ -231,13 +231,27 @@ describe('Ledger', () => {
     expect(row.querySelector('dd')?.textContent).toBe('$1.25');
     // The band names the one case where its money goes to a card that is not the next to open.
     expect(within(funding).getByText(legal.notOnCardTopUp)).toBeTruthy();
-    expect(within(funding).queryByText(/short by/)).toBeNull();
-    expect(within(funding).queryByText(/test payment/)).toBeNull();
+    expect(within(funding).queryByText(/is .* below zero:/)).toBeNull();
+    expect(within(funding).queryByText(/own test payment/)).toBeNull();
     cleanup();
     renderLedger(sourceOf({ ...snapshot, money: books([], { not_on_card_usd: 0, short_usd: 0.75, board_test_usd: 0.5019 }) }));
     const again = await screen.findByRole('region', { name: legal.meter });
     await waitFor(() => expect(within(again).getByText(legal.shortBy.replace('{usd}', '$0.75'))).toBeTruthy());
     expect(within(again).getByText("The pool includes $0.50 of the studio's own test payment; it funds no card.")).toBeTruthy();
+  });
+
+  it("says how much of Agent spend is on cards not shown yet, only while there is some (docs/specs/ledger-figures.md)", async () => {
+    renderLedger(sourceOf({ ...snapshot, totals: { ...snapshot.totals, usd_total: 3.1048, unlisted_usd: 0.2631 } }));
+    const work = await screen.findByRole('region', { name: legal.agentWork });
+    await waitFor(() => expect(within(work).getByText(legal.agentSpend)).toBeTruthy());
+    const row = within(work).getByText(legal.agentSpend).closest('.stat')!;
+    expect(row.querySelector('dd')?.textContent).toContain('$3.10');
+    expect(row.textContent).toContain(`${legal.describeAgentSpend} Includes $0.26 spent on cards not shown on the site yet.`);
+    cleanup();
+    renderLedger(sourceOf(snapshot));
+    const plain = await screen.findByRole('region', { name: legal.agentWork });
+    await waitFor(() => expect(within(plain).getByText(legal.agentSpend)).toBeTruthy());
+    expect(plain.textContent).not.toContain('not shown on the site yet');
   });
 
   it('says Not available right now. for Not on a card yet and Money in when public_money did not load', async () => {

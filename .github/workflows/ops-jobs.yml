@@ -1,12 +1,14 @@
 # Mob Machine's daily jobs (docs/specs/actions-host.md, docs/PLAN.md §10 decision 78): the nightly
 # backup, the Controller, the quota check and the ship notices, on GitHub-hosted runners, free in this
-# public repository. They ran in the board's private repository AlreadyKyle/mobmachine-ops from
-# 6 October 2026 until the account's free private minutes ran out on 18 October 2026.
+# public repository, and the marketing engine every hour (docs/specs/marketing-engine.md, PLAN.md §10
+# decision 77), which posts the studio's news to Bluesky, Mastodon and Discord and reads nothing back.
+# The first four ran in the board's private repository AlreadyKyle/mobmachine-ops from 6 October
+# 2026 until the account's free private minutes ran out on 18 October 2026.
 #
 # Secrets: the job runs in the GitHub environment `ops`, whose deployment branch policy allows main
 # alone, so a card branch, a pull request or a fork never receives a job's env. Only the step that runs
-# the job reads a secret, and only that job's own (BACKUP_ENV, CONTROLLER_ENV, QUOTA_ENV or
-# NOTICES_ENV); the alert step reads NTFY_TOPIC_URL. The job code is this run's own commit of main, as
+# the job reads a secret, and only that job's own (BACKUP_ENV, CONTROLLER_ENV, QUOTA_ENV,
+# NOTICES_ENV or MARKETING_ENV); the alert step reads NTFY_TOPIC_URL. The job code is this run's own commit of main, as
 # for the dispatcher: the kernel paths (.github, platform/ops) keep card code from changing what runs.
 # The repository is public, and so are its Actions logs: the job's output goes to a file that is
 # encrypted with age to vars.BACKUP_AGE_RECIPIENT and kept as an artifact for 14 days, and the public
@@ -21,13 +23,14 @@ on:
     - cron: '7 7 * * *'    # controller
     - cron: '37 7 * * *'   # quota
     - cron: '7 9 * * *'    # notices
+    - cron: '23 * * * *'   # marketing
   workflow_dispatch:
     inputs:
       job:
-        description: backup, controller, quota or notices
+        description: backup, controller, quota, notices or marketing
         required: true
         type: choice
-        options: [backup, controller, quota, notices]
+        options: [backup, controller, quota, notices, marketing]
 
 permissions:
   contents: read
@@ -55,6 +58,7 @@ jobs:
             controller:* | ':7 7 * * *') job=controller ;;
             quota:* | ':37 7 * * *') job=quota ;;
             notices:* | ':7 9 * * *') job=notices ;;
+            marketing:* | ':23 * * * *') job=marketing ;;
             *) echo "no job for '$ASKED' '$SCHEDULE'"; exit 1 ;;
           esac
           echo "job=$job" >> "$GITHUB_OUTPUT"
@@ -68,6 +72,7 @@ jobs:
             platform/ops
             platform/supabase/functions/_shared
             platform/site
+            platform/gate
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
@@ -89,7 +94,7 @@ jobs:
       - name: Run the job
         env:
           JOB: ${{ steps.pick.outputs.job }}
-          JOB_ENV: ${{ (steps.pick.outputs.job == 'backup' && secrets.BACKUP_ENV) || (steps.pick.outputs.job == 'controller' && secrets.CONTROLLER_ENV) || (steps.pick.outputs.job == 'quota' && secrets.QUOTA_ENV) || (steps.pick.outputs.job == 'notices' && secrets.NOTICES_ENV) || '' }}
+          JOB_ENV: ${{ (steps.pick.outputs.job == 'backup' && secrets.BACKUP_ENV) || (steps.pick.outputs.job == 'controller' && secrets.CONTROLLER_ENV) || (steps.pick.outputs.job == 'quota' && secrets.QUOTA_ENV) || (steps.pick.outputs.job == 'notices' && secrets.NOTICES_ENV) || (steps.pick.outputs.job == 'marketing' && secrets.MARKETING_ENV) || '' }}
         run: bash platform/ops/actions/run-ops-job.sh "$JOB"
 
       - name: Encrypt the job's log

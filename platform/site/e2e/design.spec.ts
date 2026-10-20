@@ -425,7 +425,7 @@ async function moneyBandsDrawn(page: Page, label: string, path: string): Promise
     return;
   }
   await expect(funding.getByText("The pool includes $0.50 of the studio's own test payment; it funds no card.")).toBeVisible();
-  if (label === 'a shortfall') await expect(funding.getByText('Waiting cards are short by $0.45 until new money arrives.')).toBeVisible();
+  if (label === 'a shortfall') await expect(funding.getByText('Not on a card yet is $0.45 below zero: agent work spent that before any money on a card covered it, or a refund took back money already spent.')).toBeVisible();
   await expect(page.getByRole('region', { name: 'Money in' }).locator('.stat')).not.toHaveCount(0);
   await expect(stopped.getByRole('region', { name: 'Paused' }).locator('.tag[data-state="paused"]')).toBeVisible();
   await expect(stopped.getByRole('region', { name: "Didn't ship" }).getByRole('heading', { level: 4 })).toHaveCount(1);

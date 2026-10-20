@@ -295,12 +295,25 @@ export function PaidExample() {
  * card), so no figure is said twice. Before the build starts, the cost is what drafting the card cost,
  * and its label says so.
  */
+/**
+ * What reached a card = its cost + what is unspent on its bar + what moved on to other cards or to Not
+ * on a card yet (docs/specs/ledger-figures.md). The bar is public_card_funding.on_card_usd, else the
+ * card's own funded_usd; each part is rounded to the cent and is 0 below it.
+ */
+export function cardMoneyParts(detail: CardDetail): { unspent: number; movedOn: number } {
+  const bar = detail.funding === null ? detail.card.funded_usd : detail.funding.on_card_usd;
+  const reached = detail.funding === null ? bar : detail.funding.credited_usd;
+  const cents = (usd: number) => Math.max(0, Math.round(usd * 100)) / 100;
+  return { unspent: cents(bar - detail.spent_usd), movedOn: cents(reached - bar) };
+}
+
 /** The stages a card reaches once the agents start building it (lib/cards.ts faceOf). */
 const BUILD_STARTED = new Set(['building', 'gated', 'live', 'paused', 'rejected']);
 
 export function CardFacts({ detail, onFace = false, children }: { detail: CardDetail; onFace?: boolean; children?: ReactNode }) {
   const card = detail.card;
   const funded = detail.funding === null ? card.funded_usd : Math.max(detail.funding.credited_usd, 0);
+  const { unspent, movedOn } = cardMoneyParts(detail);
   return (
     <dl className="facts">
       {card.funding_target_usd > 0 && !onFace ? (
@@ -319,6 +332,18 @@ export function CardFacts({ detail, onFace = false, children }: { detail: CardDe
         <dt>{BUILD_STARTED.has(card.stage) ? legal.costLabel : legal.draftCostLabel}</dt>
         <dd>{formatUsd(detail.spent_usd)}</dd>
       </div>
+      {unspent > 0 ? (
+        <div data-fact="unspent">
+          <dt>{legal.unspentOnBarLabel}</dt>
+          <dd>{formatUsd(unspent)}</dd>
+        </div>
+      ) : null}
+      {movedOn > 0 ? (
+        <div data-fact="moved-on">
+          <dt>{legal.movedOnLabel}</dt>
+          <dd>{formatUsd(movedOn)}</dd>
+        </div>
+      ) : null}
       {children}
     </dl>
   );

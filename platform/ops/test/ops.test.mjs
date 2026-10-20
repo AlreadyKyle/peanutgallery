@@ -18,6 +18,7 @@ import { VPS_JOBS } from '../jobs/lib.mjs';
 import './jobs.test.mjs';
 import './mac.test.mjs';
 import './notices.test.mjs';
+import './marketing.test.mjs';
 // The load test of the public read paths (docs/specs/load-test.md).
 import './load.test.mjs';
 
@@ -1274,6 +1275,29 @@ describe('make-jobs-env.sh', () => {
     assert.deepEqual(Object.keys(run.files).sort(), ['backup.env', 'quota.env']);
   });
 
+  // docs/specs/marketing-engine.md: marketing.env holds the service key and the channels .env sets.
+  test('writes marketing.env when asked for by name, with each channel .env sets and none it leaves unset', () => {
+    const hook = `https://discord.com/api/webhooks/123/${'t'.repeat(40)}`;
+    const dotenv = { ...DOTENV, BLUESKY_HANDLE: 'mobmachine.bsky.social', BLUESKY_APP_PASSWORD: 'abcd-efgh-ijkl-mnop', DISCORD_WEBHOOK_SHIPS: hook, MASTODON_INSTANCE_URL: '' };
+    const run = makeJobs(dotenv, JOB_OPERATOR, ['marketing']);
+    assert.equal(run.status, 0, run.output);
+    assert.deepEqual(run.files['marketing.env'], [
+      ['SUPABASE_URL', 'https://fixture.supabase.local'],
+      ['SUPABASE_SERVICE_ROLE_KEY', 'sb_secret_fixture'],
+      ['NTFY_TOPIC_URL', 'https://ntfy.sh/fixture-topic'],
+      ['BLUESKY_HANDLE', 'mobmachine.bsky.social'],
+      ['BLUESKY_APP_PASSWORD', 'abcd-efgh-ijkl-mnop'],
+      ['DISCORD_WEBHOOK_SHIPS', hook],
+    ]);
+    assert.ok(!run.output.includes('abcd-efgh-ijkl-mnop') && !run.output.includes(hook), 'the output names keys only');
+    const check = spawnSync(process.execPath, [path.join(OPS_DIR, 'jobs', 'check-env.mjs'), 'marketing', path.join(run.dir, 'marketing.env')], { encoding: 'utf8' });
+    assert.equal(check.stdout, 'valid\n');
+    const refused = makeJobs({ ...dotenv, BLUESKY_APP_PASSWORD: 'the-account-password' }, JOB_OPERATOR, ['marketing']);
+    assert.equal(refused.status, 1);
+    assert.match(refused.stderr, /marketing\.env not written:\n {2}- BLUESKY_APP_PASSWORD must be an app password/);
+    assert.ok(!refused.output.includes('the-account-password'));
+  });
+
   test('refuses a Stripe secret key as the read key, and writes nothing when every job asked for is refused', () => {
     const run = makeJobs({ ...DOTENV, STRIPE_READ_KEY: 'sk_live_fixture' }, JOB_OPERATOR, ['controller']);
     assert.equal(run.status, 1);
@@ -1484,12 +1508,12 @@ describe('the daily jobs on GitHub Actions', () => {
   const job = workflow.jobs.run;
   const steps = job.steps;
   const step = (name) => steps.find((candidate) => candidate.name === name);
-  const SECRETS = { backup: 'BACKUP_ENV', controller: 'CONTROLLER_ENV', quota: 'QUOTA_ENV', notices: 'NOTICES_ENV' };
+  const SECRETS = { backup: 'BACKUP_ENV', controller: 'CONTROLLER_ENV', quota: 'QUOTA_ENV', notices: 'NOTICES_ENV', marketing: 'MARKETING_ENV' };
 
-  test('runs the four jobs at their times and on workflow_dispatch, on main only, in the environment ops', () => {
+  test('runs the five jobs at their times and on workflow_dispatch, on main only, in the environment ops', () => {
     assert.deepEqual(Object.keys(workflow.on).sort(), ['schedule', 'workflow_dispatch']);
-    assert.deepEqual(workflow.on.schedule, [{ cron: '17 6 * * *' }, { cron: '7 7 * * *' }, { cron: '37 7 * * *' }, { cron: '7 9 * * *' }]);
-    assert.deepEqual(workflow.on.workflow_dispatch.inputs.job.options, ['backup', 'controller', 'quota', 'notices']);
+    assert.deepEqual(workflow.on.schedule, [{ cron: '17 6 * * *' }, { cron: '7 7 * * *' }, { cron: '37 7 * * *' }, { cron: '7 9 * * *' }, { cron: '23 * * * *' }]);
+    assert.deepEqual(workflow.on.workflow_dispatch.inputs.job.options, ['backup', 'controller', 'quota', 'notices', 'marketing']);
     assert.equal(job.if, "github.ref == 'refs/heads/main' && github.repository == 'AlreadyKyle/peanutgallery'");
     assert.equal(job.environment, 'ops');
     assert.equal(job['timeout-minutes'], 30);
@@ -1497,7 +1521,7 @@ describe('the daily jobs on GitHub Actions', () => {
     assert.equal(job.permissions, undefined);
     assert.deepEqual(Object.keys(workflow.jobs), ['run']);
     assert.doesNotMatch(text, /pull_request|workflow_run/);
-    for (const [cron, name] of [['17 6 * * *', 'backup'], ['7 7 * * *', 'controller'], ['37 7 * * *', 'quota'], ['7 9 * * *', 'notices']]) {
+    for (const [cron, name] of [['17 6 * * *', 'backup'], ['7 7 * * *', 'controller'], ['37 7 * * *', 'quota'], ['7 9 * * *', 'notices'], ['23 * * * *', 'marketing']]) {
       assert.ok(step('Pick the job').run.includes(`${name}:* | ':${cron}') job=${name} ;;`), name);
     }
   });
@@ -1505,7 +1529,7 @@ describe('the daily jobs on GitHub Actions', () => {
   test('pins every action to a commit sha, and its checkout of the run sha keeps no credential', () => {
     for (const { uses } of steps.filter((candidate) => candidate.uses)) assert.match(uses, /@[0-9a-f]{40}$/, uses);
     const checkout = steps.find((candidate) => candidate.uses?.startsWith('actions/checkout@'));
-    assert.deepEqual(checkout.with, { ref: '${{ github.sha }}', 'persist-credentials': false, 'sparse-checkout': 'platform/ops\nplatform/supabase/functions/_shared\nplatform/site\n' });
+    assert.deepEqual(checkout.with, { ref: '${{ github.sha }}', 'persist-credentials': false, 'sparse-checkout': 'platform/ops\nplatform/supabase/functions/_shared\nplatform/site\nplatform/gate\n' });
   });
 
   test("hands each job its own env alone, in the run step, and NTFY_TOPIC_URL to the alert alone; echoes no secret", () => {
@@ -1513,11 +1537,11 @@ describe('the daily jobs on GitHub Actions', () => {
     assert.deepEqual(withSecrets.map((candidate) => candidate.name), ['Run the job', 'Alert the board']);
     const env = step('Run the job').env.JOB_ENV;
     for (const [name, secret] of Object.entries(SECRETS)) assert.ok(env.includes(`(steps.pick.outputs.job == '${name}' && secrets.${secret})`), name);
-    assert.equal([...env.matchAll(/secrets\./g)].length, 4);
+    assert.equal([...env.matchAll(/secrets\./g)].length, 5);
     assert.match(env, /\|\| '' \}\}$/, 'no job falls through to a value that is not its own');
     assert.equal(step('Run the job').run, 'bash platform/ops/actions/run-ops-job.sh "$JOB"');
     assert.equal(step('Alert the board').env.NTFY_TOPIC_URL, '${{ secrets.NTFY_TOPIC_URL }}');
-    assert.deepEqual([...new Set([...text.matchAll(/secrets\.([A-Z_]+)/g)].map((match) => match[1]))].sort(), ['BACKUP_ENV', 'CONTROLLER_ENV', 'NOTICES_ENV', 'NTFY_TOPIC_URL', 'QUOTA_ENV']);
+    assert.deepEqual([...new Set([...text.matchAll(/secrets\.([A-Z_]+)/g)].map((match) => match[1]))].sort(), ['BACKUP_ENV', 'CONTROLLER_ENV', 'MARKETING_ENV', 'NOTICES_ENV', 'NTFY_TOPIC_URL', 'QUOTA_ENV']);
     for (const candidate of steps) {
       assert.doesNotMatch(candidate.run ?? '', /secrets\.|\$\{\{/, `${candidate.name} puts an expression in its script`);
       assert.doesNotMatch(candidate.run ?? '', /(echo|printf|cat)[^\n]*JOB_ENV/, `${candidate.name} prints the env`);
@@ -1586,7 +1610,7 @@ describe('the daily jobs on GitHub Actions', () => {
     assert.match(missing.stdout, /^ops-job: no env for notices: set its secret in the GitHub environment ops/m);
     const unknown = runJob(['promo'], { JOB_ENV });
     assert.equal(unknown.status, 2);
-    assert.match(unknown.stderr, /^usage: run-ops-job\.sh backup\|controller\|quota\|notices$/m);
+    assert.match(unknown.stderr, /^usage: run-ops-job\.sh backup\|controller\|quota\|notices\|marketing$/m);
   });
 
   test("writes the backup's env with BACKUP_DIR set to the runner's folder, and reads its done line", () => {

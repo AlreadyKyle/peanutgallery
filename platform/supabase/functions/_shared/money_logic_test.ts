@@ -1006,12 +1006,14 @@ Deno.test("public reads", OPTS, async (t) => {
       const m = await s.row<Record<string, string>>(`select refunded_usd, disputed_usd, corrections_usd, stripe_fees_usd from public.public_money`);
       // Fees: 0.59 + 0.40 on the payments, 15 on the dispute fee row; the refund and the dispute's own fee parts net out through their rows.
       assertEquals([m.refunded_usd, m.disputed_usd, m.corrections_usd], ["3.0000", "0.0000", "0.5000"]);
-      // Reconciliation: the latest reconcile run, and its finish time only when it passed.
+      // Reconciliation: the latest reconcile run's result, and the finish time of the latest run that
+      // passed (docs/specs/ledger-figures.md, which reads a run's books checks).
       await s.db.exec(`insert into public.controller_runs (job, started_at, finished_at, ok) values ('reconcile', now(), '2026-09-23T10:00:00Z', true)`);
       const ok = await s.row<{ reconciled_at: Date; last_run_ok: boolean }>(`select reconciled_at, last_run_ok from public.public_money`);
       assertEquals([ok.reconciled_at.toISOString(), ok.last_run_ok], ["2026-09-23T10:00:00.000Z", true]);
       await s.db.exec(`insert into public.controller_runs (job, started_at, finished_at, ok, created_at) values ('reconcile', now(), '2026-09-23T11:00:00Z', false, now() + interval '1 second')`);
-      assertEquals(await s.row(`select reconciled_at, last_run_ok from public.public_money`), { reconciled_at: null, last_run_ok: false });
+      const failed = await s.row<{ reconciled_at: Date; last_run_ok: boolean }>(`select reconciled_at, last_run_ok from public.public_money`);
+      assertEquals([failed.reconciled_at.toISOString(), failed.last_run_ok], ["2026-09-23T10:00:00.000Z", false]);
     } finally {
       await s.close();
     }
@@ -1067,7 +1069,7 @@ Deno.test("public reads", OPTS, async (t) => {
         { to_card_id: onward, to_title: "Onward", usd: 0.5 },
       ].sort((x, y) => y.usd - x.usd));
       assertEquals(round4(moved.reduce((t, m) => t + m.usd, 0)), 3.5);
-      assertEquals(Object.keys(stopped[0]!), ["card_id", "title", "stage", "failing_check", "spent_usd", "funded_usd", "credited_usd", "moved", "stopped_at"]);
+      assertEquals(Object.keys(stopped[0]!), ["card_id", "title", "stage", "failing_check", "spent_usd", "funded_usd", "credited_usd", "moved", "stopped_at", "from_cards_usd"]);
       assert(stopped.some((x) => x.card_id === paused));
       await s.books();
     } finally {

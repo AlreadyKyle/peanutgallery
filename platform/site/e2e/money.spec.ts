@@ -235,18 +235,57 @@ test.describe('/ledger Funding: Not on a card yet, the shortfall and the board t
     await page.goto('/ledger');
     const funding = page.getByRole('region', { name: 'Funding' });
     await expect(funding.locator('.stat', { hasText: 'Not on a card yet' }).locator('dd')).toHaveText('$0.30');
-    await expect(funding.getByText(/short by/)).toHaveCount(0);
+    await expect(funding.getByText(/below zero/)).toHaveCount(0);
     await expect(funding.getByText(/test payment/)).toHaveCount(0);
   });
 
   test.describe('short, with the board test payment', () => {
     test.use({ studio: studio({}, { not_on_card_usd: '0.0000', short_usd: '0.4500', board_test_usd: '0.5019' }) });
-    test('says waiting cards are short, and names the test payment', async ({ page }) => {
+    test('says Not on a card yet is below zero, and names the test payment', async ({ page }) => {
       await page.goto('/ledger');
       const funding = page.getByRole('region', { name: 'Funding' });
       await expect(funding.locator('.stat', { hasText: 'Not on a card yet' }).locator('dd')).toHaveText('$0.00');
-      await expect(await ledgerLine(page, 'Waiting cards are short by $0.45 until new money arrives.')).toBeVisible();
+      await expect(await ledgerLine(page, 'Not on a card yet is $0.45 below zero: agent work spent that before any money on a card covered it, or a refund took back money already spent.')).toBeVisible();
       await expect(await ledgerLine(page, "The pool includes $0.50 of the studio's own test payment; it funds no card.")).toBeVisible();
+    });
+  });
+
+  // Production on 20 October 2026, after ledger-figures' migration (docs/specs/ledger-figures.md).
+  test.describe('the pool made up, with the test payment\'s shares and spend on a card not shown yet', () => {
+    test.use({
+      studio: studio(
+        {
+          pool: { ...DEFAULT_STUDIO.pool, balance_usd: '0.4816', reserve_usd: '0.5244', incident_reserve_usd: '0.1887', held_usd: '0.0000' },
+          totals: { ...DEFAULT_STUDIO.totals, usd_total: '3.1048', unlisted_usd: '0.2631' },
+        },
+        {
+          reserve_usd: '0.4510',
+          incident_usd: '0.1623',
+          agent_credit_usd: '3.0845',
+          not_on_card_usd: '0.0000',
+          short_usd: '0.2631',
+          board_test_usd: '0.5019',
+          test_paid_usd: '1.0000',
+          test_reserve_usd: '0.0734',
+          test_incident_usd: '0.0264',
+        },
+      ),
+    });
+    test('says how the pool adds up, what the balances hold of the test payment, and the spend on cards not shown yet', async ({ page }) => {
+      await page.goto('/ledger');
+      await expect(
+        await ledgerLine(
+          page,
+          'In the pool: $3.08 of agent credit and $0.50 from the test payment, less $3.10 of agent spend. That is $0.24 unspent on card bars, $0.50 of the test payment, less the $0.26 by which Not on a card yet is below zero.',
+        ),
+      ).toBeVisible();
+      await expect(
+        await ledgerLine(page, "The pool, the reserve and the emergency fund include the studio's own $1.00 test payment: $0.50, $0.07 and $0.03. It funds no card."),
+      ).toBeVisible();
+      const work = page.getByRole('region', { name: 'Agent work' });
+      await expect(work.locator('.stat', { hasText: 'Agent spend' }).locator('dd')).toContainText('$3.10');
+      await expect(work.getByText(/Includes \$0\.26 spent on cards not shown on the site yet\./)).toBeVisible();
+      expect(await overflowsHorizontally(page)).toBe(false);
     });
   });
 });
@@ -296,12 +335,12 @@ test.describe('/ledger Stopped cards', () => {
     await expect(pausedRow.locator('.tag svg[data-glyph="pause"]')).toHaveCount(1);
     await expect(pausedRow.getByText('It reached its spending limit.')).toBeVisible();
     await expect(pausedRow.getByText('$0.42 spent')).toBeVisible();
-    await expect(pausedRow.getByText('Its money stays on it until it resumes or the board cancels it.')).toBeVisible();
+    await expect(pausedRow.getByText('Its money stays on it until it resumes or is cancelled.')).toBeVisible();
 
     const rejectedRow = band.getByRole('region', { name: "Didn't ship" }).getByRole('listitem');
     await expect(rejectedRow).toHaveCount(1);
     await expect(rejectedRow.getByText('The bot that plays the game found a problem with the change.')).toBeVisible();
-    await expect(rejectedRow.getByText('$0.30 spent · funded by $1.20 from 2 supporters')).toBeVisible();
+    await expect(rejectedRow.getByText('$0.30 spent · $1.20 reached it from 2 supporters')).toBeVisible();
     await expect(
       rejectedRow.getByText(`Its unspent money went to ${QUIET!.title} ($0.50), ${RENAME!.title} ($0.30) and Not on a card yet ($0.10).`),
     ).toBeVisible();

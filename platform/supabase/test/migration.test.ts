@@ -1904,7 +1904,7 @@ const termsVersionsSql = launchFile(TERMS_VERSIONS_FILE);
 const termsVersion2Sql = launchFile(TERMS_VERSION_2_FILE);
 const termsVersion3Sql = launchFile(TERMS_VERSION_3_FILE);
 // Version 4: version 3's words with "or the studio cancels it" (docs/specs/governance-copy.md).
-const TERMS_VERSION_4_FILE = "20261020110100_terms_version_4.sql";
+const TERMS_VERSION_4_FILE = "20261020210100_terms_version_4.sql";
 const termsVersion4Sql = launchFile(TERMS_VERSION_4_FILE);
 
 describe("terms-versions migrations", () => {

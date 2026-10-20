@@ -83,6 +83,11 @@ export type LedgerTotals = {
   cached_tokens: number;
   output_tokens: number;
   row_count: number;
+  /**
+   * The part of usd_total spent on cards the site does not show yet, such as a draft waiting for its
+   * approval (docs/specs/ledger-figures.md); absent in a document from before the column existed.
+   */
+  unlisted_usd?: number;
 };
 
 export type AgentEvent = {
@@ -149,11 +154,17 @@ export type Money = {
   not_on_card_usd: number;
   short_usd: number;
   board_test_usd: number;
-  /** When the latest reconcile run finished, set only when it passed. */
+  /** When the latest reconcile run whose books checks passed finished; null when none has. */
   reconciled_at: string | null;
-  /** The latest reconcile run's result; null when none has run. */
+  /** The latest reconcile run's books checks (every check but minimum_balance); null when none has run. */
   last_run_ok: boolean | null;
   funding_order: FundingPlace[];
+  /**
+   * The studio's own test payment (docs/specs/ledger-figures.md): what it paid, net of any refund, and
+   * its shares of the reserve and the emergency fund, which the balances hold beyond the money-in
+   * figures. Absent in a document from before the columns existed.
+   */
+  test?: { paid_usd: number; reserve_usd: number; incident_usd: number } | null;
 };
 
 /** Where a rejected card's unspent money went: a card, or Not on a card yet when to_card_id is null. */
@@ -174,6 +185,8 @@ export type StoppedCard = {
   credited_usd: number;
   moved: StoppedMove[];
   stopped_at: string;
+  /** Of credited_usd, the money released to it from other cards; absent in a document from before the column. */
+  from_cards_usd?: number;
 };
 
 /** A role from the public_roles view: the public columns of roles, never its prompt or budget. */
@@ -495,6 +508,10 @@ function moneyFrom(row: Doc): Money {
     reconciled_at: textOrNull(row, 'reconciled_at'),
     last_run_ok: typeof row.last_run_ok === 'boolean' ? row.last_run_ok : null,
     funding_order: order.map((place) => ({ card_id: text(place, 'card_id'), room_usd: money(place.room_usd) })),
+    // Only in a document from after ledger-figures' migration (docs/specs/ledger-figures.md).
+    ...(row.test_paid_usd === undefined || row.test_paid_usd === null
+      ? {}
+      : { test: { paid_usd: money(row.test_paid_usd), reserve_usd: money(row.test_reserve_usd), incident_usd: money(row.test_incident_usd) } }),
   };
 }
 
@@ -513,6 +530,7 @@ export function stoppedFrom(row: Doc): StoppedCard {
     credited_usd: money(row.credited_usd),
     moved: moved.map((move) => ({ to_card_id: textOrNull(move, 'to_card_id'), to_title: textOrNull(move, 'to_title'), usd: money(move.usd) })),
     stopped_at: text(row, 'stopped_at'),
+    ...(row.from_cards_usd === undefined || row.from_cards_usd === null ? {} : { from_cards_usd: money(row.from_cards_usd) }),
   };
 }
 
@@ -523,6 +541,7 @@ function totalsFrom(row: Doc): LedgerTotals {
     cached_tokens: money(row.cached_tokens),
     output_tokens: money(row.output_tokens),
     row_count: money(row.row_count),
+    ...(row.unlisted_usd === undefined || row.unlisted_usd === null ? {} : { unlisted_usd: money(row.unlisted_usd) }),
   };
 }
 

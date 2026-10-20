@@ -324,9 +324,13 @@ Deno.test("migrations on PGlite", {
         "20261019030000_hold_drafting.sql",
         // The Game Designer drafts on its own, cheaper model (PLAN.md §10 decision 77).
         "20261019040000_designer_model.sql",
+        // ledger-figures (docs/specs/ledger-figures.md): one definition of each public money figure.
+        "20261020100000_ledger_figures.sql",
+        // marketing-engine (docs/specs/marketing-engine.md): the engine's posts, claimed once per channel.
+        "20261020200000_marketing_posts.sql",
         // governance-copy (docs/specs/governance-copy.md): six roles' words on /team, then Terms version 4.
-        "20261020110000_governance_role_copy.sql",
-        "20261020110100_terms_version_4.sql",
+        "20261020210000_governance_role_copy.sql",
+        "20261020210100_terms_version_4.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -380,6 +384,7 @@ Deno.test("migrations on PGlite", {
         "job_runs",
         "jobs",
         "ledger",
+        "marketing_posts",
         "notice_unsubscribes",
         "outbound_posts",
         "play_counts",
@@ -2085,6 +2090,7 @@ Deno.test("migrations on PGlite", {
           output_tokens: 320,
           row_count: 3,
           overhead_usd: "0.0000",
+          unlisted_usd: "0.0000",
         });
 
         await db.query(
@@ -4202,6 +4208,10 @@ Deno.test("migrations on PGlite", {
           "follow_notice_settle",
           "follow_notices_due",
           "follow_notices_stuck",
+          // marketing-engine (docs/specs/marketing-engine.md): the engine's due list, claim and settle.
+          "marketing_post_claim",
+          "marketing_post_settle",
+          "marketing_posts_due",
         ];
         // community-core (docs/specs/final-state.md, docs/specs/community-core.md): the community
         // documents run for anon and authenticated, a player's RPCs for authenticated, and the board's
@@ -4403,7 +4413,7 @@ Deno.test("migrations on PGlite", {
         assert(posted[3]!.posted_at.getTime() >= posted[2]!.posted_at.getTime(), "version 4 posted after version 3");
         // Each migration runs again without changing a row.
         const migrations = await readMigrations();
-        for (const name of ["20260924100000_terms_versions.sql", "20260924100100_terms_version_2.sql", "20260925000000_terms_version_3.sql", "20261020110100_terms_version_4.sql"]) {
+        for (const name of ["20260924100000_terms_versions.sql", "20260924100100_terms_version_2.sql", "20260925000000_terms_version_3.sql", "20261020210100_terms_version_4.sql"]) {
           await db.exec(migrations.find((m) => m.name === name)!.sql);
           const again = await versions();
           assertEquals(again.map((r) => [r.version, r.posted_at.toISOString()]), posted.map((r) => [r.version, r.posted_at.toISOString()]), name);
