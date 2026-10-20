@@ -84,7 +84,7 @@ describe('Stopped', () => {
     const list = screen.getByRole('region', { name: legal.didntShipHeading });
     const row = within(list).getByRole('listitem');
     expect(within(row).getByText(legal.failingCheckWords.smoke!)).toBeTruthy();
-    expect(within(row).getByText('$0.30 spent · funded by $1.20 from 2 supporters')).toBeTruthy();
+    expect(within(row).getByText('$0.30 spent · $1.20 reached it from 2 supporters')).toBeTruthy();
     expect(
       within(row).getByText('Its unspent money went to Quiet rooms ($0.40), A cheaper Cart ($0.30) and Not on a card yet ($0.20).'),
     ).toBeTruthy();
@@ -94,7 +94,21 @@ describe('Stopped', () => {
 
   it('leaves the supporter count out when the funding figures did not load', () => {
     render(<Stopped snapshot={snapshot([REJECTED], { funding: {}, missing: ['funding'] })} />);
-    expect(screen.getByText('$0.30 spent · funded by $1.20')).toBeTruthy();
+    expect(screen.getByText('$0.30 spent · $1.20 reached it')).toBeTruthy();
+  });
+
+  it('says how much of what reached it came from other cards, so its spend and moves add up to it (docs/specs/ledger-figures.md)', () => {
+    // Production's "Show how much dust each strike adds": all $1.50 came from two other cards; it spent
+    // $0.153 and $1.347 went to Not on a card yet.
+    const card = stopped({ card_id: 'rej', spent_usd: 0.153, credited_usd: 1.5, from_cards_usd: 1.5, moved: [{ to_card_id: null, to_title: null, usd: 1.347 }] });
+    render(<Stopped snapshot={snapshot([card], { funding: { rej: { contributors: 1, credited_usd: 1.5 } } })} />);
+    expect(screen.getByText('$0.15 spent · $1.50 reached it from 1 supporter, $1.50 of it from other cards')).toBeTruthy();
+    expect(screen.getByText('Its unspent money went to Not on a card yet ($1.35).')).toBeTruthy();
+    expect(Math.round((card.spent_usd + card.moved.reduce((t, m) => t + m.usd, 0)) * 10000)).toBe(Math.round(card.credited_usd * 10000));
+    cleanup();
+    // None from other cards: the phrase is left out.
+    render(<Stopped snapshot={snapshot([{ ...card, from_cards_usd: 0 }], { funding: { rej: { contributors: 1, credited_usd: 1.5 } } })} />);
+    expect(screen.getByText('$0.15 spent · $1.50 reached it from 1 supporter')).toBeTruthy();
   });
 
   it('shows the stage fallback for a code with no words, never the code', () => {

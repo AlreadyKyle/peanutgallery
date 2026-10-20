@@ -1,6 +1,6 @@
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CardStamp } from '../components/Funding';
+import { CardFacts, CardStamp } from '../components/Funding';
 import { detailDoc } from '../lib/card-detail.test-fixture';
 import { cardDetailFrom, type Milestones } from '../lib/card-source';
 import { copy } from '../lib/copy';
@@ -81,6 +81,35 @@ describe('CardStamp (Funding.tsx, kernel)', () => {
   it('leaves the cost out on a card that cost nothing, as its shipped caption does', () => {
     const { container } = render(<CardStamp detail={cardDetailFrom(detailDoc({ spent_usd: '0' }))} when="Live 2 minutes after work started, 14:00 to 14:02" />);
     expect(container.querySelector('[data-fact="stamp"]')?.textContent).toBe('Live 2 minutes after work started, 14:00 to 14:02');
+  });
+});
+
+describe('CardFacts money (Funding.tsx, kernel; docs/specs/ledger-figures.md)', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  const fact = (container: HTMLElement, name: string) => container.querySelector(`[data-fact="${name}"] dd`)?.textContent ?? null;
+
+  it('adds what moved on, so what reached the card is its cost plus where the rest went', () => {
+    // Production's first live card: $0.50 reached it, it cost $0.11 and $0.39 moved on to the next card.
+    const doc = detailDoc({ funding: { contributors: 1, credited_usd: '0.5000', on_card_usd: '0.1100' }, spent_usd: '0.1100' });
+    const { container } = render(<CardFacts detail={cardDetailFrom(doc)} />);
+    expect([fact(container, 'funded'), fact(container, 'cost'), fact(container, 'unspent'), fact(container, 'moved-on')]).toEqual(['$0.50 of $3.00', '$0.11', null, '$0.39']);
+  });
+
+  it('adds what is unspent on the bar, so an open card that paid for its drafting says what is left of its money', () => {
+    // Production's open card: $0.5228 on its bar, $0.28 of it spent drafting it.
+    const card = { ...(detailDoc().card as Record<string, unknown>), stage: 'proposed', funded_usd: '0.5228', funding_target_usd: '0.7800', live_at: null };
+    const doc = detailDoc({ card, funding: { contributors: 1, credited_usd: '0.5228', on_card_usd: '0.5228' }, spent_usd: '0.2800' });
+    const { container } = render(<CardFacts detail={cardDetailFrom(doc)} onFace />);
+    expect([fact(container, 'cost'), fact(container, 'unspent'), fact(container, 'moved-on')]).toEqual(['$0.28', '$0.24', null]);
+  });
+
+  it('shows neither when the bar is all spent and nothing moved on', () => {
+    const doc = detailDoc({ funding: { contributors: 2, credited_usd: '3.0000', on_card_usd: '3.0000' }, spent_usd: '3.0000' });
+    const { container } = render(<CardFacts detail={cardDetailFrom(doc)} />);
+    expect([fact(container, 'unspent'), fact(container, 'moved-on')]).toEqual([null, null]);
   });
 });
 
