@@ -11,8 +11,31 @@ export type Rect = readonly [number, number, number, number];
 /** Element rects measured by scripts/weekly-capture.mjs, keyed "<capture>.<name>" (rects.json). */
 export type Rects = Record<string, Rect>;
 
-/** What a beat shows in the frame: a capture of the live site, or a card when there is none. */
+/** The drawn scenes a beat can act out (Scenes.tsx): the explainer's own pieces, moving. */
+export type SceneName =
+  | 'agents'
+  | 'agent-card'
+  | 'curator-joins'
+  | 'ideas-pitch'
+  | 'ideas-vote'
+  | 'signup'
+  | 'reset'
+  | 'follow'
+  | 'dust'
+  | 'daily'
+  | 'seed'
+  | 'rates'
+  | 'ledger'
+  | 'terms'
+  | 'checkout'
+  | 'shield'
+  | 'fast'
+  | 'email'
+  | 'social';
+
+/** What a beat shows: a drawn scene (the default), a capture of the live site, or a glyph card. */
 export type Shot =
+  | { scene: SceneName; url?: undefined }
   | {
       /** A file in the week's captures folder: .mp4 plays, .png holds still. */
       src: string;

@@ -1,6 +1,8 @@
 # The weekly video template
 
-The weekly update video (`docs/specs/weekly-video.md`): the explainer's plate, type and band, then a few segments of short beats beside captures of the live site, then the closing lines. A week is one props file and one captures folder; nothing else changes.
+The weekly update video (`docs/specs/weekly-video.md`): the explainer's plate, type and band, then a few segments of short beats, each beside a drawn scene that acts out the change (the explainer's own agents, cards, coins, phone and glyphs, moving), then the closing lines. No browser frames and no screenshots. A week is one props file; nothing else changes.
+
+**Scenes.** Each beat names a scene in `shot: { scene: '<name>' }` (`SceneName` in `schema.ts`, drawn in `Scenes.tsx`): `agents`, `agent-card`, `curator-joins`, `ideas-pitch`, `ideas-vote`, `signup`, `reset`, `follow`, `dust`, `daily`, `seed`, `rates`, `ledger`, `terms`, `checkout`, `shield`, `fast`, `email`, `social`. A week with a change no scene fits adds one to `Scenes.tsx`: one main movement, a pointer where a player would press, the explainer's springs (`anim.ts`), real titles and figures only. Step 2 below (captures) is optional and only for a beat that needs a capture; most weeks need none.
 
 ## Make next week's video
 
@@ -52,4 +54,4 @@ Label any capture that shows a money figure with `asOf`. Two beats in a row on t
 
 - `geometry.ts`: each cut's text column, the one frame box, and the three type sizes (label, headline, support).
 - `layout.ts`: the plate and closing times, the hold times (`HOLD`), the push-in (`PUSH`) and ring timing, all on the explainer's 60 fps, 120 BPM grid. The score reads the same table.
-- `Screen.tsx`: the frame, the fade between captures, the push-in, the ring and the card shot. `Words.tsx`: the label, the rising headline, the support line. `Plate.tsx`: the plate, the top bar's segment counter and the closing lines. `score.ts`: the soundtrack.
+- `Scenes.tsx`: the drawn scenes and the cross-fade between beats. `Words.tsx`: the label, the rising headline, the support line. `Plate.tsx`: the plate, the top bar's segment counter and the closing lines. `score.ts`: the soundtrack.

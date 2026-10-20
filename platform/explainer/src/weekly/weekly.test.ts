@@ -15,7 +15,7 @@ for (const [date, week] of Object.entries(WEEKS)) {
     week.label,
     week.intro.headline,
     week.intro.support,
-    ...week.segments.flatMap((s) => [s.title, ...s.beats.flatMap((b) => [b.headline, b.support ?? '', isCapture(b.shot) ? (b.shot.asOf ?? '') : b.shot.line])]),
+    ...week.segments.flatMap((s) => [s.title, ...s.beats.flatMap((b) => [b.headline, b.support ?? '', isCapture(b.shot) ? (b.shot.asOf ?? '') : 'line' in b.shot ? b.shot.line : ''])]),
     ...week.outro.lines.map((l) => l.text),
   ].filter((w) => w !== '');
 

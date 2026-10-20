@@ -4,13 +4,12 @@ import { WEEKLY } from './geometry';
 import { layout } from './layout';
 import { Plate } from './Plate';
 import type { WeeklyInput } from './schema';
-import { Screen } from './Screen';
+import { Scenes } from './Scenes';
 import { WEEKS } from './weeks';
 import { Words } from './Words';
 
 // The weekly update video (docs/specs/weekly-video.md): the explainer's plate and top bar, then each
-// segment's beats, the words on one side and the live site's captures in one browser frame on the
-// other, then the closing plate. The week is data (weeks/); the rects come from the capture script.
+// segment's beats, the words on one side and a drawn scene acting out the change on the other, then the closing plate. The week is data (weeks/); the rects come from the capture script.
 
 export function Weekly({ format, week: id, rects = {} }: WeeklyInput) {
   const frame = useCurrentFrame();
@@ -21,7 +20,7 @@ export function Weekly({ format, week: id, rects = {} }: WeeklyInput) {
   const base = `weekly/${week.date}`;
   return (
     <AbsoluteFill style={{ background: C.paper }}>
-      <Screen frame={frame} g={g} plan={plan} rects={rects} base={base} />
+      <Scenes frame={frame} g={g} plan={plan} />
       <Words frame={frame} g={g} plan={plan} weekLabel={week.label} />
       <Plate frame={frame} g={g} plan={plan} week={week} />
       <Audio src={staticFile(`weekly-soundtrack-${week.date}.wav`)} />
