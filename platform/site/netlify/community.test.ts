@@ -265,12 +265,36 @@ describe('the sign-in routes', () => {
 
   it('sends a provider sign-in to Supabase Auth, only for the listed providers and back to this site', async () => {
     const back = encodeURIComponent(`${ORIGIN}/me`);
+    const calls = stubFetch([{ body: { external: { email: true, google: true }, disable_signup: false } }]);
     const google = await get(`/api/community/auth/authorize?provider=google&redirectTo=${back}`);
     expect(google.status).toBe(302);
     expect(google.headers.get('Location')).toBe(`${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${back}`);
+    expect(calls.map((call) => call.url)).toEqual([`${SUPABASE_URL}/auth/v1/settings`]);
+    const none = stubFetch([{ body: {} }]);
     expect((await get(`/api/community/auth/authorize?provider=twitter&redirectTo=${back}`)).status).toBe(400);
     expect((await get(`/api/community/auth/authorize?provider=google&redirectTo=${encodeURIComponent('https://evil.example/me')}`)).status).toBe(400);
     expect((await get(`/api/community/auth/authorize?provider=google&redirectTo=${back}&scopes=x`)).status).toBe(400);
+    expect(none).toHaveLength(0);
+  });
+
+  it('refuses a provider that auth/settings does not list as on, before Supabase sees it', async () => {
+    const back = encodeURIComponent(`${ORIGIN}/me`);
+    for (const settings of [
+      { external: { email: true, google: false, github: true }, disable_signup: false },
+      { external: { email: true, google: true }, disable_signup: true },
+      {},
+    ]) {
+      stubFetch([{ body: settings }]);
+      const response = await get(`/api/community/auth/authorize?provider=google&redirectTo=${back}`);
+      expect(response.status).toBe(403);
+      expect(response.headers.get('Location')).toBeNull();
+      expect(response.headers.get('Cache-Control')).toContain('no-store');
+      expect(((await response.json()) as { code: string }).code).toBe('closed');
+    }
+    stubFetch([{ status: 500, body: {} }]);
+    const down = await get(`/api/community/auth/authorize?provider=google&redirectTo=${back}`);
+    expect(down.status).toBe(502);
+    expect(down.headers.get('Location')).toBeNull();
   });
 
   it('ends a session on the server when signing out', async () => {

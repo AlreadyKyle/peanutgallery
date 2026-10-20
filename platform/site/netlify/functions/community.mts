@@ -267,29 +267,40 @@ async function post(req: Request, url: URL): Promise<Response> {
  */
 async function signInSettings(url: URL): Promise<Response> {
   if (url.search !== '') return refuse(400, 'No query string is allowed');
+  const settings = await authSettings();
+  if (settings === null) return refuse(502, 'The sign-in service did not answer');
+  return json(200, settings, {
+    'Netlify-CDN-Cache-Control': 'public, durable, s-maxage=60, stale-while-revalidate=300',
+    'Cache-Control': 'public, max-age=0, must-revalidate',
+  });
+}
+
+/** Supabase Auth's public settings as the site may know them, or null when the service did not answer. */
+async function authSettings(): Promise<ReturnType<typeof publicAuthSettings> | null> {
   try {
     const response = await fetch(`${SUPABASE_URL}/auth/v1/settings`, {
       headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Accept: 'application/json' },
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
-    if (!response.ok) return refuse(502, 'The sign-in service did not answer');
-    return json(200, publicAuthSettings(await response.json()), {
-      'Netlify-CDN-Cache-Control': 'public, durable, s-maxage=60, stale-while-revalidate=300',
-      'Cache-Control': 'public, max-age=0, must-revalidate',
-    });
+    if (!response.ok) return null;
+    return publicAuthSettings(await response.json());
   } catch {
-    return refuse(502, 'The sign-in service did not answer');
+    return null;
   }
 }
 
 /**
  * Continue with a provider: a 302 to Supabase Auth's provider sign-in, which comes back to the page
  * named with the session in the fragment, as a magic link does. Only the providers the site has a
- * button for, and only back to this site.
+ * button for, only those auth/settings says are switched on (so a hand-made link to an off provider
+ * is refused here rather than by Supabase's raw error), and only back to this site.
  */
-function authorize(url: URL): Response {
+async function authorize(url: URL): Promise<Response> {
   const ask = authorizeRequest(url.searchParams, url.origin);
   if (!ask.ok) return refuse(ask.status, ask.error);
+  const settings = await authSettings();
+  if (settings === null) return refuse(502, 'The sign-in service did not answer');
+  if (!settings.providers.includes(ask.value.provider)) return refuseAuth(403, 'That sign-in is not on', 'closed');
   const target = `${SUPABASE_URL}/auth/v1/authorize?provider=${ask.value.provider}&redirect_to=${encodeURIComponent(ask.value.redirectTo)}`;
   return new Response(null, { status: 302, headers: { Location: target, ...NO_STORE } });
 }
