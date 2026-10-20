@@ -4420,7 +4420,7 @@ Deno.test("migrations on PGlite", {
         await db.exec(`update public.terms_versions set posted_at = posted_at where version = 1`);
         await refuses(`insert into public.terms_versions (version) values (0)`, "terms_versions_version_check");
         await refuses(`insert into public.terms_versions (version) values (10000)`, "terms_versions_version_check");
-        assertEquals((await versions()).length, 3);
+        assertEquals((await versions()).length, 4);
         const triggers = await rows<{ tgname: string }>(
           `select tgname from pg_trigger where tgrelid = 'public.terms_versions'::regclass and not tgisinternal order by 1`,
         );
@@ -4432,14 +4432,16 @@ Deno.test("migrations on PGlite", {
           (await row<{ v: number | null }>(`select public.terms_version_at($1::timestamptz) as v`, [time])).v;
         const v2At = posted[1]!.posted_at;
         const v3At = posted[2]!.posted_at;
+        const v4At = posted[3]!.posted_at;
         assertEquals(await at("2026-09-23T01:32:51Z"), 1);
         assertEquals(await at("2026-09-23T01:32:50.999Z"), null);
         assertEquals(await at("2000-01-01T00:00:00Z"), null);
         assertEquals(await at(null), null);
         assertEquals(await at(new Date(v2At.getTime() - 1).toISOString()), 1);
         if (v3At.getTime() > v2At.getTime()) assertEquals(await at(v2At.toISOString()), 2);
-        assertEquals(await at(v3At.toISOString()), 3);
-        assertEquals(await at("2099-01-01T00:00:00Z"), 3);
+        if (v4At.getTime() > v3At.getTime()) assertEquals(await at(v3At.toISOString()), 3);
+        assertEquals(await at(v4At.toISOString()), 4);
+        assertEquals(await at("2099-01-01T00:00:00Z"), 4);
 
         const privileges = await row(
           `select has_table_privilege('service_role', 'public.terms_versions', 'insert') as service_insert,
@@ -4466,7 +4468,7 @@ Deno.test("migrations on PGlite", {
             await refusedWith42501(`select * from public.terms_versions`);
             await refusedWith42501(`select public.terms_version_at(now())`);
             const view = await rows(`select * from public.public_terms_versions order by version`);
-            assertEquals(view.map((r) => Object.keys(r)), [["version", "posted_at"], ["version", "posted_at"], ["version", "posted_at"]], role);
+            assertEquals(view.map((r) => Object.keys(r)), [["version", "posted_at"], ["version", "posted_at"], ["version", "posted_at"], ["version", "posted_at"]], role);
             await refusedWith42501(`insert into public.public_terms_versions (version) values (9999)`);
             await refusedWith42501(`update public.public_terms_versions set posted_at = now() where version = 0`);
             await refusedWith42501(`delete from public.public_terms_versions where version = 0`);
@@ -4485,7 +4487,7 @@ Deno.test("migrations on PGlite", {
         } finally {
           await db.exec(`reset role`);
         }
-        assertEquals((await versions()).length, 3);
+        assertEquals((await versions()).length, 4);
       },
     );
 
