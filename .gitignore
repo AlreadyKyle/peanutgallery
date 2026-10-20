@@ -16,3 +16,6 @@ playwright-report/
 
 # Worktrees the desktop app creates for background agents.
 .claude/worktrees/
+
+# The weekly video's captures of the live site (scripts/weekly-capture.mjs): made fresh each week, not committed.
+platform/explainer/weekly-captures/
