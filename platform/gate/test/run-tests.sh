@@ -1136,11 +1136,13 @@ for file in "$REPO_ROOT"/.github/workflows/*.yml "$REPO_ROOT"/.github/workflows/
     assert "workflow audit: dispatcher.yml runs in the environment dispatcher" test "$(grep -cxE '    environment: dispatcher' "$file")" = 1
   elif [ "$name" = ops-jobs.yml ]; then
     # The daily jobs (docs/PLAN.md §10 decision 78) and the marketing engine are the other: they read their own secrets from the
-    # environment ops, which only main can deploy to, and widen nothing.
-    assert "workflow audit: ops-jobs.yml sets no job-level permissions" test "$(grep -cE '^ +permissions:' "$file")" = 0
-    assert "workflow audit: ops-jobs.yml grants no write access" test "$(grep -cE ':[[:space:]]*write([[:space:]]|$)|write-all' "$file")" = 0
+    # environment ops, which only main can deploy to. One job, offsite, which copies the backup to the
+    # Google Cloud bucket and reads no job secret, may ask for an OIDC token (id-token: write) and nothing else.
+    assert "workflow audit: ops-jobs.yml sets job-level permissions once, id-token: write alone" test "$(grep -A2 -E '^ +permissions:' "$file" | tr -s ' ' | tr '\n' '|')" = " permissions:| id-token: write| steps:|"
+    assert "workflow audit: ops-jobs.yml widens only the offsite job" test "$(awk '/^  [a-z]+:$/ { job = $1 } /^ +permissions:/ { print job }' "$file")" = "offsite:"
+    assert "workflow audit: ops-jobs.yml grants no other write access" test "$(grep -cE ':[[:space:]]*write([[:space:]]|$)|write-all' "$file")" = 1
     assert "workflow audit: ops-jobs.yml names the five job envs and NTFY_TOPIC_URL and no other secret" test "$(grep -oE 'secrets\.[A-Za-z_]+' "$file" | sort -u | tr '\n' ' ')" = "secrets.BACKUP_ENV secrets.CONTROLLER_ENV secrets.MARKETING_ENV secrets.NOTICES_ENV secrets.NTFY_TOPIC_URL secrets.QUOTA_ENV "
-    assert "workflow audit: ops-jobs.yml runs in the environment ops" test "$(grep -cxE '    environment: ops' "$file")" = 1
+    assert "workflow audit: ops-jobs.yml runs its two jobs in the environment ops" test "$(grep -cxE '    environment: ops' "$file")" = 2
   else
     assert "workflow audit: $name sets no job-level permissions" test "$(grep -cE '^ +permissions:' "$file")" = 0
     assert "workflow audit: $name grants no write access" test "$(grep -cE ':[[:space:]]*write([[:space:]]|$)|write-all' "$file")" = 0

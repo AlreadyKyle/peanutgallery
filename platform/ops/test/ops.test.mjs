@@ -1519,7 +1519,7 @@ describe('the daily jobs on GitHub Actions', () => {
     assert.equal(job['timeout-minutes'], 30);
     assert.deepEqual(workflow.permissions, { contents: 'read' });
     assert.equal(job.permissions, undefined);
-    assert.deepEqual(Object.keys(workflow.jobs), ['run']);
+    assert.deepEqual(Object.keys(workflow.jobs), ['run', 'offsite']);
     assert.doesNotMatch(text, /pull_request|workflow_run/);
     for (const [cron, name] of [['17 6 * * *', 'backup'], ['7 7 * * *', 'controller'], ['37 7 * * *', 'quota'], ['7 9 * * *', 'notices'], ['23 * * * *', 'marketing']]) {
       assert.ok(step('Pick the job').run.includes(`${name}:* | ':${cron}') job=${name} ;;`), name);
@@ -1527,7 +1527,9 @@ describe('the daily jobs on GitHub Actions', () => {
   });
 
   test('pins every action to a commit sha, and its checkout of the run sha keeps no credential', () => {
-    for (const { uses } of steps.filter((candidate) => candidate.uses)) assert.match(uses, /@[0-9a-f]{40}$/, uses);
+    const all = Object.values(workflow.jobs).flatMap((candidate) => candidate.steps);
+    for (const { uses } of all.filter((candidate) => candidate.uses)) assert.match(uses, /@[0-9a-f]{40}$/, uses);
+    for (const line of text.split('\n').filter((candidate) => /uses: /.test(candidate))) assert.match(line, /@[0-9a-f]{40} # v\d/, line);
     const checkout = steps.find((candidate) => candidate.uses?.startsWith('actions/checkout@'));
     assert.deepEqual(checkout.with, { ref: '${{ github.sha }}', 'persist-credentials': false, 'sparse-checkout': 'platform/ops\nplatform/supabase/functions/_shared\nplatform/site\nplatform/gate\n' });
   });
@@ -1569,6 +1571,38 @@ describe('the daily jobs on GitHub Actions', () => {
     assert.equal(steps.filter((candidate) => candidate.uses?.startsWith('actions/upload-artifact@')).length, 2);
     assert.equal(step('Alert the board').if, 'failure()');
     assert.ok(steps.indexOf(step('Run the job')) < steps.indexOf(encrypt));
+  });
+
+  test('copies the backup to the bucket in a job of its own, the only one that may ask for an OIDC token', () => {
+    const offsite = workflow.jobs.offsite;
+    const offsiteStep = (name) => offsite.steps.find((candidate) => candidate.name === name);
+    assert.deepEqual(job.outputs, { job: '${{ steps.pick.outputs.job }}' });
+    assert.equal(offsite.needs, 'run');
+    assert.equal(offsite.if, "needs.run.outputs.job == 'backup'");
+    assert.equal(offsite.environment, 'ops', "Google's attribute condition admits only the environment ops");
+    assert.deepEqual(offsite.permissions, { 'id-token': 'write' });
+    assert.equal([...text.matchAll(/id-token/g)].length, 2, 'the header comment and the offsite job alone');
+    const [download, auth, copy, alert] = offsite.steps;
+    assert.match(download.uses, /^actions\/download-artifact@[0-9a-f]{40}$/);
+    assert.deepEqual(download.with, { name: 'backup-${{ github.run_id }}', path: '${{ runner.temp }}/backup' });
+    assert.equal(download.with.name, step('Keep the encrypted backup').with.name);
+    assert.match(auth.uses, /^google-github-actions\/auth@[0-9a-f]{40}$/);
+    assert.deepEqual(auth.with, {
+      workload_identity_provider: 'projects/1072097120782/locations/global/workloadIdentityPools/github/providers/peanutgallery',
+      service_account: 'backup-writer@mob-machine.iam.gserviceaccount.com',
+    });
+    assert.equal(copy, offsiteStep('Copy the encrypted backup to the bucket'));
+    assert.match(copy.run, /^set -euo pipefail$/m);
+    assert.match(copy.run, /gcloud storage cp --if-generation-match=0 "\$\{files\[0\]\}" "gs:\/\/mobmachine-backups\/\$name"/);
+    assert.equal(copy.if, undefined, 'a failed copy fails the job');
+    const gcloud = [...copy.run.matchAll(/gcloud [a-z]+ [a-z-]+/g)].map((match) => match[0]);
+    assert.deepEqual(gcloud, ['gcloud storage cp'], 'it creates the object and reads, lists or deletes nothing');
+    assert.equal(alert, offsiteStep('Send the failure alert'));
+    assert.equal(alert.if, 'failure()');
+    assert.deepEqual(Object.keys(alert.env), ['NTFY_TOPIC_URL', 'RUN_URL']);
+    assert.equal(alert.env.NTFY_TOPIC_URL, '${{ secrets.NTFY_TOPIC_URL }}');
+    assert.deepEqual(offsite.steps.filter((candidate) => JSON.stringify(candidate).includes('secrets.')), [alert]);
+    for (const candidate of offsite.steps) assert.doesNotMatch(candidate.run ?? '', /secrets\.|\$\{\{/, `${candidate.name} puts an expression in its script`);
   });
 
   // run-ops-job.sh with a stand-in node on PATH that prints what a job prints, env values included.
@@ -1846,7 +1880,9 @@ describe('the GitHub Actions host', () => {
   });
 
   test('pins every action to a commit sha, and its checkout of the run sha keeps no credential', () => {
-    for (const { uses } of steps.filter((candidate) => candidate.uses)) assert.match(uses, /@[0-9a-f]{40}$/, uses);
+    const all = Object.values(workflow.jobs).flatMap((candidate) => candidate.steps);
+    for (const { uses } of all.filter((candidate) => candidate.uses)) assert.match(uses, /@[0-9a-f]{40}$/, uses);
+    for (const line of text.split('\n').filter((candidate) => /uses: /.test(candidate))) assert.match(line, /@[0-9a-f]{40} # v\d/, line);
     const checkout = steps.find((candidate) => candidate.uses?.startsWith('actions/checkout@'));
     assert.deepEqual(checkout.with, { ref: '${{ github.sha }}', 'persist-credentials': false });
   });

@@ -14,6 +14,11 @@
 # encrypted with age to vars.BACKUP_AGE_RECIPIENT and kept as an artifact for 14 days, and the public
 # log shows only the job, its exit and its PASS or FAIL (platform/ops/actions/run-ops-job.sh). The
 # backup is the same .tar.age as before, encrypted to the same key before it leaves the job.
+# The backup is also copied off GitHub, to the Google Cloud Storage bucket gs://mobmachine-backups, by
+# the job `offsite`: it runs after a backup alone, reads no job secret, and is the only job that may ask
+# GitHub for an OIDC token (id-token: write). Google's Workload Identity Federation trades that token
+# for the service account backup-writer, which may create objects in the bucket and nothing else: it
+# cannot read, list, overwrite or delete one (platform/ops/README.md, Backups off GitHub).
 # Every action is pinned to a full commit sha (the tag it was is in the comment).
 name: ops-jobs
 
@@ -45,6 +50,8 @@ jobs:
     concurrency:
       group: ops-job-${{ github.event.inputs.job || github.event.schedule }}
       cancel-in-progress: false
+    outputs:
+      job: ${{ steps.pick.outputs.job }}
     steps:
       - name: Pick the job
         id: pick
@@ -149,3 +156,43 @@ jobs:
       - name: Remove the env files
         if: always()
         run: rm -rf "$RUNNER_TEMP/ops-job/env"
+
+  offsite:
+    name: backup off GitHub
+    needs: run
+    if: needs.run.outputs.job == 'backup'
+    runs-on: ubuntu-24.04
+    environment: ops
+    timeout-minutes: 15
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: backup-${{ github.run_id }}
+          path: ${{ runner.temp }}/backup
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: projects/1072097120782/locations/global/workloadIdentityPools/github/providers/peanutgallery
+          service_account: backup-writer@mob-machine.iam.gserviceaccount.com
+
+      - name: Copy the encrypted backup to the bucket
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=("$RUNNER_TEMP"/backup/*.tar.age)
+          if [ "${#files[@]}" -ne 1 ]; then echo "expected one .tar.age, found ${#files[@]}"; exit 1; fi
+          name=$(basename "${files[0]}")
+          gcloud storage cp --if-generation-match=0 "${files[0]}" "gs://mobmachine-backups/$name"
+          echo "offsite: gs://mobmachine-backups/$name"
+
+      - name: Send the failure alert
+        if: failure()
+        env:
+          NTFY_TOPIC_URL: ${{ secrets.NTFY_TOPIC_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$NTFY_TOPIC_URL" ]; then echo "no NTFY_TOPIC_URL; the alert was not sent"; exit 0; fi
+          curl -fsS --max-time 20 -H 'Title: Mob Machine job' \
+            -d "Mob Machine job backup failed to reach the bucket on GitHub Actions: $RUN_URL" "$NTFY_TOPIC_URL" > /dev/null || true
