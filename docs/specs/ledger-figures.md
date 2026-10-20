@@ -55,13 +55,13 @@ The balances are what the studio holds, so they include the test payment's share
 - In the pool = agent credit + the test payment's agent credit − agent spend: 3.0845 + 0.5019 − 3.1048 = 0.4816.
 - In the pool = unspent on card bars + the test payment's agent credit + Not on a card yet − the shortfall: 0.2428 + 0.5019 + 0 − 0.2631 = 0.4816. Unspent on card bars is the pool less the test payment's credit less `money.not_on_card_usd()` (by that function's definition), so it is computed on the page from `pool.balance_usd`, `board_test_usd`, `not_on_card_usd` and `short_usd`.
 
-The test payment line names the payment and each share: "The pool, the reserve and the emergency fund include the studio's own $1.00 test payment: $0.50, $0.07 and $0.03. It funds no card." A document without the new columns keeps the old one-figure line, in the new words.
+The page adds, under the figures: "In the pool: $3.08 of agent credit and $0.50 from the test payment, less $3.10 of agent spend. That is $0.24 unspent on card bars, $0.50 of the test payment, less the $0.26 by which Not on a card yet is below zero." The test payment line names the payment and each share: "The pool, the reserve and the emergency fund include the studio's own $1.00 test payment: $0.50, $0.07 and $0.03. It funds no card." A document without the new columns keeps the old one-figure line, in the new words.
 
-The shortfall line says what the shortfall is: Not on a card yet is below zero by that much, because agent work spent it before any card's money covered it, or a refund took back money already spent (docs/PLAN.md §5, Refunds and disputes). In production it is the $0.2631 spent drafting a card that is not public yet.
+The shortfall line says what the shortfall is: "Not on a card yet is $0.26 below zero: agent work spent that before any money on a card covered it, or a refund took back money already spent." (docs/PLAN.md §5, Refunds and disputes). In production it is the $0.2631 spent drafting a card that is not public yet.
 
 ### Agent work
 
-Agent spend is every studio-billed row: 3.1048 in production. When some of it is on cards the site does not show yet, the note under it says so: "Includes $0.26 spent drafting cards not shown yet." The total and the tokens never name such a card.
+Agent spend is every studio-billed row: 3.1048 in production. When some of it is on cards the site does not show yet, its description says so: "Includes $0.26 spent on cards not shown on the site yet." The total and the tokens never name such a card.
 
 ### A card's money
 
@@ -114,15 +114,22 @@ On every card, what reached it = what it spent + what is unspent on its bar + wh
 
 - `deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/ledger_figures_test.ts platform/supabase/functions/_shared/money_logic_test.ts platform/supabase/functions/_shared/migration_test.ts platform/supabase/functions/_shared/community_core_test.ts`
 - `pnpm --filter @backseat/site test`
-- `E2E_PORT=4450 npx playwright test e2e/money.spec.ts e2e/design.spec.ts` in `platform/site`
+- `E2E_PORT=4450 npx playwright test e2e/money.spec.ts e2e/design.spec.ts e2e/card.spec.ts` in `platform/site`
 - `pnpm verify`
 - The before and after table above, from production with read-only SELECTs.
 
 ## Evidence
 
+Production, read-only SELECTs on 20 October 2026, the new definitions computed by hand in the query (the migration is not applied): lifetime_old 600, lifetime_new 500; studio-billed spend 3.1048 against the public total 2.8417, so unlisted 0.2631 (all on one card on horizon next that needs an approval); test payment paid 1.0000, reserve 0.0734, emergency fund 0.0264, agent credit 0.5019; supporters' reserve 0.4510, emergency fund 0.1623, agent credit 3.0845; pool 0.4816, reserve 0.5244, emergency fund 0.1887; unspent on card bars 0.2428; latest run's books checks true, reconciled_at 2026-10-20 12:40:49 UTC.
+
+Per card, reached = spent + unspent on the bar + moved on, for all ten cards money reached (for example 0.5000 = 0.1100 + 0 + 0.3900; 1.5000 = 0.2121 + 0 + 1.2879; 0.5228 = 0.2800 + 0.2428 + 0), and the bars sum to 3.0845, the agent credit, with nothing on Not on a card yet's allocations.
+
+The Controller's reconcile runs: 17 in all, 5 passed (8 to 12 October 2026). Every run from 13 October 2026 fails only `minimum_balance` (Stripe holds 1.00 CAD, the figure is 1.45 CAD after the 14 October 2026 payout); every other check passes.
+
 ## Decisions
 
 - 2026-10-20: the balances keep the test payment's shares and say so, rather than leave them out. The money is in Stripe and in the pool, and the pool paid for the drafting the shortfall names; a pool shown without it would read below zero while the studio holds $0.48.
 - 2026-10-20: a card's funding keeps "what reached it" (the funders a shipped card keeps, `docs/specs/supporter-pages.md`) and adds where it went, rather than redefine `credited_usd`. Per card the figures add up; across cards, Money in's agent credit is the one total.
+- 2026-10-20: Agent spend counts spend on a card the public may not read yet. agent-system-core's ledger policy hides such a card's rows so that summing raw rows gives back no hidden card's id or spend; the total names no card, and the pool's balance already carries the sum, so leaving it out only made the page impossible to add up. The rows themselves stay hidden.
 - 2026-10-20: the public reconciliation line reads the books checks. `minimum_balance` compares Stripe's balance with a buffer the operator sets in Stripe; it alerts the operator as before and is not a disagreement between the books and Stripe.
 - 2026-10-20: found and not changed (money logic, out of scope): spend on a card before it has bar money comes off Not on a card yet, and the drain later puts bar money on that card that its earlier spend has already used. So an open card's bar includes its drafting cost while its target is the build estimate (production: $0.28 of the open card's $0.52). Whether drafting should count against a card's own bar is a money-logic decision for its own spec.
