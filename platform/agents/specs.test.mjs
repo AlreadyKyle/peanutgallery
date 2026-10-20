@@ -38,13 +38,14 @@ const LAUNCH_VALUES = {
   'head-of-product': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'candid', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'web_only', status: 'starts' },
   'biz-dev': { model: 'MODEL_BUILDER', budget_share: 0.025, voice: 'curious', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'web_only', status: 'starts' },
   community: { model: 'MODEL_BUILDER', budget_share: 0.025, voice: 'warm', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'web_only', status: 'starts' },
-  curator: { model: 'MODEL_BUILDER', budget_share: 0, voice: 'level', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'web_only', status: 'starts' },
+  // The Curator runs since suggestion triage is on (docs/specs/governance-copy.md).
+  curator: { model: 'MODEL_BUILDER', budget_share: 0, voice: 'level', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'web_only', status: 'running' },
   'art-director': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'keen', tools: READ_SET, metrics: ['first_pass_rate', 'reopen_rate'], class: 'reviewer', status: 'starts' },
   host: { model: 'MODEL_HOST', budget_share: 0.05, voice: 'cheerful', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'web_only', status: 'planned' },
 };
 
 // The roles that run at launch, from the launch plan's roster.
-const RUNNING = ['Game Designer', 'Game Director', 'Builder A', 'Builder B', 'QA', 'Platform Builder', 'Platform Director', 'Janitor'];
+const RUNNING = ['Game Designer', 'Game Director', 'Builder A', 'Builder B', 'QA', 'Platform Builder', 'Platform Director', 'Janitor', 'Curator'];
 
 function readSchemaFromReadme() {
   const readme = readFileSync(join(agentsDir, 'README.md'), 'utf8');
