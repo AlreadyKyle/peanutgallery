@@ -56,6 +56,9 @@ export function formatRate(perSecond: number): string {
   if (perSecond < 0) return `-${formatRate(-perSecond)}`;
   if (perSecond >= 1e6) return formatDust(perSecond);
   if (perSecond >= 100) return groupThousands(perSecond);
+  // Below 10 a rate keeps its hundredths, so a unit's 0.25 does not read as 0.3 and a change from
+  // 0.25 to 0.3 shows; at least one decimal stays, so a whole rate still reads "1.0".
+  if (perSecond < 10) return perSecond.toFixed(2).replace(/(\.\d)0$/, '$1');
   return perSecond.toFixed(1);
 }
 
