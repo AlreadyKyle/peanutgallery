@@ -296,3 +296,88 @@ test.describe('an open card on a wide screen', () => {
     expect(target).toBe(href);
   });
 });
+
+// Home's first game beside the explainer from 80rem: the text column holds Play Dust free on one line
+// (at 80rem the 13rem box art left it 160px, and the button broke in two).
+for (const width of [1280, 1300, 1366, 1440, 1920]) {
+  test(`keeps the first game's Play on one line beside the explainer at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/');
+    const play = page.locator('.showcase .game-tile .button');
+    await expect(play).toBeVisible();
+    const [button, text] = await Promise.all([play.boundingBox(), page.locator('.showcase .game-text').boundingBox()]);
+    expect(button!.height).toBeLessThanOrEqual(46);
+    expect(button!.x + button!.width).toBeLessThanOrEqual(text!.x + text!.width + 0.5);
+  });
+}
+
+// When the studio's documents do not answer, the pipe says what every other part of home says, not
+// that it is still loading.
+test('says the pipe is not available when the studio cannot be read', async ({ page }) => {
+  await page.route(/\/api\/(live|cards)(\?.*)?$/, (route) => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"down"}' }));
+  await page.route(/\/api\/community\//, (route) => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"down"}' }));
+  await page.goto('/');
+  const pipe = page.locator('.home .pipe');
+  await expect(pipe.getByText('Not available right now.')).toBeVisible();
+  await expect(pipe.locator('[aria-busy="true"]')).toHaveCount(0);
+});
+
+// The Machine card's preset amounts stay 44px targets on the narrowest phone, on home and /contribute
+// (WCAG 2.5.5): five no longer fit one row there, so they wrap.
+for (const path of ['/', '/contribute']) {
+  test(`keeps every preset amount at least 44px wide at 320px on ${path}`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto(path);
+    const amounts = page.locator('.machine-amounts .amount');
+    await expect(amounts).toHaveCount(5);
+    for (const box of await amounts.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON() as DOMRect))) {
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+    expect(await overflowsHorizontally(page)).toBe(false);
+  });
+}
+
+// Skip to content (WCAG 2.4.1): the first Tab stop, shown when focused, moves focus to the page's main.
+for (const path of ['/', '/faq', '/contribute']) {
+  test(`offers Skip to content as the first Tab stop on ${path}`, async ({ page }) => {
+    await page.goto(path);
+    await expect(page.locator('main')).toBeAttached();
+    await page.keyboard.press('Tab');
+    const skip = page.getByRole('link', { name: 'Skip to content' });
+    await expect(skip).toBeFocused();
+    await expect(skip).toBeInViewport();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('main')).toBeFocused();
+  });
+}
+
+// The top bar holds still between pages: a kernel page (Contribute, the ledger, the legal pages,
+// /thanks) draws no you slot, but holds its width, so the page links and buttons do not move.
+test.describe('the top bar between pages', () => {
+  for (const width of [480, 1024, 1440]) {
+    test(`keeps every link where it was on the kernel's pages at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const where = async (path: string) => {
+        await page.goto(path);
+        await expect(page.locator('.topbar .nav-contribute')).toBeVisible();
+        await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
+        return page.locator('.topbar-row > :is(a, button, ul)').evaluateAll((els) =>
+          els.filter((el) => (el as HTMLElement).offsetParent !== null).map((el) => `${el.className} ${Math.round(el.getBoundingClientRect().x)}`),
+        );
+      };
+      const card = await where('/faq');
+      for (const path of ['/contribute', '/ledger', '/terms', '/thanks']) expect(await where(path), path).toEqual(card);
+    });
+  }
+});
+
+// Below 30rem a visitor's you slot leaves the row; the Menu carries Sign in by name instead.
+test('offers Sign in by name in the phone Menu', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/faq');
+  const nav = page.getByRole('navigation', { name: 'Site' });
+  await nav.getByRole('button', { name: 'Menu' }).click();
+  await expect(nav.getByRole('link', { name: 'Sign in' })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in');
+});

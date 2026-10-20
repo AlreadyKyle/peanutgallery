@@ -318,6 +318,11 @@ main.title-stays > .band:last-child {
 /* A band that holds nothing yet but its loading line (/card/:id, /thanks, /reports, /team) reaches to
    the foot of the window while it waits, so what follows it, the rest of the page and the footer,
    waits below the fold rather than showing and then being pushed down when the body arrives. */
+/* A page whose code is still loading (routes.tsx) holds the window's height the same way. */
+main.page-loading {
+  min-height: calc(100vh - var(--bar));
+}
+
 main:is(.title-stays, .team-page, .me-page) > .band:has(> [aria-busy='true']),
 main.profile-page > .band:last-child {
   min-height: calc(100vh - var(--bar));

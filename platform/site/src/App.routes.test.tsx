@@ -34,6 +34,7 @@ vi.mock('./routes', async () => {
     footerNav: [],
     communityNav: [],
     youSlot: null,
+    menuYou: null,
   };
 });
 

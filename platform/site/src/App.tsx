@@ -303,8 +303,9 @@ function TopBar() {
             <NavLink to="/ledger">{legal.ledger}</NavLink>
           </li>
           {/* Below 30rem the you slot leaves the row, and this carries it: Sign in for a visitor, Your
-              desk for a player (routes.tsx, menuYou); a kernel page keeps its own plain desk link. */}
-          {signInOpen ? <li className="menu-you">{kernelPage ? <NavLink to="/me">{copy.nav.me}</NavLink> : menuYou}</li> : null}
+              desk for a player (routes.tsx, menuYou); a kernel page, or a routes.tsx without one, keeps
+              the kernel's own plain desk link. */}
+          {signInOpen ? <li className="menu-you">{kernelPage || menuYou === null ? <NavLink to="/me">{copy.nav.me}</NavLink> : menuYou}</li> : null}
           {play === null ? null : (
             <li className="menu-play">
               <a href={play}>{copy.play}</a>

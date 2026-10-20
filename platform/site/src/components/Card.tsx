@@ -144,7 +144,14 @@ export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, r
         ) : shown === 'live' ? (
           <>
             <p className="card-meta">{shippedCaption(card, snapshot, sourceLabel(card.source))}</p>
-            {!playable || mode === 'example' ? null : mode === 'sample' ? (
+            {!playable || mode === 'example' ? null : ghost ? (
+              // A ghost only holds the slot's height (Replay.tsx) inside a hidden, inert list: the same
+              // box as Play, but no link, so nothing focusable sits where assistive technology cannot read it.
+              <span className="button button-block">
+                <Glyph name="cartridge" />
+                {copy.playTheGame}
+              </span>
+            ) : mode === 'sample' ? (
               <button type="button" className="button button-block" aria-disabled="true" aria-describedby={titleId}>
                 <Glyph name="cartridge" />
                 {copy.playTheGame}

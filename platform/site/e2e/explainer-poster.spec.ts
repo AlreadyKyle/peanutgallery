@@ -53,6 +53,8 @@ for (const path of ['/', '/how-it-works']) {
       await page.goto(path);
       const button = page.getByRole('button', { name: 'Play the video' });
       await expect(button).toBeVisible();
+      // Home's poster loads as it nears the view (loading=lazy): bring it there before reading it.
+      await button.scrollIntoViewIfNeeded();
       const { ink, pixels, pill } = await pictureUnderPill(page);
       expect(pixels).toBeGreaterThan(1000);
       expect(ink, `${ink} of ${pixels} poster pixels under the pill differ from its background`).toBe(0);
