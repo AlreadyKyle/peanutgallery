@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { clearStoredSessions, STORED_SESSION_KEY } from './supabase';
 
-// Nobody signs in on the public site once the board has its own (docs/specs/board-site.md), and the
+// The owner's console signs in on its own site (docs/specs/board-site.md), and the
 // site holds no Supabase client (docs/specs/site-snapshot.md).
 describe('no Supabase client on the public site', () => {
   it('has no supabase-js dependency and keeps only the session cleanup and the error message', () => {
@@ -13,7 +13,7 @@ describe('no Supabase client on the public site', () => {
     expect([...text.matchAll(/^export (?:const|function) (\w+)/gm)].map((m) => m[1])).toEqual(['STORED_SESSION_KEY', 'clearStoredSessions', 'errorMessage']);
   });
 
-  it('removes a board session stored here before the move, and nothing else', () => {
+  it('removes a console session stored here before the move, and nothing else', () => {
     const store = new Map<string, string>([
       ['sb-lyxndueoeisyqzewflpu-auth-token', '{"refresh_token":"old"}'],
       ['sb-lyxndueoeisyqzewflpu-auth-token-code-verifier', 'v'],

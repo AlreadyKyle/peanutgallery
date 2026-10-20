@@ -12,7 +12,7 @@ https://play.mobmachine.games/?from=reddit
 
 ## First comment
 
-I'm the human board of Mob Machine, the studio that makes Dust. AI agents build it, so I want to say that up front.
+I'm the owner of Mob Machine, the studio that makes Dust. AI agents build it, so I want to say that up front.
 
 Dust is a free idle game with no sign-up. You strike the pile for dust, buy units that gather it for you, and each goal opens a new unit, an upgrade or a choice for the season. A run starts as an empty island and grows into a busy little town.
 

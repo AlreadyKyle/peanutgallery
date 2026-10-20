@@ -223,7 +223,7 @@ describe('Ledger', () => {
     expect(within(band).getByText(legal.partUnavailable)).toBeTruthy();
   });
 
-  it('shows Not on a card yet in the Funding band, the shortfall and the board test payment only while above zero', async () => {
+  it('shows Not on a card yet in the Funding band, the shortfall and the studio test payment only while above zero', async () => {
     renderLedger(sourceOf({ ...snapshot, money: books([], { not_on_card_usd: 1.25, short_usd: 0, board_test_usd: 0 }) }));
     const funding = await screen.findByRole('region', { name: legal.meter });
     await waitFor(() => expect(within(funding).getByText(legal.notOnCard)).toBeTruthy());

@@ -66,7 +66,7 @@ describe('teamStatus', () => {
     expect(teamStatus(role('Studio Head'), snapshot())).toEqual({ kind: 'running', sentence: null });
   });
 
-  it('starts a card role whose folder is closed when the board opens the studio code lane, and runs it once open', () => {
+  it('starts a card role whose folder is closed when the studio code lane opens, and runs it once open', () => {
     expect(teamStatus(role('Platform Builder'), snapshot())).toEqual({ kind: 'starts', sentence: copy.team.laneClosed });
     expect(teamStatus(role('Platform Builder'), snapshot({ platformLaneOpen: true }))).toEqual({ kind: 'running', sentence: null });
   });
@@ -84,7 +84,7 @@ describe('teamStatus', () => {
     expect(teamStatus({ ...janitor, paused: true }, snapshot({ paused: true }))).toEqual({ kind: 'paused', sentence: copy.team.rolePaused, by: 'role' });
   });
 
-  it("pauses a role the board paused, with its own reason, before the studio's", () => {
+  it("pauses a role the owner paused, with its own reason, before the studio's", () => {
     const own = role('Builder B', { paused: true, paused_reason: 'Waiting on a fix to its tools.' });
     expect(teamStatus(own, snapshot())).toEqual({ kind: 'paused', sentence: 'Waiting on a fix to its tools.', by: 'role' });
     expect(teamStatus(own, snapshot({ paused: true }))).toEqual({ kind: 'paused', sentence: 'Waiting on a fix to its tools.', by: 'role' });

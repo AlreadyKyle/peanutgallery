@@ -15,7 +15,8 @@ async function screenshot(page: Page, name: string, width: number): Promise<void
 }
 
 // The roles the roster marks running whose lane is open, in /team's order (by title).
-const RUNNING_ROLES = ['Builder A', 'Builder B', 'Game Designer', 'Game Director', 'Janitor', 'Platform Director', 'QA'];
+// The Curator runs since suggestion triage is on (docs/specs/governance-copy.md).
+const RUNNING_ROLES = ['Builder A', 'Builder B', 'Curator', 'Game Designer', 'Game Director', 'Janitor', 'Platform Director', 'QA'];
 // The running roles that run on a model: all but the code-only Janitor.
 const MODEL_ROLES = RUNNING_ROLES.filter((title) => title !== 'Janitor');
 // Their models in /team's order: the Game Designer on its own (docs/PLAN.md §10 decision 77).
@@ -71,8 +72,8 @@ for (const viewport of WIDTHS) {
         'Who runs it',
         'What code does and what the agents do',
       ]);
-      // The board by name, and the worked example from $5.00 paid (docs/specs/copy-pass.md).
-      await expect(page.getByRole('region', { name: 'Who runs it', exact: true })).toContainText('Mob Machine is run by AI agents and a board: the people who own the studio and can step in, today Kyle Smith.');
+      // The owner by name, and the worked example from $5.00 paid (docs/specs/copy-pass.md).
+      await expect(page.getByRole('region', { name: 'Who runs it', exact: true })).toContainText('Mob Machine is run by AI agents and its owner, Kyle Smith, who can pause the agents, cancel a card and change the spending caps.');
       const worked = main.locator('figure.example').nth(1);
       await expect(worked.locator('figcaption')).toContainText('$5.00 paid, with the default split.');
       await expect(worked.locator('.stat dd')).toHaveText(['$5.00', '$0.46', '$0.45', '$0.82', '$0.16', '$3.11']);
@@ -107,7 +108,6 @@ for (const viewport of WIDTHS) {
         'Art Director',
         'Biz Dev',
         'Community',
-        'Curator',
         'Head of Finance',
         'Head of Product',
         'HR',
@@ -117,7 +117,7 @@ for (const viewport of WIDTHS) {
       await expect(starts.locator('#agent-r-platform-builder')).toContainText('Starts when studio cards open for funding.');
       await expect(starts.locator('#agent-r-community')).toContainText('Starts once a named moderator is in place for the community channels.');
       await expect(planned.getByRole('heading', { level: 3 })).toHaveText(['Host', 'Studio Head']);
-      // The board block sits at the foot, after every section (docs/specs/copy-pass.md).
+      // The Who runs it block sits at the foot, after every section (docs/specs/copy-pass.md).
       await expect(page.getByRole('main').locator('section h2')).toHaveText(['Running', 'Starts later', 'Planned', 'Who runs it']);
       await expect(page.locator('main > .band').last().getByRole('region', { name: 'Who runs it', exact: true })).toContainText('Kyle Smith');
       const avatars = page.getByRole('main').getByRole('img');
@@ -221,7 +221,7 @@ test.describe('the production /team model check', () => {
       await expect(running.getByRole('heading', { level: 3 })).toHaveText(RUNNING_ROLES);
       const models = runningModelsCheck(await runningRoleRows(running));
       expect(models.ok).toBe(false);
-      expect(models.message).toContain(`: ${DESIGNER_MODEL}, ${RUNNING_MODEL}, ${DESIGNER_MODEL}, `);
+      expect(models.message).toContain(`: ${DESIGNER_MODEL}, ${RUNNING_MODEL}, ${RUNNING_MODEL}, ${DESIGNER_MODEL}, `);
     });
   });
 

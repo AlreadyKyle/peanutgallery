@@ -182,7 +182,7 @@ describe('MachineFlow', () => {
   });
 
   describe('Next up', () => {
-    it('draws only approved agent cards waiting to open, on the planned face: never the backlog, board work or a held card', () => {
+    it('draws only approved agent cards waiting to open, on the planned face: never the backlog, kernel work or a held card', () => {
       renderFlow(
         snapshot([
           card({ id: 'board', title: 'Board work', horizon: 'next', rank: 1, board_work: true }),

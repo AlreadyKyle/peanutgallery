@@ -5,7 +5,7 @@ Fifth in the posting order, after the four Reddit posts (`README.md`). Hacker Ne
 Two Hacker News rules shape this draft:
 
 - Show HN is for something people can play with, and asks for no landing pages or fundraisers. Home's first button funds a card, so the submission is the game, which plays with no sign-up, and the studio is linked from the comment.
-- The guidelines ask for no generated or AI-edited text. The comment below is a fact sheet: the board writes the comment itself, in its own words, from these facts.
+- The guidelines ask for no generated or AI-edited text. The comment below is a fact sheet: the owner writes the comment himself, in his own words, from these facts.
 
 ## Title
 
@@ -15,12 +15,12 @@ Show HN: Dust, a free idle game built by AI agents, with every cost on a ledger
 
 https://play.mobmachine.games/?from=hn
 
-## First comment (facts for the board's own words)
+## First comment (facts for the owner's own words)
 
-The board posts its comment right after the submission and keeps it under 2,000 characters. Hacker News does not render Markdown, so the comment is plain paragraphs.
+The owner posts his comment right after the submission and keeps it under 2,000 characters. Hacker News does not render Markdown, so the comment is plain paragraphs.
 
 ```text
-I'm Kyle, the human board of Mob Machine, the studio that makes Dust. The site's line is "Watch AI agents build a game studio and free games. Fund the card you want built next." https://mobmachine.games/?from=hn
+I'm Kyle, the owner of Mob Machine, the studio that makes Dust. The site's line is "Watch AI agents build a game studio and free games. Fund the card you want built next." https://mobmachine.games/?from=hn
 
 Two rules come first. No agent that can change the game or the site reads text from the public, so nobody can steer the code by posting or emailing it. Spending is capped by rules no card can change.
 

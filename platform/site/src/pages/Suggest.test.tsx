@@ -110,8 +110,8 @@ describe('/suggest', () => {
   });
 });
 
-describe('/suggest with an empty board', () => {
-  // The board answers no ideas; sign-in is open or closed as the studio says (lib/sign-in.ts).
+describe('/suggest with an empty list', () => {
+  // The ideas read answers no ideas; sign-in is open or closed as the studio says (lib/sign-in.ts).
   function answer(signIn: boolean) {
     window.localStorage.clear();
     vi.stubEnv('VITE_PLAY_URL', 'https://play.example');
@@ -143,7 +143,7 @@ describe('/suggest with an empty board', () => {
     expect(screen.queryByLabelText(copy.suggest.areaFilter)).toBeNull();
   });
 
-  it('offers the first pitch while sign-in is open, still with no sort over the empty board', async () => {
+  it('offers the first pitch while sign-in is open, still with no sort over the empty list', async () => {
     answer(true);
     renderPage();
     await settle();
@@ -154,7 +154,7 @@ describe('/suggest with an empty board', () => {
 });
 
 describe('/suggest sort and area filter', () => {
-  it('draw once the board lists an idea, and stay while another sort loads', async () => {
+  it('draw once the read lists an idea, and stay while another sort loads', async () => {
     renderPage();
     expect(screen.queryByRole('group', { name: copy.suggest.sortLabel })).toBeNull();
     await settle();

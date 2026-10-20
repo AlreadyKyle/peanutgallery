@@ -8,7 +8,7 @@ const words = copy.cardPage;
 
 // Suggested by (docs/specs/place.md; docs/specs/final-state.md, step 5 of the ideas loop): the players
 // whose ideas a card came from, read from /api/community/card/<id>/ideas, which lists the ideas in the
-// clusters the board linked to the card, most backed first. A card with none, or a read that fails,
+// clusters the owner linked to the card, most backed first. A card with none, or a read that fails,
 // draws nothing: the page never shows made-up credits.
 export function SuggestedBy({ cardId }: { cardId: string }) {
   const doc = useCommunity<{ items: SuggestionSummary[] }>(`/card/${cardId}/ideas`);

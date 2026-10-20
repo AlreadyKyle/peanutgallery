@@ -211,7 +211,7 @@ function Changed({ detail }: { detail: CardDetail }) {
 /**
  * A planned card (next or later, not started) takes no money, so its page draws no face (which would
  * read Open for funding): it says "Planned and not built yet", "Approved, opens soon" or "Held by the
- * board" with the board's reason, and links home's cards to fund.
+ * studio" with the owner's reason, and links home's cards to fund.
  */
 function Planned({ detail }: { detail: CardDetail }) {
   const state = plannedState(detail.card);
@@ -265,7 +265,7 @@ function Detail({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }
         {detail.lines.length === 0 ? null : <p className="muted">{words.linesLede}</p>}
         <Timeline lines={detail.lines} count={detail.line_count} roles={detail.roles} team={snapshot.roles} />
       </section>
-      {/* What the agents are told: on the card's own page only, not on every card (the board, 27 Sep 2026). */}
+      {/* What the agents are told: on the card's own page only, not on every card (the owner, 27 Sep 2026). */}
       {detail.card.intent === null || detail.card.intent.trim() === '' ? null : (
         <section className="section" aria-labelledby="card-brief">
           <h2 id="card-brief">{copy.agentBrief}</h2>

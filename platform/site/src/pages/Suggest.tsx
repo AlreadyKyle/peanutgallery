@@ -286,7 +286,7 @@ export function Suggest() {
           ) : list.state === 'unavailable' ? (
             <EmptyState line={legal.partUnavailable} next={{ to: '/', label: copy.roadmapLink }} unavailable onRetry={list.reload} />
           ) : list.items.length === 0 ? (
-            // While sign-in is closed no one can pitch, so the empty board offers the game instead.
+            // While sign-in is closed no one can pitch, so the empty list offers the game instead.
             <EmptyState line={copy.suggest.empty} next={signedIn || signInOpen ? { to: '#suggest-send', label: copy.emptyState.sendFirst } : playNext()} />
           ) : (
             <>

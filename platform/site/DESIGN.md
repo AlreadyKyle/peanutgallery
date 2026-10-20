@@ -175,7 +175,7 @@ The money in the bottom block comes from `Funding.tsx` (kernel). Modes: `live` (
 | Face | Stage | Look | Word and glyph | Bottom |
 |---|---|---|---|---|
 | open | proposed, designing | paper | Open for funding, coin outline | bar, rows, Fund this card |
-| picked | voted | paper, a 6px signal tab under the top edge at its left, two fifths of the card wide, clear of the rarity tab | Picked by the board, flag | as open |
+| picked | voted | paper, a 6px signal tab under the top edge at its left, two fifths of the card wide, clear of the rarity tab | Picked by the studio, flag | as open |
 | funded | funded | paper | Funded, a tiny full bar filled with the coin | full bar, rows, "Waiting for the agents" (plain muted, 44px) |
 | building | building | `--work` (the signal at 14%) | Building, gear | "Builder A is building this · $0.42 spent so far" (the role when the roles loaded, else who filed it); no bar |
 | checks | gated | `--work` | Being checked, checklist | the role and spend; no per-check pips (no public per-check record) |

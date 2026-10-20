@@ -3,11 +3,11 @@ import type { Role, Snapshot } from './source';
 
 /**
  * The roles that build cards, and the folder each builds in. teamStatus reads it: a card role whose
- * folder is closed starts when the board opens the lane, whatever the roster says. The Studio Head, the Game Designer and
+ * folder is closed shows as starting until its lane opens, whatever the roster says. The Studio Head, the Game Designer and
  * the Game Director build no card: the Designer drafts and the Director grades when too few cards are open, and
  * the Studio Head's ranking is retired (docs/specs/unattended-roles.md); the rest of the
  * roster has no job that runs yet: note triage, the report, the stream and outside research are
- * backlog cards. The board's own site keeps the same list for its executor choice
+ * backlog cards. The owner's console keeps the same list for its executor choice
  * (platform/board/src/lib/board.ts).
  */
 export const CARD_ROLE_FOLDERS: Readonly<Record<string, string>> = {
@@ -18,10 +18,10 @@ export const CARD_ROLE_FOLDERS: Readonly<Record<string, string>> = {
 };
 
 /**
- * The folders whose cards run. The platform code lane (platform/site outside the kernel paths) opens
- * once the board has its own site and studio_state.platform_lane_open is set (docs/specs/board-site.md);
- * until then the dispatcher refuses those cards, and set_card_horizon, file_card and resume_card
- * refuse them on now.
+ * The folders whose cards run. The platform code lane (platform/site outside the kernel paths) is open
+ * while studio_state.platform_lane_open is set, as it is in production since the owner's console moved
+ * to its own site (docs/specs/board-site.md); while it is unset the dispatcher refuses those cards, and
+ * set_card_horizon, file_card and resume_card refuse them on now.
  */
 export function openFolders(platformLaneOpen: boolean): readonly string[] {
   return platformLaneOpen ? ['seed-1', 'platform'] : ['seed-1'];
@@ -43,8 +43,8 @@ export function cardRoleFolder(role: Role): string | null {
  * - running: roster status running, not paused, and (for a card role) its folder is open;
  * - paused: roster status running while the role itself is paused (its own reason, else a plain
  *   line). A studio pause is not shown on the public site (docs/PLAN.md §10 decision 62);
- * - starts: roster status starts, with its trigger; or a card role whose folder the board has not
- *   opened, which starts when the board opens the studio code lane;
+ * - starts: roster status starts, with its trigger; or a card role whose folder is closed, which
+ *   starts when the studio code lane opens;
  * - planned: roster status planned or unset, with its trigger when it has one.
  */
 export type TeamKind = 'running' | 'paused' | 'starts' | 'planned';

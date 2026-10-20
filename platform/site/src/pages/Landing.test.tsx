@@ -292,7 +292,7 @@ afterEach(() => {
 });
 
 describe('Landing', () => {
-  it("is drawn in the board's order, on four bands, with every card on the floor: the cards to fund, the first game, Ideas, Next up, Building, then Shipped", async () => {
+  it("is drawn in the owner's order, on four bands, with every card on the floor: the cards to fund, the first game, Ideas, Next up, Building, then Shipped", async () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', 'https://buy.stripe.com/test-link');
     vi.stubEnv('VITE_PLAY_URL', 'https://play.example');
     const { container } = renderLanding(fakeSource());
@@ -306,7 +306,7 @@ describe('Landing', () => {
     await screen.findByRole('region', { name: copy.team.title });
     await lanesDrawn();
     // The live studio sits on the plate beside the pitch, in view when the page opens (docs/specs/brand.md,
-    // Home); the floor follows in the board's order (decisions 67 and 70): the cards to fund, the first
+    // Home); the floor follows in the owner's order (decisions 67 and 70): the cards to fund, the first
     // game, then the players' ideas and Next up, Building and Shipped (docs/specs/place.md).
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
       copy.studioRoom.title,
@@ -519,7 +519,7 @@ describe('Landing', () => {
     expect(within(lane('next')).queryByRole('progressbar')).toBeNull();
   });
 
-  it('keeps Ideas on the floor and the rail while sign-in is closed and the board has no ideas, with no pitch button', async () => {
+  it('keeps Ideas on the floor and the rail while sign-in is closed and there are no ideas, with no pitch button', async () => {
     resetSignInOpen();
     window.localStorage.clear();
     const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } }));

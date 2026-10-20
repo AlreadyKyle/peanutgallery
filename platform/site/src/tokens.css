@@ -37,7 +37,7 @@
   --ink-hover: #333333; /* outline hover and press on ink */
   --muted-on-ink: #a3a3a3; /* secondary text in ink bands */
   --line-on-ink: #333333; /* hairlines in ink bands (decorative) */
-  --signal: #111111; /* the studio: band 1, the primary fill and focus ring on paper, the Picked ribbon, the studio suit. Ink since the board's call of 23 Sep 2026 (the blue read as MS-DOS) */
+  --signal: #111111; /* the studio: band 1, the primary fill and focus ring on paper, the Picked ribbon, the studio suit. Ink since the owner's call of 23 Sep 2026 (the blue read as MS-DOS) */
   --signal-deep: #333333; /* hover of every signal fill */
   --signal-press: #333333; /* press of every signal fill */
   --muted-on-signal: #a3a3a3; /* secondary text on signal; the quiet label and edge there */
@@ -95,19 +95,19 @@
   --leading-heading: 1.15; /* section headings (h2) */
   --leading-title: 1.35; /* h3 and h4, card, row and choice titles: a two-line title's lines never touch */
 
-  /* Type scale (the board, 23 Sep 2026). Headings grow with the viewport, from a 390px phone to a
+  /* Type scale (the owner, 23 Sep 2026). Headings grow with the viewport, from a 390px phone to a
      1440px screen; text holds still. Every font-size is one of these. */
   --size-small: 0.875rem; /* 14px: meta lines, the card's index row and spec rows, a row's date and meta, footer */
   --size-body: 1.0625rem; /* 17px: paragraphs, nav, buttons, row titles */
   --size-lead: 1.25rem; /* 20px: figures, h3 and card titles */
-  /* The production pass (the board's ask of 18 October 2026): the headings were half the size of the best
+  /* The production pass (the owner's ask of 18 October 2026): the headings were half the size of the best
      product pages' against the same body text, so every section read as a form. A section heading is
      now about 3.3 times the body at 1440px (was 2.4), a page heading about 5. */
   --size-lede: clamp(1.25rem, 1.1rem + 0.5vw, 1.5rem); /* 20px to 24px: a page plate's lede and a section's intro (home's pitch keeps --size-lead under it) */
   --size-h2: clamp(1.625rem, 1.2rem + 1.6vw, 2.5rem); /* 26px to 40px: a heading inside a part (a lane, a step, a card page's title) */
   --size-section: clamp(2rem, 1.25rem + 3vw, 3.5rem); /* 32px to 56px: a section's heading (32px on a phone, so it stands clear of the 20px lede) */
   --size-h1: clamp(2.5rem, 1.2rem + 4.8vw, 6rem); /* 40px to 96px: the page heading */
-  --size-hero: clamp(2.375rem, 1rem + 2.6vw, 3.25rem); /* 38px to 52px: home's pitch, three lines beside the room (the board, 18 October 2026: tops out at 52px) */
+  --size-hero: clamp(2.375rem, 1rem + 2.6vw, 3.25rem); /* 38px to 52px: home's pitch, three lines beside the room (the owner, 18 October 2026: tops out at 52px) */
 
   /* Tracking: the only letter-spacing values. Display type sets tight, mono labels open. */
   --tracking-display: -0.03em; /* h1 and the pitch */
@@ -126,7 +126,7 @@
   --bar: 3.8125rem;
   /* A band's block padding and the space between any two sections, wherever they sit (a band, a
      pair's cell, how it works' steps, /contribute's parts): 80px on a phone, about 89px at 768px,
-     111px at 1024px, 133px at 1280px and 144px from 1440px (the board, 18 October 2026: the site
+     111px at 1024px, 133px at 1280px and 144px from 1440px (the owner, 18 October 2026: the site
      read as dense; every section gets room to breathe, as a printed sheet does). */
   --band-pad: clamp(5rem, 1.5rem + 8.5vw, 9rem);
   /* A page's plate (band 1) is its title, not a section, so it takes less: 48px on a phone, about

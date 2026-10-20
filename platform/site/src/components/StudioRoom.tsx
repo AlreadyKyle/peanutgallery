@@ -19,7 +19,7 @@ import { RoomDrawing, roomLayers, TILE, viewBoxOf } from './RoomDrawing';
 // coin drops through the pipe when a card's funding rises, a paper plane brings a suggestion, and a
 // ship leaves the dock as a box. Hover, focus or a tap on an agent shows its role card; the same facts
 // are written in a list under the room for screen readers and the keyboard, which shows only while
-// focus is in it (the board, 17 October 2026: the visible list pushed the page down and repeated the
+// focus is in it (the owner, 17 October 2026: the visible list pushed the page down and repeated the
 // role cards). Under reduced motion the room is drawn still, every agent at its place in the data; an
 // agent under the pointer or focus never moves.
 

@@ -189,7 +189,7 @@ describe('a card box', () => {
     expect(specRow(box, 'contributors')).toEqual([legal.contributorsLabel, '1']);
   });
 
-  it('shows 0 contributors on a goal with no funding row, and no summary when blank', () => {
+  it('shows 0 supporters on a goal with no funding row, and no summary when blank', () => {
     const fresh = card({ id: 'new', title: 'New', summary: '  ', intent: null, funding_target_usd: 20 });
     faces([fresh], snapshot([fresh]));
     expect(specRow(boxFor('New'), 'contributors')).toEqual([legal.contributorsLabel, '0']);

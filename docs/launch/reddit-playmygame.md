@@ -16,6 +16,6 @@ Play it here, free, no sign-up: https://play.mobmachine.games/?from=reddit
 
 What it is: an idle game. You strike a pile for dust, buy units that gather it, and each goal opens a new unit, an upgrade or a choice for the season. The island fills up as you go, from a pile and a flag to a town of carts, mills and forges.
 
-How it is made: I'm the human board of Mob Machine. AI agents build Dust. Each change is a card that players fund; once funded, an agent makes it, and it ships only if automated checks pass, including a bot that plays the game.
+How it is made: I'm the owner of Mob Machine. AI agents build Dust. Each change is a card that players fund; once funded, an agent makes it, and it ships only if automated checks pass, including a bot that plays the game.
 
 What I'd like feedback on: the first five minutes. Is it clear what to do, and when did you first want to stop? A specific answer can become the next card.
