@@ -17,10 +17,15 @@ const WIDTHS = [320, 375, 414, 767, 768, 900, 1023, 1024, 1060, 1100, 1140, 1160
 async function pictureUnderPill(page: import('@playwright/test').Page): Promise<{ ink: number; pixels: number; pill: { width: number; height: number } }> {
   return page.evaluate(async () => {
     const frame = document.querySelector('.explainer-frame')!;
-    const img = frame.querySelector<HTMLImageElement>('.explainer-poster img')!;
+    const shown = frame.querySelector<HTMLImageElement>('.explainer-poster img')!;
     const pill = frame.querySelector('.explainer-play')!;
+    await shown.decode();
+    // The file the picture chose (srcset), read at its own pixel size: a srcset image's naturalWidth
+    // is scaled by the density the browser picked it for, the canvas reads the file's pixels.
+    const img = new Image();
+    img.src = shown.currentSrc;
     await img.decode();
-    const box = img.getBoundingClientRect();
+    const box = shown.getBoundingClientRect();
     const at = pill.getBoundingClientRect();
     // object-fit: cover: the image is scaled to fill the box and the overflow is cut evenly.
     const scale = Math.max(box.width / img.naturalWidth, box.height / img.naturalHeight);

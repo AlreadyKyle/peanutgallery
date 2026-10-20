@@ -1,8 +1,8 @@
 import { expect, test } from './fixtures';
 
 // /studio/history's era slider (docs/specs/final-state.md, Studio evolution and history): Earlier, the
-// slider and Later in one row where the row is wide enough; below 24rem the two buttons left the
-// slider 24px between them, so it takes a full-width row of its own over them.
+// slider and Later in one row where the row is wide enough; on a phone (below 30rem) the two buttons
+// left the slider 24px between them at 320px, so it takes a full-width row of its own over them.
 
 const era = (index: number, id: string, name: string, reachedAt: string | null) => ({
   id,
@@ -31,7 +31,7 @@ for (const width of [320, 375, 414, 1440]) {
     const earlier = (await page.getByRole('button', { name: 'Earlier' }).boundingBox())!;
     const later = (await page.getByRole('button', { name: 'Later' }).boundingBox())!;
     const stepper = (await page.locator('.era-stepper').boundingBox())!;
-    if (width < 384) {
+    if (width < 480) {
       // Its own row, the stepper's full width, over Earlier and Later.
       expect(Math.abs(box.width - stepper.width)).toBeLessThanOrEqual(1);
       expect(box.y + box.height).toBeLessThanOrEqual(Math.min(earlier.y, later.y));

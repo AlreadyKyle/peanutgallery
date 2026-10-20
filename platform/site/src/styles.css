@@ -4737,9 +4737,9 @@ ol.timeline {
   accent-color: var(--ink);
 }
 
-/* Below 24rem the two buttons leave the slider too little of the row (24px at 320px), so the slider
-   takes a full-width row of its own over Earlier and Later. */
-@media (max-width: 23.99rem) {
+/* On a phone the two buttons leave the slider too little of the row (24px at 320px, under 120px at
+   414px), so below 30rem the slider takes a full-width row of its own over Earlier and Later. */
+@media (max-width: 29.99rem) {
   .era-stepper {
     grid-template-columns: 1fr 1fr;
     grid-template-areas:

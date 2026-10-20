@@ -126,6 +126,9 @@ for (const width of [375, 768, 1440]) {
       });
       await page.goto(path);
       await page.evaluate(() => document.fonts.ready);
+      // A page that loads on its own (routes.tsx) draws its title once its code arrives, which is
+      // not a data read: measure from there.
+      await page.locator('main h1').first().waitFor({ state: 'attached' });
       const loading = await measure();
       release();
       await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
