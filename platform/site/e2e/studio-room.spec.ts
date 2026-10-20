@@ -33,6 +33,48 @@ test('an agent under the pointer holds still with its role card open', async ({ 
   expect(await agent.getAttribute('transform')).toBe(held);
 });
 
+// "Pick an agent to see what it is doing": a click or a tap picks it, its ring and role card stay up
+// after the pointer leaves, and a second press puts them away. The hover that comes with a click used
+// to open the card and the click to shut it again at once, so a press seemed to do nothing.
+for (const viewport of [
+  { width: 1440, height: 900 },
+  { width: 375, height: 812 },
+]) {
+  test(`a press on an agent opens its role card and keeps it open at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    const agent = page.locator('.floor-plate .studio-stage .studio-agent').first();
+    await expect(agent).toBeVisible();
+    await agent.click({ force: true });
+    const card = page.locator('.floor-plate .role-card');
+    await expect(card).toBeVisible();
+    await expect(agent).toHaveAttribute('aria-expanded', 'true');
+    // The pointer moves off the room: a picked agent's card stays.
+    await page.mouse.move(2, viewport.height - 2);
+    await page.waitForTimeout(400);
+    await expect(card).toBeVisible();
+    await expect(card.locator('.role-card-doing')).not.toBeEmpty();
+    // A second press puts it away.
+    await agent.click({ force: true });
+    await page.mouse.move(2, viewport.height - 2);
+    await expect(card).toHaveCount(0);
+    await expect(agent).toHaveAttribute('aria-expanded', 'false');
+  });
+}
+
+test('Enter picks an agent from the keyboard and Escape lets it go', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  const agent = page.locator('.floor-plate .studio-stage .studio-agent').first();
+  await expect(agent).toBeVisible();
+  await agent.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.floor-plate .role-card')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.floor-plate .role-card')).toHaveCount(0);
+});
+
 test('the room is named for assistive technology without a browser tooltip', async ({ page }) => {
   await page.goto('/');
   // The plate's room; the rail's small map (docs/specs/place.md) is hidden from assistive technology.

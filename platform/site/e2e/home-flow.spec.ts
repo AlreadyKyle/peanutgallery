@@ -76,7 +76,7 @@ test.describe('home flow lanes', () => {
     const links = await fund.getByRole('link', { name: 'Fund this card' }).evaluateAll((as) => as.map((a) => (a as HTMLAnchorElement).href));
     expect(links).toHaveLength(2);
     for (const href of links) expect(href).toMatch(new RegExp(`^${PAYMENT_LINK}\\?client_reference_id=[0-9a-f-]{36}$`));
-    await expect(items.nth(2).locator('li.card h4')).toContainText(['A cheaper Cart']);
+    await expect(items.nth(2).locator('li.card h3')).toContainText(['A cheaper Cart']);
     await expect(items.nth(2).locator('li.card[data-face="funded"]')).toHaveCount(1);
   });
 
@@ -98,7 +98,7 @@ test.describe('home flow, production lanes', () => {
     await expect(fund.getByRole('link', { name: 'Contribute' })).toHaveAttribute('href', '/contribute');
     await expect(items.nth(2).locator('.flow-empty')).toContainText('Cheaper first Gatherer');
     await expect(items.nth(3).locator('li.card[data-face="live"]')).toHaveCount(3);
-    await expect(items.nth(3).locator('li.card h4').first()).toHaveText('Cheaper first Gatherer');
+    await expect(items.nth(3).locator('li.card h3').first()).toHaveText('Cheaper first Gatherer');
     await expect(page.locator('p.status-line')).toHaveText(copy.status.openNone);
   });
 });

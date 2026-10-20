@@ -3,7 +3,8 @@
 // page's og:image.
 //
 // The face shows the card's title and summary, its Supporter numbers (never amounts, never ranked),
-// what the agents have spent on it, and its draft-to-live time once it is live. Nothing here counts
+// its funding bar's words before building starts and what the agents have spent on it after, and its
+// draft-to-live time once it is live. Nothing here counts
 // down and nothing suggests chance (docs/research/comparables.md). The colours are tokens.css's, which
 // card-preview.test.ts checks; the type is the site's own face, from @fontsource (satori reads woff,
 // not the site's variable woff2). satori lays the face out as SVG with the text as paths, and resvg
@@ -41,7 +42,10 @@ export type PreviewCard = {
   title: string;
   summary: string;
   stage: string;
+  horizon: string;
   spentUsd: number;
+  fundedUsd: number;
+  targetUsd: number;
   supporters: number[];
   supporterCount: number;
   createdAt: string;
@@ -77,7 +81,11 @@ export function previewCardFrom(body: string): PreviewCard | null {
     title,
     summary: str(card.summary),
     stage: str(card.stage),
+    horizon: str(card.horizon),
     spentUsd: num(root.spent_usd),
+    // As the card page's facts read it (Funding.tsx): the credited figure once funding loads.
+    fundedUsd: isDoc(root.funding) ? Math.max(num(root.funding.credited_usd), 0) : num(card.funded_usd),
+    targetUsd: num(card.funding_target_usd),
     supporters,
     supporterCount: Math.max(num(root.supporter_count), supporters.length),
     createdAt: str(card.created_at),
@@ -112,21 +120,42 @@ export function draftToLive(createdAt: string, liveAt: string | null): string | 
   return days === 1 ? '1 day' : `${days} days`;
 }
 
-/** "#1, #4 and #9", or "#1, #4 … and 12 more"; supporters are listed by number, never by amount. */
-export function supporterLine(numbers: number[], count: number): string {
-  if (count === 0) return 'No supporters yet';
-  const shown = numbers.slice(0, SHOWN_SUPPORTERS).map((n) => `#${n}`);
-  const more = count - shown.length;
-  if (more > 0) return `${shown.join(', ')} and ${more} more`;
-  if (shown.length === 1) return shown[0]!;
-  return `${shown.slice(0, -1).join(', ')} and ${shown.at(-1)}`;
+function count(n: number): string {
+  return n.toLocaleString('en-US');
 }
 
-/** The card's state words, as src/lib/copy.ts's status lines; checked by card-preview.test.ts. */
+/**
+ * "Funded by Supporter 1", "Funded by Supporter 1, 4 and 9", or "Funded by Supporter 1, 2 ... and 12
+ * more" (docs/COPY.md: a supporter is a number); listed by number, never by amount.
+ */
+export function supporterLine(numbers: number[], total: number): string {
+  if (total === 0) return 'No supporters yet';
+  const shown = numbers.slice(0, SHOWN_SUPPORTERS).map(count);
+  const more = total - shown.length;
+  let list: string;
+  if (more > 0) list = `${shown.join(', ')} and ${count(more)} more`;
+  else if (shown.length === 1) list = shown[0]!;
+  else list = `${shown.slice(0, -1).join(', ')} and ${shown.at(-1)}`;
+  return `Funded by Supporter ${list}`;
+}
+
+/** The stages before building starts: the face shows the funding bar's words, not spend. */
+const BEFORE_BUILD = new Set(['proposed', 'designing', 'voted', 'funded']);
+
+/** "$0.52 of $0.78 funded", the card page's funding bar words, or null with no target. */
+export function fundingLine(card: Pick<PreviewCard, 'fundedUsd' | 'targetUsd'>): string | null {
+  if (card.targetUsd <= 0) return null;
+  return `${formatUsd(card.fundedUsd)} of ${formatUsd(card.targetUsd)} funded`;
+}
+
+/**
+ * The card's state words, as src/lib/copy.ts's status lines and the card page's faces
+ * (src/lib/cards.ts faceOf and isPlanned); checked by card-preview.test.ts. A card not yet started
+ * is Open for funding on horizon now and Planned on the roadmap.
+ */
 export const STAGE_WORDS: Record<string, string> = {
-  proposed: 'Planned',
-  designing: 'Planned',
-  voted: 'Open for funding',
+  open: 'Open for funding',
+  planned: 'Planned',
   funded: 'Funded',
   building: 'Building',
   gated: 'Being checked',
@@ -134,6 +163,13 @@ export const STAGE_WORDS: Record<string, string> = {
   live: 'Live',
   rejected: 'Not built',
 };
+
+export function stageWord(card: Pick<PreviewCard, 'stage' | 'horizon'>): string {
+  if (card.stage === 'proposed' || card.stage === 'designing' || card.stage === 'voted') {
+    return STAGE_WORDS[card.horizon === 'now' ? 'open' : 'planned']!;
+  }
+  return STAGE_WORDS[card.stage] ?? 'Card';
+}
 
 type Node = { type: string; props: Doc & { children?: unknown } };
 
@@ -153,7 +189,13 @@ export function face(card: PreviewCard): Node {
   const live = card.stage === 'live';
   const building = card.stage === 'building' || card.stage === 'gated';
   const time = draftToLive(card.createdAt, card.liveAt);
-  const stats = [stat('Supporters', String(card.supporterCount)), stat('Agents spent', formatUsd(card.spentUsd))];
+  const stats = [stat('Supporters', count(card.supporterCount))];
+  if (BEFORE_BUILD.has(card.stage)) {
+    const funding = fundingLine(card);
+    if (funding !== null) stats.push(stat('Funding', funding));
+  } else {
+    stats.push(stat('Agents spent', formatUsd(card.spentUsd)));
+  }
   if (time !== null) stats.push(stat('Draft to live', time));
   return el(
     'div',
@@ -181,7 +223,7 @@ export function face(card: PreviewCard): Node {
             color: live ? TOKENS.live : TOKENS.ink,
             fontWeight: 700,
           },
-          STAGE_WORDS[card.stage] ?? 'Card',
+          stageWord(card),
         ),
       ]),
       el('div', { display: 'flex', flexDirection: 'column' }, [
@@ -191,7 +233,7 @@ export function face(card: PreviewCard): Node {
       el('div', { display: 'flex', flexDirection: 'column' }, [
         el('div', { display: 'flex', marginBottom: 20 }, stats),
         el('div', { display: 'flex', justifyContent: 'space-between', borderTop: `2px solid ${TOKENS.line}`, paddingTop: 16, fontSize: 22, color: TOKENS.muted }, [
-          el('div', {}, clip(`Supporters ${supporterLine(card.supporters, card.supporterCount)}`, 70)),
+          el('div', {}, clip(supporterLine(card.supporters, card.supporterCount), 70)),
           el('div', {}, ADDRESS),
         ]),
       ]),

@@ -133,6 +133,18 @@ test('Play steps through the recorded milestones within 30 seconds, then reads R
   await expect(page.locator('.replay .card-solo li.card')).toHaveAttribute('data-face', 'live');
 });
 
+// The hidden copies that hold the slot's height (Replay.tsx) carry no link or button: nothing that
+// could take focus sits inside a list assistive technology is told to skip.
+test('the replay slot holders hold nothing focusable', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto(`/card/${LIVE_CARD_ID}`);
+  await expect(page.getByRole('button', { name: 'Play how this card was built' })).toBeVisible();
+  await expect(page.locator('.card-sizer').first()).toBeAttached();
+  await expect(page.locator('[aria-hidden="true"] :is(a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"]))')).toHaveCount(0);
+  // The shipped face's Play the game is still a link on the card itself.
+  await expect(page.locator('.replay .card-solo').getByRole('link', { name: 'Play the game' })).toBeVisible();
+});
+
 test('Play holds the slot: neither the Play button nor anything under the card moves', async ({ page }) => {
   test.setTimeout(60_000);
   await page.emulateMedia({ reducedMotion: 'no-preference' });

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { useMyProfile } from '../lib/account';
 import { copy } from '../lib/copy';
 import { useSignInOpen } from '../lib/sign-in';
@@ -35,4 +35,13 @@ export function YouChip() {
       </span>
     </Link>
   );
+}
+
+/**
+ * The Menu's you link, shown below 30rem where the you slot leaves a visitor's row: Sign in for a
+ * visitor, so a phone still offers it by name, and Your desk for a player.
+ */
+export function YouMenuLink() {
+  const me = useMyProfile();
+  return me.state === 'signed-out' ? <NavLink to="/sign-in">{copy.you.signIn}</NavLink> : <NavLink to="/me">{copy.nav.me}</NavLink>;
 }

@@ -105,6 +105,9 @@ test('a wrong password says so without saying which part was wrong, and an uncon
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveText('That email and password do not match. Try again, or reset your password.');
   await expect(page).toHaveURL(/\/sign-in$/);
+  // Each field names the refusal, so going back to fix one reads why (aria-describedby).
+  await expect(page.getByLabel('Email')).toHaveAccessibleDescription('That email and password do not match. Try again, or reset your password.');
+  await expect(page.getByLabel('Password', { exact: true })).toHaveAccessibleDescription('That email and password do not match. Try again, or reset your password.');
 
   const later: Post[] = [];
   await page.unrouteAll();
@@ -115,6 +118,27 @@ test('a wrong password says so without saying which part was wrong, and an uncon
   await expect(page.getByRole('status')).toContainText('We sent a link to player@example.com.');
   expect(later.map((post) => post.path)).toEqual(['/api/community/auth/password', '/api/community/auth/resend']);
 });
+
+// The form's text links are targets a fingertip can find (WCAG 2.5.8): Forgot password? beside its
+// label at least 24px tall, and the switch under the form (Create an account) 44px, on the account
+// pages and on /me's own form.
+for (const path of ['/sign-in', '/me']) {
+  test(`gives the form's text links a press area on ${path}`, async ({ page }) => {
+    const posts: Post[] = [];
+    await answer(page, posts);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto(path);
+    const main = page.getByRole('main');
+    const forgot = main.getByRole(path === '/me' ? 'button' : 'link', { name: 'Forgot password?' });
+    const create = main.getByRole(path === '/me' ? 'button' : 'link', { name: 'Create an account' });
+    await expect(forgot).toBeVisible();
+    expect((await forgot.boundingBox())!.height).toBeGreaterThanOrEqual(24);
+    expect((await create.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    // Hover keeps the size (the text button's hover rule once set it back to an inline line).
+    await create.hover();
+    expect((await create.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  });
+}
 
 test('creates an account and asks the visitor to confirm their email, with the same link for any address', async ({ page }) => {
   const posts: Post[] = [];

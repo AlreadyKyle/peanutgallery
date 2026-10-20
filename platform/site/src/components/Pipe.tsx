@@ -44,16 +44,27 @@ function Who({ event, linked }: { event: FeedEvent; linked: boolean }) {
   );
 }
 
+/**
+ * The row's words beside its kind word. The database writes an opened card as "A new card opened:
+ * <title>" (community.on_card); beside the kind word Opened, the title alone reads "Opened <title>".
+ */
+const OPENED_PREFIX = 'A new card opened: ';
+export function pipeText(event: FeedEvent): string {
+  if (event.kind === 'card_opened' && event.text.startsWith(OPENED_PREFIX)) return event.text.slice(OPENED_PREFIX.length);
+  return event.text;
+}
+
 export function PipeRow({ event, now, linked = true }: { event: FeedEvent; now: number; linked?: boolean }) {
   const kind = FEED_KINDS[event.kind] ?? FEED_KINDS.stage;
   const link = linked ? linkOf(event) : null;
+  const text = pipeText(event);
   return (
     <li className="pipe-row" data-kind={event.kind} data-event={event.id}>
       <span className="pipe-kind">
         <Glyph name={kind.glyph} />
         {kind.word}
       </span>
-      <p className="pipe-text">{link === null ? event.text : <Link to={link}>{event.text}</Link>}</p>
+      <p className="pipe-text">{link === null ? text : <Link to={link}>{text}</Link>}</p>
       <p className="pipe-meta">
         <Who event={event} linked={linked} />
         {event.rarity === undefined || event.rarity === 'common' ? null : <RarityTag rarity={event.rarity} />}
@@ -78,9 +89,14 @@ export type PipeProps = {
   paging?: boolean;
   /** False on an overlay that is watched, not clicked (/broadcast): rows carry no links. */
   linked?: boolean;
+  /**
+   * The line to show instead of the rows when nothing loaded and nothing will (the snapshot failed
+   * and the feed has no rows): the unavailable line every other part of the page shows then.
+   */
+  unavailable?: string | null;
 };
 
-export function Pipe({ events, live, loading, hasOlder, loadingOlder, onOlder, pageSize = 8, headingLevel = 3, paging = true, linked = true }: PipeProps) {
+export function Pipe({ events, live, loading, hasOlder, loadingOlder, onOlder, pageSize = 8, headingLevel = 3, paging = true, linked = true, unavailable = null }: PipeProps) {
   const list = useRef<HTMLOListElement>(null);
   const known = useRef<Set<string> | null>(null);
   const [count, setCount] = useState(pageSize);
@@ -120,6 +136,8 @@ export function Pipe({ events, live, loading, hasOlder, loadingOlder, onOlder, p
         <p className="muted" aria-busy="true">
           {copy.pipe.loading}
         </p>
+      ) : shown.length === 0 && unavailable !== null ? (
+        <p className="muted">{unavailable}</p>
       ) : shown.length === 0 ? (
         <p className="pipe-empty">
           <Glyph name="coin-outline" />

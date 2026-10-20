@@ -137,9 +137,6 @@ export function FloorRail({ snapshot, lit, counts, ideas = true }: { snapshot: S
           );
         })}
       </ol>
-      <p className="small floor-ledger">
-        <Link to="/ledger">{copy.floor.ledger}</Link>
-      </p>
     </nav>
   );
 }
@@ -172,7 +169,7 @@ export function StationCards({ cards, snapshot, planned = false, empty }: { card
   return (
     <ul className="card-grid station-cards">
       {cards.slice(0, FLOW_LANE_CARDS).map((card) => (
-        <CardFace key={card.id} card={card} snapshot={snapshot} compact face={planned ? 'planned' : undefined} />
+        <CardFace key={card.id} card={card} snapshot={snapshot} compact titleLevel={3} face={planned ? 'planned' : undefined} />
       ))}
     </ul>
   );
@@ -201,8 +198,8 @@ export function useIdeasStation() {
 
 /**
  * The Ideas station: the crowd's top ideas with their state and upvotes (a signed-in player can
- * upvote here), and the way to pitch one. The review agent that reads ideas has no tools; the agents
- * that build never see a player's words. The ideas' area is left out here: home names a game only in
+ * upvote here), and the way to pitch one. No agent sorts ideas yet; the agents that build never see a
+ * player's words. The ideas' area is left out here: home names a game only in
  * its game tile (decision 68).
  */
 export function IdeasStation({ index, station }: { index: number; station: ReturnType<typeof useIdeasStation> }) {

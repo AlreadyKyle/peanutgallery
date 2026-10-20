@@ -81,17 +81,27 @@ function ask(): Promise<boolean | null> {
  * does not come counts as open: the sign-in form still says so when it is not.
  */
 export function useSignInOpen(): boolean {
-  const [open, setOpen] = useState<boolean>(() => known ?? stored() ?? false);
+  return useSignInAnswer() ?? false;
+}
+
+/**
+ * The same answer with its third state: true or false once known (this tab's, else the last one this
+ * browser stored), null while a first visit waits for it. A page whose body is the sign-in form (/me
+ * signed out, /sign-up) draws the form while it waits, as no answer counts as open, so the page is
+ * laid out once rather than drawn closed and then redrawn open.
+ */
+export function useSignInAnswer(): boolean | null {
+  const [answer, setAnswer] = useState<boolean | null>(() => known ?? stored());
   useEffect(() => {
     let live = true;
-    void ask().then((answer) => {
-      if (live) setOpen(answer ?? true);
+    void ask().then((value) => {
+      if (live) setAnswer(value ?? true);
     });
     return () => {
       live = false;
     };
   }, []);
-  return open;
+  return answer;
 }
 
 /**

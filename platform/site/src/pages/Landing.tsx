@@ -113,6 +113,12 @@ function StudioStatus({ studio, live }: { studio: StudioState; live: ReturnType<
 }
 
 /**
+ * The explainer's drawn width in the showcase: beside the game from 80rem (342 to 440px wide), the
+ * floor's parts column from 64rem (about 63% of the window), the window's width below that.
+ */
+const SHOWCASE_SIZES = '(min-width: 80rem) 28rem, (min-width: 64rem) 64vw, 100vw';
+
+/**
  * The first game and the explainer under one heading at the section size, side by side from 80rem: the
  * game's box art, its name, one line and Play (decision 68), and the video that shows how a card
  * becomes a change in it. Without a play address the video takes the row alone, with no heading.
@@ -123,7 +129,7 @@ function ShowcaseSection() {
   if (env.playUrl === '') {
     return (
       <div className="showcase">
-        <ExplainerVideo still />
+        <ExplainerVideo still lazy sizes={SHOWCASE_SIZES} />
       </div>
     );
   }
@@ -144,7 +150,7 @@ function ShowcaseSection() {
           </p>
         </div>
       </section>
-      <ExplainerVideo still />
+      <ExplainerVideo still lazy sizes={SHOWCASE_SIZES} />
     </div>
   );
 }
@@ -268,7 +274,7 @@ export function Landing() {
         )}
         {/* While the snapshot loads, the room is drawn empty in its own box and the pipe tells the feed,
             so nothing under them moves when the agents arrive. */}
-        <LiveStudio snapshot={view?.snapshot ?? null} pipeSize={2} />
+        <LiveStudio snapshot={view?.snapshot ?? null} pipeSize={2} unavailable={view === null && studio.state !== 'loading' ? unavailableLine(studio) : null} />
       </div>
       {/* The stations in the machine's order, the rail with the room's small map beside them from
           64rem; then the first game. */}

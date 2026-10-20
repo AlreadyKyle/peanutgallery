@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { copy } from '../lib/copy';
 import type { StudioDoc } from '../lib/community-types';
@@ -376,6 +376,10 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label,
   const bodies = useRef(new Map<string, SVGGElement>());
   const container = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState<{ id: string; at: Spot } | null>(null);
+  // An agent picked by a press (a click, a tap, Enter or Space) keeps its role card open when the
+  // pointer leaves; one only hovered or focused closes as the pointer or focus moves on. A press used
+  // to toggle, so the hover that came with a click opened the card and the click shut it at once.
+  const pinned = useRef<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sprites, setSprites] = useState<Pulse[]>([]);
   const seenPulses = useRef(new Set<string>());
@@ -636,6 +640,7 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label,
     if (anim.wander) anim.restUntil = Math.max(anim.restUntil, t + anim.dur + 1500);
   };
   const hide = (id: string, delay = 160) => {
+    if (pinned.current === id) return;
     if (closeTimer.current !== null) clearTimeout(closeTimer.current);
     closeTimer.current = setTimeout(() => {
       release(id);
@@ -643,10 +648,30 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label,
     }, delay);
   };
 
+  /** A press: a picked agent's card closes, any other agent is picked and its card stays open. */
+  const press = (id: string) => {
+    if (pinned.current === id) {
+      pinned.current = null;
+      hide(id, 0);
+      return;
+    }
+    if (pinned.current !== null && pinned.current !== id) {
+      const was = pinned.current;
+      pinned.current = null;
+      release(was);
+    }
+    show(id);
+    pinned.current = id;
+  };
+  const unpin = (id: string) => {
+    if (pinned.current === id) pinned.current = null;
+    hide(id, 0);
+  };
+
   useEffect(() => {
     if (active === null) return;
     const onDown = (event: PointerEvent) => {
-      if (container.current !== null && !container.current.contains(event.target as Node)) hide(active.id, 0);
+      if (container.current !== null && !container.current.contains(event.target as Node)) unpin(active.id);
     };
     document.addEventListener('pointerdown', onDown);
     return () => document.removeEventListener('pointerdown', onDown);
@@ -679,14 +704,17 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label,
               onMouseEnter: () => show(place.role.id),
               onMouseLeave: () => hide(place.role.id),
               onFocus: () => show(place.role.id),
-              onBlur: () => hide(place.role.id, 0),
-              onClick: () => (active?.id === place.role.id ? hide(place.role.id, 0) : show(place.role.id)),
+              onBlur: (event: FocusEvent<SVGGElement>) => {
+                // Focus moving into the open role card (its link) keeps the agent picked.
+                if (event.relatedTarget instanceof Node && container.current?.contains(event.relatedTarget)) return;
+                unpin(place.role.id);
+              },
+              onClick: () => press(place.role.id),
               onKeyDown: (event: KeyboardEvent<SVGGElement>) => {
-                if (event.key === 'Escape') hide(place.role.id, 0);
+                if (event.key === 'Escape') unpin(place.role.id);
                 if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault();
-                  if (active?.id === place.role.id) hide(place.role.id, 0);
-                  else show(place.role.id);
+                  press(place.role.id);
                 }
               },
             }
