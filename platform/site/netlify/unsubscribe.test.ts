@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Beside the functions folder, not in it: Netlify deploys every file in netlify/functions as a function.
 import cardFunction from './functions/card.mts';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './lib/public-env';
-import { followUnsubscribeCopy, unsubscribeCopy } from './lib/unsubscribe';
+import { followUnsubscribeCopy, UNSUBSCRIBE_POLICY, unsubscribeCopy } from './lib/unsubscribe';
 
 const ORIGIN = 'https://site.example';
 const PAYMENT = '00000000-0000-4000-8000-0000000000aa';
@@ -34,10 +34,37 @@ function expectPage(response: Response, status: number) {
   expect(response.headers.get('Content-Type')).toBe('text/html; charset=utf-8');
   expect(response.headers.get('Cache-Control')).toBe('no-store');
   expect(response.headers.get('Netlify-CDN-Cache-Control')).toBe('no-store');
+  // A function's answer gets none of netlify.toml's headers, so the page sends its own.
+  expect(response.headers.get('Content-Security-Policy')).toBe(UNSUBSCRIBE_POLICY);
+  expect(response.headers.get('X-Frame-Options')).toBe('DENY');
+  expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+  expect(response.headers.get('Referrer-Policy')).toBe('no-referrer');
 }
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('the unsubscribe page headers', () => {
+  it('load nothing, refuse every frame and let the one form post only to this origin', () => {
+    const policy = Object.fromEntries(UNSUBSCRIBE_POLICY.split(';').map((part) => part.trim().split(/\s+/)).map(([name, ...sources]) => [name, sources]));
+    expect(policy).toEqual({
+      'default-src': ["'none'"],
+      'form-action': ["'self'"],
+      'frame-ancestors': ["'none'"],
+      'base-uri': ["'none'"],
+    });
+  });
+
+  it('are sent on every answer: the button page, a refusal and a 405', async () => {
+    stubFetch(answering('true'));
+    expectPage(await request(LINK), 200);
+    expectPage(await request('/api/unsubscribe'), 400);
+    expectPage(await oneClick(), 200);
+    const wrongMethod = await request(LINK, { method: 'PUT' });
+    expectPage(wrongMethod, 405);
+    expect(wrongMethod.headers.get('Allow')).toBe('GET, POST');
+  });
 });
 
 describe('GET /api/unsubscribe', () => {

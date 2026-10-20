@@ -188,6 +188,23 @@ describe('the sign-in routes', () => {
     });
   });
 
+  it('answers an address that already has an account exactly as a fresh sign-up', async () => {
+    const fresh = await (async () => {
+      stubFetch([{ body: { id: 'u1', email: 'new@example.com', identities: [] } }]);
+      return post('/api/community/auth/signup', { email: 'new@example.com', password: 'long enough pass', redirectTo: `${ORIGIN}/me` });
+    })();
+    const freshBody = await fresh.text();
+    for (const code of ['user_already_exists', 'email_exists']) {
+      stubFetch([{ status: 422, body: { code: 422, error_code: code, msg: 'User already registered' } }]);
+      const known = await post('/api/community/auth/signup', { email: 'taken@example.com', password: 'long enough pass', redirectTo: `${ORIGIN}/me` });
+      expect(known.status, code).toBe(fresh.status);
+      expect(known.status, code).toBe(200);
+      expect(await known.text(), code).toBe(freshBody);
+      expect(JSON.parse(freshBody)).toEqual({ confirm: true });
+      expect(known.headers.get('Cache-Control'), code).toBe(fresh.headers.get('Cache-Control'));
+    }
+  });
+
   it('refuses a short password before Supabase, and turns its refusals into codes', async () => {
     const none = stubFetch([{ body: {} }]);
     const short = await post('/api/community/auth/signup', { email: 'a@example.com', password: 'short', redirectTo: `${ORIGIN}/me` });
@@ -374,5 +391,37 @@ describe('the pure helpers', () => {
     expect(otpRequest({ email: 'a@b.co', redirectTo: 'https://user:pw@mobmachine.games/me' }, ORIGIN).ok).toBe(false);
     const limiter = new WindowLimiter(2, 1000);
     expect([limiter.allow('a', 0), limiter.allow('a', 1), limiter.allow('a', 2), limiter.allow('a', 1001)]).toEqual([true, true, false, true]);
+  });
+});
+
+describe('WindowLimiter at its key cap', () => {
+  it('keeps a hot key\'s count when a flood of new keys passes the cap, evicting only the oldest', () => {
+    const limiter = new WindowLimiter(3, 60_000, 100);
+    expect([limiter.allow('hot', 0), limiter.allow('hot', 1), limiter.allow('hot', 2)]).toEqual([true, true, true]);
+    for (let i = 0; i < 500; i++) {
+      limiter.allow(`flood-${i}`, 10 + i);
+      // The hot address keeps coming back, so it is never the oldest key, and stays refused.
+      if (i % 50 === 0) expect(limiter.allow('hot', 10 + i), `after ${i} new keys`).toBe(false);
+    }
+    expect(limiter.size).toBeLessThanOrEqual(100);
+    expect(limiter.allow('hot', 600)).toBe(false);
+    // The newest keys are kept with their hit; only the oldest went.
+    expect(limiter.allow('flood-499', 600)).toBe(true);
+    expect(limiter.allow('flood-499', 601)).toBe(true);
+    expect(limiter.allow('flood-499', 602)).toBe(false);
+    // The window still ends: after it the hot address is let through again.
+    expect(limiter.allow('hot', 60_100)).toBe(true);
+  });
+
+  it('drops every key whose window ended, and keeps a key still in its window', () => {
+    const limiter = new WindowLimiter(1, 1000, 3);
+    expect(limiter.allow('old-1', 0)).toBe(true);
+    expect(limiter.allow('old-2', 1)).toBe(true);
+    expect(limiter.allow('kept', 600)).toBe(true);
+    // A fourth key passes the cap at 1 500: old-1 and old-2 ended their window, kept did not.
+    expect(limiter.allow('new', 1_500)).toBe(true);
+    expect(limiter.size).toBe(2);
+    expect(limiter.allow('kept', 1_501)).toBe(false);
+    expect(limiter.allow('new', 1_502)).toBe(false);
   });
 });

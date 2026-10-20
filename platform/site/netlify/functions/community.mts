@@ -175,12 +175,15 @@ async function post(req: Request, url: URL): Promise<Response> {
       if (answer.status >= 400 && answer.status < 500) {
         if (code === 'weak_password') return refuseAuth(400, errorText(answer.body, 'Choose a stronger password'), 'weak');
         if (code === 'signup_disabled' || code === 'email_provider_disabled') return refuseAuth(403, 'Sign-up is closed for now', 'closed');
-        if (code === 'user_already_exists' || code === 'email_exists') return refuseAuth(409, 'That email already has an account', 'exists');
+        // An address that already has an account (Supabase says so when "Confirm email" is off) gets
+        // exactly a fresh sign-up's answer, so the form never says who has one (docs/specs/accounts.md).
+        if (code === 'user_already_exists' || code === 'email_exists') return json(200, { confirm: true }, NO_STORE);
         return refuseAuth(400, errorText(answer.body, 'The account could not be made'), 'bad');
       }
       if (answer.status >= 300) return refuse(502, 'The sign-in service did not answer');
       // "Confirm email" on: no session until the link in the email is opened. A known address gets
-      // the same answer, so the form never says who has an account.
+      // the same answer (Supabase answers it 200 with no identities), so the form never says who has
+      // an account.
       const session = sessionFields(answer.body);
       return json(200, session ?? { confirm: true }, NO_STORE);
     }

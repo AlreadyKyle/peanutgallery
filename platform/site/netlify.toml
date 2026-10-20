@@ -142,9 +142,14 @@
 # its figures come from /api on this origin), and no form on it may post anywhere but here
 # (docs/specs/board-site.md). It does not stop a link to another host: the gate's payment-host scan
 # fails a build that carries a payment address other than the Payment Link above.
+# Strict-Transport-Security replaces Netlify's default (max-age=31536000): two years, every subdomain,
+# preload-eligible. Every subdomain of mobmachine.games in use serves HTTPS (www redirects to the apex,
+# play is the game on Netlify; send carries mail records only and no web host). The domain has not been
+# submitted to the preload list.
 [[headers]]
   for = "/*"
   [headers.values]
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
