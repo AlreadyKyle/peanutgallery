@@ -184,7 +184,13 @@ jobs:
           files=("$RUNNER_TEMP"/backup/*.tar.age)
           if [ "${#files[@]}" -ne 1 ]; then echo "expected one .tar.age, found ${#files[@]}"; exit 1; fi
           name=$(basename "${files[0]}")
-          gcloud storage cp --if-generation-match=0 "${files[0]}" "gs://mobmachine-backups/$name"
+          # One JSON API create, ifGenerationMatch=0 so an existing name is refused: gcloud storage cp
+          # reads the object first, which backup-writer may not do.
+          token=$(gcloud auth print-access-token)
+          echo "::add-mask::$token"
+          curl -fsS --max-time 600 -o /dev/null -H @<(printf 'Authorization: Bearer %s\n' "$token") \
+            -H 'Content-Type: application/octet-stream' --data-binary @"${files[0]}" \
+            "https://storage.googleapis.com/upload/storage/v1/b/mobmachine-backups/o?uploadType=media&ifGenerationMatch=0&name=$name"
           echo "offsite: gs://mobmachine-backups/$name"
 
       - name: Send the failure alert
