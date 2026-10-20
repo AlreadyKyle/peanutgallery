@@ -35,8 +35,8 @@ export const WEEKLY: Record<FormatName, WeeklyGeometry> = {
   tall: {
     format: FORMATS.tall,
     id: 'weekly-tall',
-    text: { x: 72, width: 936, y: 184, anchor: 'top' },
-    type: { label: 26, headline: 58, support: 32 },
+    text: { x: 72, width: 936, y: 300, anchor: 'top' },
+    type: { label: 26, headline: 62, support: 32 },
     frame: frameFor(72, 936, null, 1350 - 72),
   },
 };

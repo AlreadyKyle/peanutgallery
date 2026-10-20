@@ -73,6 +73,7 @@ const week: WeekProps = {
           support: 'A card made from an idea credits who pitched it.',
           shot: { src: 'suggest-list.png', url: 'mobmachine.games/suggest' },
           focus: 'suggest-list.how',
+          zoom: 1.3,
           ring: 'suggest-list.how',
         },
       ],
@@ -86,8 +87,6 @@ const week: WeekProps = {
           headline: 'Sign up with a password',
           support: 'Or continue with Google or GitHub.',
           shot: { src: 'sign-up.png', url: 'mobmachine.games/sign-up' },
-          focus: 'sign-up.form',
-          zoom: 1.25,
           ring: 'sign-up.form',
         },
         {
@@ -148,7 +147,7 @@ const week: WeekProps = {
         // #255 governance copy and Terms version 4.
         { headline: 'Terms version 4 is now in force', shot: { src: 'terms.png', url: 'mobmachine.games/terms' }, focus: 'terms.version', zoom: 1.6, ring: 'terms.version' },
         // #256 the Machine card's presets set checkout's amount.
-        { headline: 'Pick $10 and checkout opens on $10', shot: { src: 'machine.png', url: 'mobmachine.games/contribute' }, focus: 'machine.presets', zoom: 1.3, ring: 'machine.presets' },
+        { headline: 'Pick $10 and checkout opens on $10', shot: { src: 'machine.png', url: 'mobmachine.games/contribute' }, ring: 'machine.presets' },
         // #249 HSTS, unsubscribe headers, sign-up never says who has an account, the rate limiter.
         { headline: 'Security hardening across the site', shot: { glyph: 'check', url: 'mobmachine.games', line: 'The site always asks for a secure connection, and sign-up never says who has an account.' } },
         // #252 code splitting, layout shift fixes; #250 Dust's files cached for a year.
