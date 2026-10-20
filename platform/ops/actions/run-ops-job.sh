@@ -1,7 +1,8 @@
 #!/bin/bash
 # run-ops-job.sh: one of the daily jobs on GitHub Actions, run by .github/workflows/ops-jobs.yml
 # (docs/specs/actions-host.md, docs/PLAN.md §10 decision 78): the backup, the Controller, the quota
-# check or the ship notices, as the private ops repository's jobs.yml ran them until 18 October 2026.
+# check, the ship notices or the marketing engine (docs/specs/marketing-engine.md); the first four as
+# the private ops repository's jobs.yml ran them until 18 October 2026.
 #
 # - JOB_ENV is the environment secret holding the text make-jobs-env.sh writes for this job
 #   (backup-mac.env for the backup). This script writes it to a 0600 file under $RUNNER_TEMP/ops-job
@@ -13,9 +14,9 @@
 # - Actions logs are public, so the job's output goes to $RUNNER_TEMP/ops-job/job.log only, which the
 #   workflow encrypts with age before it uploads it. The public log gets this script's own lines: the
 #   job, its exit, and the first word of the job's result line (PASS or FAIL for the Controller, the
-#   quota check and the notices; done for the backup), never a field of the log.
+#   quota check, the notices and the marketing engine; done for the backup), never a field of the log.
 #
-# usage: run-ops-job.sh backup|controller|quota|notices
+# usage: run-ops-job.sh backup|controller|quota|notices|marketing
 # OPS_JOB_SOURCE_ONLY=1 loads the functions without running anything (the ops tests use it).
 set -euo pipefail
 
@@ -25,7 +26,7 @@ LOG=$JOB_DIR/job.log
 PG_BIN=${OPS_JOB_PG_BIN:-/usr/lib/postgresql/17/bin}
 BACKUP_ATTEMPTS=3
 RETRY_SECONDS=${OPS_JOB_RETRY_SECONDS:-60}
-USAGE="usage: run-ops-job.sh backup|controller|quota|notices"
+USAGE="usage: run-ops-job.sh backup|controller|quota|notices|marketing"
 
 note() { printf 'ops-job: %s\n' "$*"; }
 
@@ -107,7 +108,7 @@ run() {
 
 main() {
   case "${1:-}" in
-    backup | controller | quota | notices) run "$1" ;;
+    backup | controller | quota | notices | marketing) run "$1" ;;
     *)
       echo "$USAGE" >&2
       exit 2

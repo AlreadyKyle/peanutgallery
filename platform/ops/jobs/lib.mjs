@@ -3,6 +3,7 @@
 // 22: the jobs run from the read-only code clone, in the dispatcher image on a server or under launchd
 // on the board's Mac, with no node_modules of their own.
 import { readFileSync } from 'node:fs';
+import { channelEnvProblems } from './marketing-posters.mjs';
 
 // Every key a job's env file may hold, by job. provision.sh refuses a file with any other key, so a
 // job never holds a secret it does not use.
@@ -17,6 +18,13 @@ export const JOB_KEYS = {
   notices: {
     required: ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'STRIPE_READ_KEY', 'RESEND_API_KEY', 'NTFY_TOPIC_URL'],
     optional: ['NOTICES_HEALTHCHECK_URL'],
+  },
+  // The marketing engine (docs/specs/marketing-engine.md): the service key for its due list, claims
+  // and settles, and each channel's own credentials, every one optional: a channel without its keys is
+  // skipped, never failed. DISCORD_WEBHOOK_SHIPS is the dispatcher's ships webhook, the same address.
+  marketing: {
+    required: ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'NTFY_TOPIC_URL'],
+    optional: ['MARKETING_HEALTHCHECK_URL', 'BLUESKY_HANDLE', 'BLUESKY_APP_PASSWORD', 'BLUESKY_PDS_URL', 'MASTODON_INSTANCE_URL', 'MASTODON_ACCESS_TOKEN', 'DISCORD_WEBHOOK_SHIPS'],
   },
   quota: {
     required: ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'GITHUB_BILLING_TOKEN', 'GITHUB_BILLING_USER', 'NTFY_TOPIC_URL'],
@@ -48,7 +56,7 @@ export const MAC_JOBS = ['backup-mac', 'controller', 'quota'];
 const OWNER_DB_URL = /^postgres(ql)?:\/\/postgres[.:@]/;
 
 // Keys whose value must be an https URL.
-export const URL_KEYS = ['SUPABASE_URL', 'NTFY_TOPIC_URL', 'CONTROLLER_HEALTHCHECK_URL', 'NOTICES_HEALTHCHECK_URL', 'QUOTA_HEALTHCHECK_URL', 'BACKUP_PAR_URL', 'BACKUP_HEALTHCHECK_URL'];
+export const URL_KEYS = ['SUPABASE_URL', 'NTFY_TOPIC_URL', 'CONTROLLER_HEALTHCHECK_URL', 'NOTICES_HEALTHCHECK_URL', 'MARKETING_HEALTHCHECK_URL', 'QUOTA_HEALTHCHECK_URL', 'BACKUP_PAR_URL', 'BACKUP_HEALTHCHECK_URL'];
 
 // Stripe secret keys can move money. No job holds one under any name; the Controller reads Stripe
 // only with a restricted live key.
@@ -122,6 +130,7 @@ export function jobEnvProblems(job, env) {
   if (user && !/^[A-Za-z0-9-]+$/.test(user)) problems.push('GITHUB_BILLING_USER must be a GitHub user name');
   const token = (env.GITHUB_BILLING_TOKEN ?? '').trim();
   if (token && !token.startsWith('github_pat_')) problems.push('GITHUB_BILLING_TOKEN must be a fine-grained personal access token (github_pat_...)');
+  if (job === 'marketing') problems.push(...channelEnvProblems(env));
   return problems;
 }
 

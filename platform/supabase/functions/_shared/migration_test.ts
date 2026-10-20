@@ -326,6 +326,8 @@ Deno.test("migrations on PGlite", {
         "20261019040000_designer_model.sql",
         // ledger-figures (docs/specs/ledger-figures.md): one definition of each public money figure.
         "20261020100000_ledger_figures.sql",
+        // marketing-engine (docs/specs/marketing-engine.md): the engine's posts, claimed once per channel.
+        "20261020200000_marketing_posts.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -379,6 +381,7 @@ Deno.test("migrations on PGlite", {
         "job_runs",
         "jobs",
         "ledger",
+        "marketing_posts",
         "notice_unsubscribes",
         "outbound_posts",
         "play_counts",
@@ -4202,6 +4205,10 @@ Deno.test("migrations on PGlite", {
           "follow_notice_settle",
           "follow_notices_due",
           "follow_notices_stuck",
+          // marketing-engine (docs/specs/marketing-engine.md): the engine's due list, claim and settle.
+          "marketing_post_claim",
+          "marketing_post_settle",
+          "marketing_posts_due",
         ];
         // community-core (docs/specs/final-state.md, docs/specs/community-core.md): the community
         // documents run for anon and authenticated, a player's RPCs for authenticated, and the board's
