@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { Sequence } from 'remotion';
+import { Img, Sequence, staticFile } from 'remotion';
 import { pop, progress, shake, tween, wobble } from '../anim';
 import { Avatar } from '../components/Avatar';
 import { Card } from '../components/Card';
@@ -9,7 +9,7 @@ import { Phone, PHONE } from '../components/Phone';
 import { roster } from '../data';
 import { C, EASE_IN, EASE_IN_OUT, EASE_OUT, FONT } from '../theme';
 import { BEAT } from '../timeline';
-import { frameHeight, type WeeklyGeometry } from './geometry';
+import type { WeeklyGeometry } from './geometry';
 import type { Layout } from './layout';
 import type { SceneName } from './schema';
 
@@ -19,9 +19,35 @@ import type { SceneName } from './schema';
 // where a player would press. Every figure and title shown is real (cited in the week's file).
 
 const W = 1040;
+const H = 690;
 const FADE = 16;
 
-const box = (g: WeeklyGeometry) => ({ x: g.frame.x, y: g.frame.y, width: W, height: frameHeight(g) });
+/**
+ * The stage every scene stands on: a large rounded panel to the right of the words, from under the
+ * top bar to the foot of the frame, tinted for its segment with a faint dot grid, so each scene is
+ * anchored and the picture has colour without a frame round it. The scene's own 1040 by 690 space is
+ * centred on it, scaled to fill.
+ */
+function stageOf(g: WeeklyGeometry) {
+  const f = g.format;
+  const top = f.bar + 48;
+  const left = g.text.x + g.text.width + 64;
+  const width = f.width - left - 56;
+  const height = f.height - top - 48;
+  const scale = Math.min((width - 24) / W, (height - 40) / H);
+  return { left, top, width, height, scale };
+}
+
+/** Pale tints of the brand's own colours, one a segment (the intro takes the first). */
+const TINTS = ['#e6eff9', '#fdf3dc', '#efe9fb', '#f9e5ef', '#e9f4ec', '#eef0f2'];
+
+function hex(c: string): [number, number, number] {
+  return [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)) as [number, number, number];
+}
+function mixHex(a: string, b: string, k: number): string {
+  const [x, y] = [hex(a), hex(b)];
+  return `rgb(${x.map((v, i) => Math.round(v + (y[i]! - v) * k)).join(',')})`;
+}
 
 /** A child placed by its centre. */
 function At({ x, y, children, scale = 1, rotate = 0, opacity = 1, style }: { x: number; y: number; children: ReactNode; scale?: number; rotate?: number; opacity?: number; style?: CSSProperties }) {
@@ -69,12 +95,12 @@ const pill = (extra: CSSProperties = {}): CSSProperties => ({
   display: 'inline-flex',
   alignItems: 'center',
   gap: 14,
-  padding: '14px 26px',
+  padding: '16px 30px',
   border: `4px solid ${C.ink}`,
   borderRadius: 18,
   background: C.paper,
   fontFamily: FONT,
-  fontSize: 30,
+  fontSize: 34,
   fontWeight: 700,
   color: C.ink,
   whiteSpace: 'nowrap',
@@ -87,8 +113,8 @@ function Field({ label, text, dots = false, k, width = 520 }: { label: string; t
   const shown = dots ? '•'.repeat(n) : text.slice(0, n);
   return (
     <div style={{ fontFamily: FONT, color: C.ink, width }}>
-      <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 10 }}>{label}</div>
-      <div style={{ height: 66, boxSizing: 'border-box', border: `3px solid ${C.ink}`, borderRadius: 12, padding: '0 20px', display: 'flex', alignItems: 'center', fontSize: 28, letterSpacing: dots ? '0.18em' : undefined }}>
+      <div style={{ fontSize: 27, fontWeight: 700, marginBottom: 10 }}>{label}</div>
+      <div style={{ height: 74, boxSizing: 'border-box', border: `4px solid ${C.ink}`, borderRadius: 14, padding: '0 22px', display: 'flex', alignItems: 'center', fontSize: 32, background: C.paper, letterSpacing: dots ? '0.18em' : undefined }}>
         {shown}
         {k > 0 && k < 1.15 ? <span style={{ width: 3, height: 34, background: C.ink, marginLeft: 3, opacity: Math.floor(k * 12) % 2 === 0 ? 1 : 0.2 }} /> : null}
       </div>
@@ -144,16 +170,16 @@ function AgentsScene({ local }: { local: number }) {
           const n = r * 5 + i;
           const up = pop(local, 4 + n * 4, 'bouncy');
           const x = 130 + i * 195 + (r === 1 ? 97 : 0);
-          const y = 210 + r * 250;
+          const y = 190 + r * 260;
           return (
             <div key={agent.title} style={{ opacity: Math.min(1, up * 1.5), transform: `scale(${0.6 + up * 0.4})`, transformOrigin: `${x}px ${y}px`, position: 'absolute', inset: 0 }}>
-              <Walker note={agent.note} x={x} y={y} size={150} local={local} seed={n} range={55} />
+              <Walker note={agent.note} x={x} y={y} size={172} local={local} seed={n} range={55} />
             </div>
           );
         }),
       )}
-      <At x={W / 2} y={640} opacity={progress(local, 50, 20)}>
-        <div style={{ fontFamily: FONT, fontSize: 26, fontWeight: 600, color: C.muted }}>Nine agents, all running</div>
+      <At x={W / 2} y={630} opacity={progress(local, 50, 20)} scale={0.9 + 0.1 * pop(local, 50, 'soft')}>
+        <div style={pill({ fontSize: 28, padding: '10px 24px', borderColor: C.live, color: C.live })}>Nine agents, all running</div>
       </At>
     </>
   );
@@ -225,7 +251,7 @@ function CuratorJoinsScene({ local }: { local: number }) {
 /** An idea note: a card with the pencil, a line of grey for its words, and a vote count. */
 function IdeaNote({ label, votes, voteK = 0, style }: { label?: string; votes?: number; voteK?: number; style?: CSSProperties }) {
   return (
-    <div style={{ width: 420, height: 120, boxSizing: 'border-box', padding: '22px 26px', border: `4px solid ${C.ink}`, borderRadius: 20, background: C.paper, fontFamily: FONT, color: C.ink, display: 'flex', alignItems: 'center', gap: 20, ...style }}>
+    <div style={{ width: 460, height: 128, boxSizing: 'border-box', padding: '22px 28px', border: `4px solid ${C.ink}`, borderRadius: 20, background: C.paper, fontFamily: FONT, color: C.ink, display: 'flex', alignItems: 'center', gap: 20, ...style }}>
       <Glyph name="pencil" size={36} />
       <div style={{ flex: 1 }}>
         {label !== undefined ? <div style={{ fontSize: 28, fontWeight: 700 }}>{label}</div> : <div style={{ height: 16, borderRadius: 8, background: C.line, width: '86%' }} />}
@@ -244,31 +270,38 @@ function IdeasPitchScene({ local }: { local: number }) {
   const typed = progress(local, 14, 46, EASE_OUT);
   const send = 76;
   const fly = progress(local, send + 6, 30, EASE_IN_OUT);
-  const filter = pop(local, send + 20, 'snappy');
-  const filterOut = progress(local, send + 50, 14);
+  const filter = pop(local, send + 34, 'snappy');
+  // The list makes room at its top, and the pitch lands there as a new idea.
+  const room = progress(local, send + 4, 26, EASE_IN_OUT);
+  const landed = pop(local, send + 30, 'snappy');
   return (
     <>
       {[0, 1, 2].map((i) => (
-        <At key={i} x={760} y={210 + i * 140} opacity={0.35 + 0.65 * progress(local, 4 + i * 5, 16)}>
+        <At key={i} x={760} y={150 + (i + room) * 140} opacity={(0.4 + 0.6 * progress(local, 4 + i * 5, 16)) * (i === 2 ? 1 - room : 1)}>
           <IdeaNote />
         </At>
       ))}
-      <At x={300 + fly * 460} y={330 - fly * 260} scale={1 - fly * 0.0} rotate={-4 + fly * 4}>
-        <div style={{ width: 440, boxSizing: 'border-box', padding: 30, border: `4px solid ${C.ink}`, borderRadius: 24, background: C.paper, fontFamily: FONT, color: C.ink, boxShadow: 'none' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 30, fontWeight: 700 }}>
-            <Glyph name="pencil" size={34} /> Pitch an idea
+      {landed > 0 ? (
+        <At x={760} y={150} scale={0.8 + landed * 0.2} opacity={Math.min(1, landed * 1.6)}>
+          <IdeaNote label="Your idea" style={{ background: C.coinUp }} />
+        </At>
+      ) : null}
+      <At x={290 + fly * 470} y={330 - fly * 180} scale={1 - fly * 0.55} opacity={1 - progress(local, send + 26, 10)} rotate={-3 + fly * 3}>
+        <div style={{ width: 460, boxSizing: 'border-box', padding: 32, border: `4px solid ${C.ink}`, borderRadius: 26, background: C.paper, fontFamily: FONT, color: C.ink }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 34, fontWeight: 700 }}>
+            <Glyph name="pencil" size={36} /> Pitch an idea
           </div>
-          <div style={{ marginTop: 20, height: 110, border: `3px solid ${C.ink}`, borderRadius: 12, padding: 18, boxSizing: 'border-box', fontSize: 26 }}>
+          <div style={{ marginTop: 20, height: 120, border: `4px solid ${C.ink}`, borderRadius: 14, padding: 20, boxSizing: 'border-box', fontSize: 30 }}>
             {'Your idea for the game'.slice(0, Math.round(22 * typed))}
           </div>
-          <div style={{ marginTop: 18 }}>
+          <div style={{ marginTop: 20 }}>
             <Button text="Send" down={press(local, send)} />
           </div>
         </div>
       </At>
-      <At x={760} y={600} scale={0.6 + filter * 0.4} opacity={Math.min(1, filter * 2) * (1 - filterOut)}>
+      <At x={760} y={610} scale={0.6 + filter * 0.4} opacity={Math.min(1, filter * 2)}>
         <div style={pill({ borderColor: C.live, color: C.live })}>
-          <Glyph name="check" size={30} colour={C.live} /> Passed the content filter
+          <Glyph name="check" size={32} colour={C.live} /> Passed the content filter
         </div>
       </At>
     </>
@@ -291,14 +324,14 @@ function IdeasVoteScene({ local }: { local: number }) {
         const tapK = taps.map((t, j) => ((j === 1 ? 1 : 0) === i || (j !== 1 && i === 0) ? progress(local, t, 14) : 0)).reduce((a, b) => Math.max(a, b), 0);
         const lift = i === 0 ? promote : 0;
         return (
-          <At key={i} x={420 - lift * 120} y={180 + i * 140 - lift * 20} opacity={i === 0 ? 1 - promote : 1 - promote * 0.5}>
+          <At key={i} x={420 - lift * 120 - promote * 160} y={180 + i * 140 - lift * 20} opacity={1 - promote}>
             <IdeaNote votes={1} voteK={tapK} />
           </At>
         );
       })}
       <Pointer x={ptr.x} y={ptr.y} press={taps.reduce((s, t) => s + press(local, t), 0)} opacity={progress(local, 0, 10) * (1 - progress(local, 80, 14))} />
       {card > 0 ? (
-        <At x={W / 2} y={340} scale={0.7 + card * 0.3} opacity={Math.min(1, card * 1.5)}>
+        <At x={W / 2} y={345} scale={(0.7 + card * 0.3) * 1.2} opacity={Math.min(1, card * 1.5)} rotate={(1 - card) * -6}>
           <div style={{ position: 'relative', width: 520, height: 330 }}>
             <Card title="The most backed idea becomes a card" face="open" fill={progress(local, 120, 40) * 0.35} meta="Suggested by a player" />
           </div>
@@ -388,7 +421,7 @@ function FollowScene({ local, len }: { local: number; len: number }) {
   const following = local >= T;
   return (
     <>
-      <div style={{ position: 'absolute', left: 100 + s.x, top: 90 + s.y, width: 520, height: 330 }}>
+      <div style={{ position: 'absolute', left: 70 + s.x, top: 60 + s.y, width: 520, height: 330, transform: 'scale(1.12)', transformOrigin: 'top left' }}>
         <Card title={FOLLOWED} face={local >= ship ? 'live' : 'building'} fill={0.999} stamp={stamp} gear={local * 4} meta={local >= ship ? null : 'Builder A is building this'} />
       </div>
       <At x={360} y={540}>
@@ -411,66 +444,81 @@ function FollowScene({ local, len }: { local: number; len: number }) {
 
 function DustScene({ local }: { local: number }) {
   const taps = [
-    { at: 30, button: 'strike' as const },
-    { at: 52, button: 'strike' as const },
-    { at: 74, button: 'buyGatherer' as const },
-    { at: 104, button: 'strike' as const },
+    { at: 34, button: 'strike' as const },
+    { at: 56, button: 'strike' as const },
+    { at: 78, button: 'buyGatherer' as const },
+    { at: 108, button: 'strike' as const },
   ];
-  const up = pop(local, 2, 'soft');
+  const phone = pop(local, 2, 'soft');
+  const art = pop(local, 14, 'bouncy');
+  const turn = wobble(local, 3, 14, 150);
   return (
     <>
-      <At x={W / 2} y={360 + (1 - up) * 80} opacity={Math.min(1, up * 1.4)} scale={0.86}>
+      <At x={300} y={350 + (1 - phone) * 80} opacity={Math.min(1, phone * 1.4)}>
         <div style={{ position: 'relative', width: PHONE.width, height: PHONE.height }}>
           <Phone frame={local} taps={taps} />
         </div>
       </At>
-      {[0, 1, 2, 3].map((i) => {
-        const t = taps[i]!.at;
-        const k = progress(local, t, 34, EASE_OUT);
+      {taps.map((tap, i) => {
+        const k = progress(local, tap.at, 34, EASE_OUT);
         return k > 0 && k < 1 ? (
-          <At key={i} x={W / 2 + (i % 2 ? 1 : -1) * (180 + k * 60)} y={300 - k * 120} opacity={1 - k} rotate={k * 120}>
-            <Glyph name="spark" size={44} colour={C.coin} />
+          <At key={i} x={300 + (i % 2 ? 1 : -1) * (150 + k * 70)} y={260 - k * 130} opacity={1 - k} rotate={k * 140}>
+            <Glyph name="spark" size={48} colour={C.coin} />
           </At>
         ) : null;
       })}
-      <At x={W / 2 + 290} y={180} opacity={progress(local, 20, 16)} rotate={-6}>
-        <div style={pill({ background: C.suitGame, color: C.paper, borderColor: C.ink })}>Now in 3D</div>
+      <At x={730} y={330 + (1 - art) * 120} opacity={Math.min(1, art * 1.5)} scale={0.8 + art * 0.2}>
+        <div style={{ perspective: 1200 }}>
+          <div style={{ transform: `rotateY(${-18 + turn}deg) rotateX(${6 + wobble(local, 5, 3, 120)}deg)`, transformStyle: 'preserve-3d' }}>
+            <Img src={staticFile('box-art.svg')} style={{ width: 330, height: 440, display: 'block', borderRadius: 18, border: `5px solid ${C.ink}` }} />
+          </div>
+        </div>
+      </At>
+      <At x={730} y={600} opacity={progress(local, 40, 16)} scale={0.85 + 0.15 * pop(local, 40, 'snappy')} rotate={-3}>
+        <div style={pill({ background: C.suitGame, color: C.paper })}>Now in 3D</div>
       </At>
     </>
   );
 }
 
 function DailyScene({ local, len }: { local: number; len: number }) {
-  const run = progress(local, 16, len - 50, EASE_IN_OUT);
-  const done = pop(local, len - 34, 'snappy');
+  const end = Math.round(len * 0.5);
+  const run = progress(local, 10, end - 10, EASE_IN_OUT);
+  const done = pop(local, end + 4, 'bouncy');
   const secs = Math.round(240 * (1 - run));
-  const r = 150;
+  const r = 160;
   const circ = 2 * Math.PI * r;
+  const ringBump = 1 + 0.06 * Math.sin(Math.min(1, progress(local, end, 14)) * Math.PI);
   return (
     <>
-      <At x={360} y={330}>
-        <svg width={360} height={360} viewBox="0 0 360 360" style={{ overflow: 'visible' }}>
-          <circle cx={180} cy={180} r={r} fill={C.paper} stroke={C.line} strokeWidth={18} />
-          <circle cx={180} cy={180} r={r} fill="none" stroke={C.coin} strokeWidth={18} strokeDasharray={circ} strokeDashoffset={circ * run} transform="rotate(-90 180 180)" strokeLinecap="round" />
-          <circle cx={180} cy={180} r={r + 12} fill="none" stroke={C.ink} strokeWidth={4} />
-          <circle cx={180} cy={180} r={r - 12} fill="none" stroke={C.ink} strokeWidth={4} />
+      <At x={300} y={345} scale={ringBump}>
+        <svg width={380} height={380} viewBox="0 0 380 380" style={{ overflow: 'visible' }}>
+          <circle cx={190} cy={190} r={r} fill={C.paper} stroke={C.line} strokeWidth={22} />
+          <circle cx={190} cy={190} r={r} fill="none" stroke={C.coin} strokeWidth={22} strokeDasharray={circ} strokeDashoffset={circ * run} transform="rotate(-90 190 190)" strokeLinecap="round" />
+          <circle cx={190} cy={190} r={r + 15} fill="none" stroke={C.ink} strokeWidth={5} />
+          <circle cx={190} cy={190} r={r - 15} fill="none" stroke={C.ink} strokeWidth={5} />
         </svg>
         <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontFamily: FONT, color: C.ink }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 76, fontWeight: 700 }}>{`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`}</div>
-            <div style={{ fontSize: 24, color: C.muted, fontWeight: 600 }}>Today's run</div>
+            <div style={{ fontSize: 84, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`}</div>
+            <div style={{ fontSize: 26, color: C.muted, fontWeight: 600 }}>Today's run</div>
           </div>
         </div>
       </At>
-      <At x={790} y={330} scale={0.6 + done * 0.4} opacity={Math.min(1, done * 1.6)} rotate={(1 - done) * 8}>
-        <div style={{ width: 360, boxSizing: 'border-box', padding: 28, border: `4px solid ${C.ink}`, borderRadius: 24, background: C.paper, fontFamily: FONT, color: C.ink }}>
-          <div style={{ fontSize: 30, fontWeight: 700 }}>Daily Dust</div>
-          <div style={{ display: 'flex', gap: 8, margin: '20px 0', alignItems: 'flex-end', height: 90 }}>
+      <At x={760} y={345 + (1 - done) * 60} scale={0.7 + done * 0.3} opacity={Math.min(1, done * 1.6)} rotate={(1 - done) * 10 - 2}>
+        <div style={{ width: 400, boxSizing: 'border-box', padding: 32, border: `4px solid ${C.ink}`, borderRadius: 26, background: C.paper, fontFamily: FONT, color: C.ink }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: 34, fontWeight: 700 }}>Daily Dust</div>
+            <span style={{ display: 'inline-grid', placeItems: 'center', width: 40, height: 40, borderRadius: 9, background: C.suitGame, color: C.paper }}>
+              <Glyph name="cartridge" size={26} />
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 9, margin: '24px 0', alignItems: 'flex-end', height: 110 }}>
             {[0.3, 0.45, 0.4, 0.6, 0.7, 0.65, 0.85, 1].map((h, i) => (
-              <div key={i} style={{ flex: 1, height: `${h * 100 * Math.min(1, done * 1.2)}%`, background: i === 7 ? C.suitGame : C.ink, borderRadius: 4 }} />
+              <div key={i} style={{ flex: 1, height: `${h * 100 * progress(local, end + 10 + i * 3, 14)}%`, background: i === 7 ? C.suitGame : C.ink, borderRadius: 5 }} />
             ))}
           </div>
-          <div style={{ fontSize: 22, color: C.muted }}>The same run for everyone, every day</div>
+          <div style={{ fontSize: 24, color: C.muted }}>The same run for everyone, every day</div>
         </div>
       </At>
     </>
@@ -486,7 +534,7 @@ function SeedScene({ local }: { local: number }) {
   ];
   return (
     <>
-      <At x={260} y={340} scale={0.72}>
+      <At x={260} y={350} scale={0.86}>
         <div style={{ position: 'relative', width: PHONE.width, height: PHONE.height }}>
           <Phone frame={local} taps={[{ at: 22, button: 'strike' }]} />
         </div>
@@ -522,14 +570,18 @@ function SeedScene({ local }: { local: number }) {
 }
 
 function RatesScene({ local }: { local: number }) {
-  const flip = progress(local, 34, 20, EASE_IN_OUT);
+  const flip = progress(local, 30, 22, EASE_IN_OUT);
+  const land = pop(local, 30, 'bouncy');
   return (
-    <At x={W / 2} y={330}>
-      <div style={{ fontFamily: FONT, color: C.ink, textAlign: 'center' }}>
-        <div style={{ fontSize: 30, fontWeight: 600, color: C.muted, marginBottom: 20 }}>Gatherer</div>
-        <div style={{ position: 'relative', height: 170, width: 640, overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 150, fontWeight: 700, transform: `translateY(${-flip * 100}%)`, opacity: 1 - flip }}>+0.3/s</div>
-          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 150, fontWeight: 700, transform: `translateY(${(1 - flip) * 100}%)` }}>+0.25/s</div>
+    <At x={W / 2} y={345}>
+      <div style={{ width: 720, boxSizing: 'border-box', padding: '40px 48px', border: `4px solid ${C.ink}`, borderRadius: 30, background: C.paper, fontFamily: FONT, color: C.ink }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18, fontSize: 38, fontWeight: 700 }}>
+          <Glyph name="team" size={40} /> Gatherer
+          <span style={{ marginLeft: 'auto', fontSize: 26, color: C.muted, fontWeight: 600 }}>per second</span>
+        </div>
+        <div style={{ position: 'relative', height: 190, overflow: 'hidden', marginTop: 16 }}>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', fontSize: 168, fontWeight: 700, transform: `translateY(${-flip * 100}%)`, opacity: 1 - flip, color: C.muted }}>+0.3</div>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', fontSize: 168, fontWeight: 700, transform: `translateY(${(1 - flip) * 100}%) scale(${0.96 + 0.04 * land})`, transformOrigin: 'left center' }}>+0.25</div>
         </div>
       </div>
     </At>
@@ -589,6 +641,14 @@ function TermsScene({ local }: { local: number }) {
 }
 
 function CheckoutScene({ local }: { local: number }) {
+  return (
+    <div style={{ position: 'absolute', inset: 0, transform: 'scale(1.18)', transformOrigin: '45% 50%' }}>
+      <CheckoutInner local={local} />
+    </div>
+  );
+}
+
+function CheckoutInner({ local }: { local: number }) {
   const chips = ['$5', '$10', '$25', '$50', '$100'];
   const T = 34;
   const picked = local >= T;
@@ -668,10 +728,10 @@ function EmailScene({ local }: { local: number }) {
         </At>
       ) : null}
       <At x={620} y={330} scale={0.6 + mail * 0.4} opacity={Math.min(1, mail * 1.6)}>
-        <div style={{ width: 600, boxSizing: 'border-box', padding: 34, border: `4px solid ${C.ink}`, borderRadius: 24, background: C.paper, fontFamily: FONT, color: C.ink }}>
-          <div style={{ fontSize: 22, color: C.muted, fontWeight: 600 }}>From studio@mobmachine.games</div>
-          <div style={{ fontSize: 34, fontWeight: 700, marginTop: 10 }}>Shipped in Dust</div>
-          <div style={{ marginTop: 22, padding: 18, border: `3px solid ${C.ink}`, borderRadius: 14, fontSize: 24, fontWeight: 600, opacity: progress(local, 60, 16), transform: `translateY(${(1 - progress(local, 60, 16)) * 16}px)` }}>
+        <div style={{ width: 700, boxSizing: 'border-box', padding: 42, border: `4px solid ${C.ink}`, borderRadius: 30, background: C.paper, fontFamily: FONT, color: C.ink }}>
+          <div style={{ fontSize: 27, color: C.muted, fontWeight: 600 }}>From studio@mobmachine.games</div>
+          <div style={{ fontSize: 46, fontWeight: 700, marginTop: 12 }}>Shipped in Dust</div>
+          <div style={{ marginTop: 26, padding: 22, border: `4px solid ${C.ink}`, borderRadius: 16, background: C.coinUp, fontSize: 30, fontWeight: 600, opacity: progress(local, 60, 16), transform: `translateY(${(1 - progress(local, 60, 16)) * 16}px)` }}>
             Next for Dust: the next card to fund
           </div>
         </div>
@@ -685,8 +745,8 @@ function SocialScene({ local }: { local: number }) {
   return (
     <>
       <At x={180} y={340} scale={0.9 + 0.1 * pop(local, 0, 'soft')}>
-        <div style={{ width: 200, height: 200, borderRadius: 30, border: `4px solid ${C.ink}`, display: 'grid', placeItems: 'center', background: C.paper }}>
-          <Glyph name="flag" size={90} />
+        <div style={{ width: 240, height: 240, borderRadius: 36, border: `5px solid ${C.ink}`, display: 'grid', placeItems: 'center', background: C.coinUp }}>
+          <Glyph name="flag" size={110} />
         </div>
       </At>
       {names.map((n, i) => {
@@ -702,7 +762,7 @@ function SocialScene({ local }: { local: number }) {
               </At>
             ) : null}
             <At x={780} y={ty} scale={0.6 + land * 0.4} opacity={Math.min(1, land * 1.6)}>
-              <div style={pill({ width: 300, justifyContent: 'center' })}>{n}</div>
+              <div style={pill({ width: 340, justifyContent: 'center', fontSize: 38, padding: '20px 30px' })}>{n}</div>
             </At>
           </div>
         );
@@ -733,27 +793,54 @@ const SCENES: Record<SceneName, (p: { local: number; len: number }) => ReactNode
   social: SocialScene,
 };
 
-/** Every beat's scene, cross-faded on the beat's first frames, in the frame's box on the right. */
+/** Every beat's scene on the stage, cross-faded on the beat's first frames. */
 export function Scenes({ frame, g, plan }: { frame: number; g: WeeklyGeometry; plan: Layout }) {
-  const b = box(g);
+  const st = stageOf(g);
   const first = plan.beats[0]!.start;
+  const enter = pop(frame, first - 8, 'soft');
   const exit = progress(frame, plan.outro - 30, 30, EASE_IN);
+  // The tint follows the segment, shifting over half a second as each one starts.
+  const current = [...plan.beats].reverse().find((b) => frame >= b.start) ?? plan.beats[0]!;
+  const prev = plan.beats.filter((b) => b.start < current.start && b.segment !== current.segment).pop();
+  const tintOf = (seg: number) => TINTS[Math.max(0, seg) % TINTS.length]!;
+  const segStart = plan.beats.find((b) => b.segment === current.segment)!.start;
+  const tint = prev === undefined ? tintOf(current.segment) : mixHex(tintOf(prev.segment), tintOf(current.segment), progress(frame, segStart, 30, EASE_IN_OUT));
+  const ox = (st.width - W * st.scale) / 2;
+  const oy = (st.height - H * st.scale) / 2;
   return (
-    <div style={{ position: 'absolute', left: b.x, top: b.y, width: b.width, height: b.height, opacity: progress(frame, first - 18, 30) * (1 - exit) }}>
-      {plan.beats.map((placed, i) => {
-        const shot = placed.beat.shot;
-        if (!('scene' in shot)) return null;
-        const Scene = SCENES[shot.scene];
-        const next = plan.beats[i + 1];
-        const end = next === undefined ? plan.outro : next.start;
-        return (
-          <Sequence key={i} from={placed.start} durationInFrames={end - placed.start + FADE} layout="none">
-            <SceneLayer frame={frame} start={placed.start} end={end} last={next === undefined}>
-              <Scene local={frame - placed.start} len={end - placed.start} />
-            </SceneLayer>
-          </Sequence>
-        );
-      })}
+    <div
+      style={{
+        position: 'absolute',
+        left: st.left,
+        top: st.top,
+        width: st.width,
+        height: st.height,
+        borderRadius: 56,
+        background: tint,
+        backgroundImage: 'radial-gradient(rgba(17,17,17,0.07) 2.2px, transparent 2.6px)',
+        backgroundSize: '34px 34px',
+        backgroundPosition: `${(frame * 0.25) % 34}px ${(frame * 0.12) % 34}px`,
+        overflow: 'hidden',
+        opacity: Math.min(1, enter * 1.3) * (1 - exit),
+        transform: `translateY(${(1 - enter) * 50 + exit * 40}px) scale(${0.96 + enter * 0.04})`,
+      }}
+    >
+      <div style={{ position: 'absolute', left: ox, top: oy, width: W, height: H, transform: `scale(${st.scale})`, transformOrigin: 'top left' }}>
+        {plan.beats.map((placed, i) => {
+          const shot = placed.beat.shot;
+          if (!('scene' in shot)) return null;
+          const Scene = SCENES[shot.scene];
+          const next = plan.beats[i + 1];
+          const end = next === undefined ? plan.outro : next.start;
+          return (
+            <Sequence key={i} from={placed.start} durationInFrames={end - placed.start + FADE} layout="none">
+              <SceneLayer frame={frame} start={placed.start} end={end} last={next === undefined}>
+                <Scene local={frame - placed.start} len={end - placed.start} />
+              </SceneLayer>
+            </Sequence>
+          );
+        })}
+      </div>
     </div>
   );
 }

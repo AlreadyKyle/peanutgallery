@@ -88,6 +88,7 @@ mkdirSync(publicDir, { recursive: true });
 copyFileSync(join(site, 'public', 'fonts', 'atkinson-hyperlegible-next-400-700.woff2'), join(publicDir, 'atkinson-hyperlegible-next-400-700.woff2'));
 // The game's frame the drawn phone shows (components/Phone.tsx), the same file the explainer uses.
 copyFileSync(join(root, 'assets', 'dust-3600.png'), join(publicDir, 'dust-3600.png'));
+copyFileSync(join(root, '..', '..', 'seed-1', 'box-art.svg'), join(publicDir, 'box-art.svg'));
 rmSync(join(publicDir, 'weekly', week), { recursive: true, force: true });
 cpSync(captures, join(publicDir, 'weekly', week), { recursive: true, filter: (src) => !src.endsWith('rects.json') });
 const wav = join(publicDir, `weekly-soundtrack-${week}.wav`);
