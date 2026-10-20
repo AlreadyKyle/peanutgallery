@@ -183,7 +183,7 @@ describe('Team', () => {
     await screen.findByRole('region', { name: team.running });
     expect(box('QA').getAttribute('data-status')).toBe('paused');
     expect(within(box('QA')).getByText('Waiting on a fix to its tools.')).toBeTruthy();
-    // Eyes open on every box, the paused one and the roles still to come included (the board, 19 October 2026).
+    // Eyes open on every box, the paused one and the roles still to come included (the owner, 19 October 2026).
     for (const title of ['Builder A', 'QA', 'Biz Dev']) expect(box(title).querySelector('svg.avatar .avatar-eye'), title).not.toBeNull();
     expect(document.querySelectorAll('svg.avatar .avatar-lid')).toHaveLength(0);
   });
@@ -286,7 +286,7 @@ describe('Team', () => {
     const { container } = renderTeam(sourceOf(snapshot()));
     await screen.findByRole('region', { name: team.running });
     const who = screen.getByRole('region', { name: legal.whoRuns.heading });
-    expect(who.textContent).toContain('Mob Machine is run by AI agents and a board: the people who own the studio and can step in, today Kyle Smith.');
+    expect(who.textContent).toContain('Mob Machine is run by AI agents and its owner, Kyle Smith, who can pause the agents, cancel a card and change the spending caps.');
     expect(within(who).queryAllByRole('listitem')).toHaveLength(0);
     expect(within(who).getByRole('link', { name: team.whoRunsLink }).getAttribute('href')).toBe('/how-it-works#how-who');
     expect(who.textContent).not.toMatch(/publish|public list|with (its|their) reasons?/i);

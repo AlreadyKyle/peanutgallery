@@ -30,7 +30,7 @@ export function roleFacts(role: Role, snapshot: Snapshot): string {
 }
 
 /**
- * One member of the team, in the same box in every section (the board, 26 Sep 2026; PLAN §10
+ * One member of the team, in the same box in every section (the owner, 26 Sep 2026; PLAN §10
  * decision 49): the avatar beside the name and "AI agent", the description, then the foot.
  */
 function RoleRow({ role, status, snapshot }: { role: Role; status: TeamStatus; snapshot: Snapshot }) {
@@ -43,7 +43,7 @@ function RoleRow({ role, status, snapshot }: { role: Role; status: TeamStatus; s
   const coming = !onTheTeam(status);
   return (
     <li className="agent" id={`agent-${role.id}`} data-status={status.kind} data-kind={role.code_only === true ? 'code' : undefined}>
-      {/* Eyes always open (the board, 19 October 2026): every agent bobs as an idle agent in the
+      {/* Eyes always open (the owner, 19 October 2026): every agent bobs as an idle agent in the
           live studio does, paused or not. */}
       <Avatar note={role.species_note} size={coming ? 56 : 96} idle />
       <h3 id={`role-${role.id}`}>{role.name}</h3>

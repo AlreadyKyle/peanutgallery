@@ -175,7 +175,7 @@ export function exampleSplit(net: number, studioPct: number = DEFAULT_STUDIO_PCT
 // the Bank of Canada's daily average for 25 September 2026, 1.4145 Canadian dollars to the US dollar
 // (https://www.bankofcanada.ca/valet/observations/FXUSDCAD/json): 0.30 / 1.4145 = $0.2121. The page
 // labels the fee about, since a real fee moves with the card and the day's rate. No Stripe API is
-// read: Stripe access is the board's alone.
+// read: Stripe access is the owner's alone.
 export const STRIPE_EXAMPLE_FEE = { pct: 2.9, conversionPct: 2, fixedUsd: 0.2121 } as const;
 
 /** Stripe's fee on a payment of `paid` US dollars by STRIPE_EXAMPLE_FEE, to four decimal places. */

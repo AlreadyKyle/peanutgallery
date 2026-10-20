@@ -1,7 +1,7 @@
 {
   "name": "Head of Product",
   "title": "Head of Product",
-  "description": "Looks at the studio the way a newcomer, a supporter and the board see it, and sends each problem it finds to the agent who owns it.",
+  "description": "Looks at the studio the way a newcomer and a supporter see it, and sends each problem it finds to the agent who owns it.",
   "species_note": "A small teal creature with three eyes in a ring and stubby legs.",
   "model": "MODEL_DIRECTOR",
   "budget_share": 0,

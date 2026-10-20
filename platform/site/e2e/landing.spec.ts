@@ -54,7 +54,7 @@ for (const viewport of WIDTHS) {
 
       // The team strip: the first three roles on the team (lib/roster.ts teamStatus), each linking to its row on /team.
       const team = page.getByRole('region', { name: 'The team' });
-      await expect(team.locator('.member-name')).toHaveText(['Builder A', 'Builder B', 'Game Designer']);
+      await expect(team.locator('.member-name')).toHaveText(['Builder A', 'Builder B', 'Curator']);
       for (const href of await team.locator('a.member').evaluateAll((as) => as.map((a) => a.getAttribute('href')))) expect(href).toMatch(/^\/team#agent-/);
       await expect(team.getByRole('link', { name: 'Meet the whole team' })).toHaveAttribute('href', '/team');
 
@@ -74,7 +74,7 @@ for (const viewport of WIDTHS) {
       await expect(money.locator('.pool-line svg.coin')).toHaveCount(1);
       // The split is told on /how-it-works and /contribute, not again on home.
       await expect(money.getByText('Unless you change it on the Fund a card page', { exact: false })).toHaveCount(0);
-      await expect(money.getByText("The agents' share pays only for the AI model time that builds funded cards", { exact: false })).toHaveCount(0);
+      await expect(money.getByText("The agents' share pays for the AI model time that drafts, grades and builds cards", { exact: false })).toHaveCount(0);
       await expect(money.locator('ul.rows li')).toHaveCount(3);
       await expect(money.getByRole('link', { name: 'Full ledger' })).toHaveAttribute('href', '/ledger');
 

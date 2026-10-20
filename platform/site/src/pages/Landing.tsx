@@ -23,7 +23,7 @@ import { useStudioMorph } from '../lib/studio-morph';
 import { teamStrip } from '../lib/roster';
 import { unavailableLine, useStudio, type StudioState } from '../lib/studio';
 
-// Home, in the board's order (DESIGN.md, Home; docs/specs/home-flow.md, docs/specs/place.md), on
+// Home, in the owner's order (DESIGN.md, Home; docs/specs/home-flow.md, docs/specs/place.md), on
 // bands: the ink plate with the room and the pitch; the floor (paper), the only band with cards: the
 // cards to fund, the first game, the players' ideas, then Next up, Building and Shipped; the team
 // (ink); where the money goes. A band with nothing to show
@@ -98,7 +98,7 @@ function Hero() {
 
 /**
  * The studio's state in one line, its stale notice and the announcer for screen readers. It opens the
- * Fund station, over the cards it counts, not the plate (the board, 18 October 2026: the line is not
+ * Fund station, over the cards it counts, not the plate (the owner, 18 October 2026: the line is not
  * needed above the fold).
  */
 function StudioStatus({ studio, live }: { studio: StudioState; live: ReturnType<typeof useLiveHome> }) {

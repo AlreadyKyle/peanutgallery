@@ -2,11 +2,11 @@
 // split, the emergency fund, the daily limit, holds, refunds and where the money goes), the label and
 // description of every money and ledger figure, the words of the ledger's rows, the Payment Link's
 // choices and the funding caption on a card (docs/specs/board-site.md). This file is kernel
-// (platform/gate/kernel-paths.txt): no card may change it, and a change is a board pull request.
+// (platform/gate/kernel-paths.txt): no card may change it, and a change is a kernel pull request.
 // copy.ts holds the rest of the site's words and does not repeat these; every page, kernel or not,
 // reads these from here.
 //
-// The text pages are drafted for board review; not legal advice. In a paragraph, {email} becomes the
+// The text pages are the studio's own drafts; not legal advice. In a paragraph, {email} becomes the
 // contact address as a mailto link, {refunds} a link to the Refunds page, {terms} a link to the Terms
 // and {discord} the Discord invite. The words of the Terms and the Refunds page are not here: every
 // posted version of them is in terms-versions.ts (docs/specs/legal-copy.md).
@@ -26,13 +26,13 @@ export const legal = {
   notDonations: 'These are contributions, not donations.',
   // Home's Where the money goes, after the split: what the agents' share buys (docs/specs/home-game-tile.md).
   agentShareLine:
-    "The agents' share pays only for the AI model time that builds funded cards, and the ledger lists every cost.",
+    "The agents' share pays for the AI model time that drafts, grades and builds cards; each cost is billed to its card and listed on the ledger.",
   // Said once on /contribute and /ledger. Stripe takes US dollars only (the webhook refuses any other currency).
   usdNote: 'All amounts are in US dollars (USD).',
   fixedRulesIntro: 'No contribution or card can change these.',
   fixedRules: [
     'The public ledger shows the money that comes in, where it goes and the cost of all agent work paid for with contributions.',
-    'Agents spend contributions only on funded cards, within set caps.',
+    'Agents spend contributions only on cards, within set caps.',
     "10% of every contribution after Stripe's fee goes to a reserve. Unless you change it, 80% of the rest goes to the agents and 20% to the studio.",
     "5% of the agents' share goes to an emergency fund, up to $500.",
     'Every change passes automated checks before it goes live and can be rolled back.',
@@ -59,8 +59,8 @@ export const legal = {
   loadingFigures: 'Loading the figures.',
   loadingLedger: 'Loading the ledger.',
   loadingDeploys: 'Loading deploys.',
-  contributorsOne: '1 contributor',
-  contributorsMany: '{n} contributors',
+  contributorsOne: '1 supporter',
+  contributorsMany: '{n} supporters',
   // One plain line under each figure, so nothing needs a tap to explain it.
   describeAvailable: 'Agent credit not spent yet: what is on card bars and what is waiting for a card.',
   // Added to the In the pool description when agent work has cost more than came in; the figure shows $0.00.
@@ -91,9 +91,9 @@ export const legal = {
   shippedOn: 'shipped',
   spentSoFar: 'spent so far',
   fundThis: 'Fund this card',
-  // A card's spec rows: "Funded $1.50 of $3.00" and "Contributors 2".
+  // A card's spec rows: "Funded $1.50 of $3.00" and "Supporters 2".
   fundedLabel: 'Funded',
-  contributorsLabel: 'Contributors',
+  contributorsLabel: 'Supporters',
   // A card that was not built, on the design guide's sample face; /ledger's Stopped rows say where the
   // money went card by card (movedTo).
   notBuiltMoney: 'Its unspent money went to the next cards in line.',
@@ -194,7 +194,7 @@ export const legal = {
         heading: 'Where the money goes',
         paragraphs: [
           "The 10% reserve covers disputes, and agents never spend it. The emergency fund is kept for urgent fixes.",
-          'Agent credit pays only for model usage on funded cards, within daily and per-card caps.',
+          'Agent credit pays only for model usage on cards, within daily and per-card caps.',
           "Money given with no card, or beyond a card's target, goes to the next cards in line, each up to its target. What no card can take waits for the next card to open.",
         ],
       },
@@ -206,7 +206,7 @@ export const legal = {
       },
     ],
   },
-  // The explainer video (docs/specs/explainer-video.md): its words in the order it shows them. Its first and last lines are the board's own for the video (PLAN.md
+  // The explainer video (docs/specs/explainer-video.md): its words in the order it shows them. Its first and last lines are the owner's own for the video (PLAN.md
   // §10 decision 57); every line between is a sentence the site already says, word for word, and each
   // step is a heading of howMoneyMoves (platform/explainer/src/data.test.ts). platform/explainer draws
   // these same strings. It lives here because some lines state money.
@@ -258,7 +258,7 @@ export const legal = {
   noFundableCards: 'No card is open for funding right now. Fund the next card in line and your money waits for the next one that opens.',
   // Under /contribute's card choices.
   waterfallLine: "Anything beyond a card's target funds the next cards in line.",
-  // /ledger's Funding band: money on no card yet, the shortfall and the board's test payment.
+  // /ledger's Funding band: money on no card yet, the shortfall and the studio's test payment.
   notOnCard: 'Not on a card yet',
   describeNotOnCard: 'Agent credit that no open card could take, waiting for the next card to open.',
   notOnCardTopUp: CEILING_TOP_UP,
@@ -282,7 +282,7 @@ export const legal = {
   poolSplitShort: ', less the {short} by which Not on a card yet is below zero',
   // /ledger's Money in band: what supporters paid and where it went. The figures add up: received -
   // Stripe fees - refunded - disputed + corrections = reserve + studio + emergency fund + held + agent
-  // credit (docs/specs/money-logic.md). The board's own test payment is in none of them.
+  // credit (docs/specs/money-logic.md). The studio's own test payment is in none of them.
   moneyIn: 'Money in',
   moneyInLede: 'What supporters have paid, and where it went.',
   moneyInEmpty: 'No contributions yet.',
@@ -328,10 +328,11 @@ export const legal = {
   movedTo: 'Its unspent money went to {places}.',
   movedPlace: '{place} ({usd})',
   anotherCard: 'another card',
-  // A stopped card's reason in plain words, by the failing_check code the dispatcher or the board
-  // wrote. A code with no entry shows its stage's fallback; the raw code never shows.
+  // A stopped card's reason in plain words, by the failing_check code the dispatcher or the owner
+  // wrote. A code with no entry shows its stage's fallback; the raw code never shows. The codes keep
+  // their old board_ names; only the words changed.
   failingCheckWords: {
-    cancelled_by_board: 'The board cancelled it.',
+    cancelled_by_board: 'The studio cancelled it.',
     acceptance: "The change did not pass the card's own check.",
     acceptance_grammar: "The card's check could not be read.",
     acceptance_already_true: 'What the card asked for was already true.',
@@ -354,10 +355,10 @@ export const legal = {
     wall_clock: 'The agent ran out of time.',
     console_credit: "The agents' model credit ran out.",
     usage_tier_cap: 'The studio reached its monthly limit on model usage.',
-    paused_by_board: 'The board paused the studio while it was being built.',
-    board_session: 'The board session it was running in ended.',
-    horizon: 'The board moved it to a later part of the roadmap.',
-    vetoed: 'The board set it aside.',
+    paused_by_board: 'The studio was paused while it was being built.',
+    board_session: 'The session it was running in ended.',
+    horizon: 'It was moved to a later part of the roadmap.',
+    vetoed: 'The studio set it aside.',
     patch_conflict: 'Its change no longer fits the latest version, so it waits to be redone.',
     unknown_model: "The agent's model was not recognised.",
     dispatcher_stopped: "The studio's tools stopped while it was being built.",
@@ -416,9 +417,9 @@ export const legal = {
   // The 7-day part only when it is not $0.00, and the whole clause only when the total is not.
   teamSpent: 'Spent from contributions {total}',
   teamSpentWeek: 'Spent from contributions {total}, {week} in the last 7 days',
-  // /roadmap's label on a card the board vetoed, beside the board's reason. Here, not in copy.ts,
-  // because the site-kernel test keeps the word held out of copy.ts.
-  heldByBoard: 'Held by the board',
+  // /roadmap's label on a card the owner vetoed (cards.board_vetoed), beside the owner's reason. Here,
+  // not in copy.ts, because the site-kernel test keeps the word held out of copy.ts.
+  heldByBoard: 'Held by the studio',
   // The public lines for the database's own steps that name money or funding (event line keys
   // topped_up, resumed and ranked, lib/lines.ts): the top-up with its amount, the resume by rule,
   // and the Studio Head's ranking. Here, not in copy.ts, because copy.ts carries no money word.
@@ -427,19 +428,20 @@ export const legal = {
     resumed: { one: 'resumed the card by rule after its spending limit' },
     ranked: { one: 'ranked the cards open for funding' },
   } as Record<string, { one: string; many?: string }>,
-  // /how-it-works' Who runs it, its first line repeated at the foot of /team (docs/specs/copy-pass.md):
-  // the board by name, what it can do and what it files (PLAN.md §4 Who files cards). The board's
-  // standing duties stay in PLAN.md §4 The Board, not on a public page. No line says the board's
-  // actions are published: no public list of them exists.
+  // /how-it-works' Who runs it, its first line repeated at the foot of /team (docs/specs/copy-pass.md,
+  // docs/specs/governance-copy.md): the owner by name and what he can do, then what the agents do on
+  // their own and what the owner files (PLAN.md §4 Who files cards). The owner's standing duties stay
+  // in PLAN.md §4 The Board, not on a public page. No line says the owner's actions are published: no
+  // public list of them exists.
   whoRuns: {
     heading: 'Who runs it',
     paragraphs: [
-      'Mob Machine is run by AI agents and a board: the people who own the studio and can step in, today Kyle Smith.',
-      'The board can pause the agents, cancel a card and change the spending caps.',
-      'When too few cards are open, the Game Designer, an AI agent, drafts one and the Game Director grades it before it opens. The board may file cards too.',
+      'Mob Machine is run by AI agents and its owner, Kyle Smith, who can pause the agents, cancel a card and change the spending caps.',
+      'The owner may also file cards.',
+      'When too few cards are open, the Game Designer, an AI agent, drafts one and the Game Director grades it before it opens.',
     ],
     agentsLabel: 'The agents act on their own',
-    boardLabel: 'The board can step in',
+    ownerLabel: 'The owner can step in',
   },
   // /thanks, where Stripe's redirect lands (docs/specs/supporter-pages.md). No answer holds an amount,
   // an email or a name, and an unknown session reads the same as one not yet recorded.
@@ -469,7 +471,7 @@ export const legal = {
     terms: 'Your contribution is under version {n} of the {terms}, including the {refunds}.',
     followHeading: 'Follow along',
     watchCard: 'Watch this card',
-    // Says what the link does: the Discord invite. Ship posts start only once the board sets the
+    // Says what the link does: the Discord invite. Ship posts start only once the owner sets the
     // ships webhook (BOARD-SETUP.md), so the button promises none (docs/specs/copy-pass.md).
     discord: 'Follow the studio on Discord',
     discordAge: 'Discord is for ages 13 and over.',
@@ -488,7 +490,7 @@ export const legal = {
     shipEmail: 'When it goes live, the studio emails you a ship notice.',
     shareLede: 'Share the card, so friends can follow it too.',
   },
-  pausedFallback: 'It stopped on a check the board is looking into.',
+  pausedFallback: 'It stopped on a check the studio is looking into.',
   rejectedFallback: "It did not pass one of the studio's checks.",
   // On the open card closest to fully funded (docs/specs/supporter-loop.md): a fact, never a timer.
   leftToFund: '{amount} left to fund it.',
@@ -517,7 +519,7 @@ export const legal = {
   fundAgreement:
     "By funding you accept the {terms} in force when your checkout starts, including the {refunds}, and confirm you are an adult where you live or have a parent's or guardian's permission.",
   // Privacy is a notice with its own date, not part of a Terms version.
-  privacyUpdated: 'Last updated 19 October 2026.',
+  privacyUpdated: 'Last updated 20 October 2026.',
   privacy: {
     title: 'Privacy',
     lede: 'What the studio stores when you contribute, and what it does not.',
@@ -572,7 +574,10 @@ export const legal = {
       {
         heading: 'Sign-in',
         paragraphs: [
-          'Board members, and players who keep a profile, sign in with a link sent to their email address. Sign-in uses Supabase Auth, which keeps that address so you can sign in again.',
+          // docs/specs/accounts.md: a password or a one-time link, and a provider button only once that
+          // provider is on in Supabase Auth.
+          'Players who keep a profile sign in with their email and a password, or with a link sent to that email. Sign-in uses Supabase Auth, which keeps that address so you can sign in again.',
+          'Where the sign-in page offers Google, Apple, GitHub or Discord, you can sign in with one of them instead, and it gives Supabase Auth your email address.',
         ],
       },
       {
@@ -582,7 +587,7 @@ export const legal = {
       {
         heading: 'What is public',
         paragraphs: [
-          "The public pages show totals, such as the money available and each card's number of contributors. They never show names or email addresses.",
+          "The public pages show totals, such as the money available and each card's number of supporters. They never show an email address.",
         ],
       },
       {
@@ -590,7 +595,7 @@ export const legal = {
         paragraphs: [
           'Supporter numbers are public on the cards your money reached.',
           'A number belongs to one receipt email, which the studio stores only as a one-way hash, so paying with two email addresses gives two numbers.',
-          'Nothing public shows a name or an email address.',
+          "A profile's name and avatar are public when you choose. Without a profile, nothing public shows a name or an email address.",
         ],
       },
       {

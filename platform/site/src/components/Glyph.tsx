@@ -139,7 +139,7 @@ const DRAWINGS: Record<GlyphName, ReactNode> = {
       <circle className="glyph-line" cx={8} cy={8} r={3} />
     </>
   ),
-  // Picked by the board.
+  // Picked by the studio.
   flag: (
     <>
       <path className="glyph-line" d="M3.5 14.5V1.75" />

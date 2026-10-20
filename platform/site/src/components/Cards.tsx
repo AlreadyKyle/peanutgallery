@@ -75,7 +75,7 @@ export function ShippedRow({ card, snapshot, example = false }: { card: Card; sn
 }
 
 /**
- * A planned card's state on /roadmap (docs/specs/supporter-pages.md): held by the board with its
+ * A planned card's state on /roadmap (docs/specs/supporter-pages.md): held by the studio with its
  * reason when vetoed; approved and opening soon when an approved agent card waits to be dealt (its
  * opens_at is set and it is not on now); else planned and not built yet.
  */
@@ -88,7 +88,7 @@ export function plannedState(card: Card): { label: string; reason: string | null
 /**
  * A planned card as a rail row: its suit in the rail, then its title, and on /roadmap its summary and
  * state. /roadmap's rows sit under a group heading (h4) whose intro says planned once, so a row shows
- * its state only when it is approved and opening soon or held by the board (docs/specs/copy-pass.md).
+ * its state only when it is approved and opening soon or held by the studio (docs/specs/copy-pass.md).
  */
 export function PlannedRow({ card, detail = false, byline = null, level = 3 }: { card: Card; detail?: boolean; byline?: string | null; level?: 3 | 4 }) {
   const state = plannedState(card);

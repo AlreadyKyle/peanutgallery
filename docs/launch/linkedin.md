@@ -1,12 +1,12 @@
 # LinkedIn
 
-The board's personal post, outside PLAN.md §7's channel order: post it after the X thread, once the studio is building again ("It's live now" must be true). LinkedIn allows 3,000 characters; the first two lines show before "see more". The link carries `?from=linkedin`, the tag the site counts (`docs/specs/channel-counters.md`).
+The owner's personal post, outside PLAN.md §7's channel order: post it after the X thread, once the studio is building again ("It's live now" must be true). LinkedIn allows 3,000 characters; the first two lines show before "see more". The link carries `?from=linkedin`, the tag the site counts (`docs/specs/channel-counters.md`).
 
 ## Post
 
 I just opened a game studio with no employees.
 
-Mob Machine is run by AI agents and a human board, which is me. You watch them build, and you decide what they build next.
+Mob Machine is run by AI agents and the studio's owner, which is me. You watch them build, and you decide what they build next.
 
 After 20 years making games, the part I wanted to rethink wasn't the tools. It was who gets to direct the work, and where the money goes.
 

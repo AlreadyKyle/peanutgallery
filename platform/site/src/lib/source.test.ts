@@ -40,7 +40,7 @@ const golden = JSON.parse(readFileSync(resolve(process.cwd(), 'src/lib/__fixture
 /**
  * The Snapshot without what supporter-pages added (docs/specs/supporter-pages.md): role stats, the
  * roster's status, trigger and pause, a card's dealing and veto, and each event's line key; and
- * copy-pass's board-work marker, and agent-upkeep's code_only. The golden was captured before them,
+ * copy-pass's kernel-work marker (board_work), and agent-upkeep's code_only. The golden was captured before them,
  * so it cannot hold them; they are checked on their own below.
  */
 function beforeSupporterPages(snapshot: Snapshot): unknown {
@@ -78,7 +78,7 @@ describe('the golden snapshot', () => {
     expect(snapshot.cards.every((card) => card.board_vetoed === false && card.opens_at === null)).toBe(true);
   });
 
-  it("reads each card's board-work marker, and a card document without one as not board work (copy-pass)", async () => {
+  it("reads each card's kernel-work marker, and a card document without one as not kernel work (copy-pass)", async () => {
     const marked = new Set(DEFAULT_STUDIO.cards.filter((card) => card.board_work === true).map((card) => String(card.id)));
     expect(marked.size).toBeGreaterThan(0);
     const { fetchFn } = serving(() => toDocuments(DEFAULT_STUDIO));
@@ -174,7 +174,7 @@ describe('createSnapshotSource.load', () => {
     expect(loaded.cards.find((c) => c.id === building.id)?.live_at).toBe('2026-09-23T12:00:00Z');
   });
 
-  it('moves a card the board deals from next to now into the fund group with its target, as funding_order lists it', () => {
+  it('moves a card the studio deals from next to now into the fund group with its target, as funding_order lists it', () => {
     // The deal sets horizon, rank, target and builder in one write (set_card_horizon); the card
     // document still has the card on next with no target.
     const planned = DEFAULT_STUDIO.cards.find((card) => card.horizon === 'next')!;

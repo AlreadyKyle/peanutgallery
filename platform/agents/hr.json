@@ -1,7 +1,7 @@
 {
   "name": "HR",
   "title": "HR",
-  "description": "Keeps each agent's job description true to the work it actually does, and proposes changes to a role for the board to approve.",
+  "description": "Keeps each agent's job description true to the work it actually does, and proposes changes to a role.",
   "species_note": "A round blue creature with two small antennae and a wide mouth.",
   "model": "MODEL_DIRECTOR",
   "budget_share": 0,

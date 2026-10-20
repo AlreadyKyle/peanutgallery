@@ -26,7 +26,7 @@ const { trigger: _builderTrigger, ...builderAFile } = builderA;
 const host: RoleSpec = {
   name: "Host",
   title: "Host",
-  description: "Narrates the studio's work on a live stream and speaks up for chat, but is not running yet.",
+  description: "Narrates the studio's work on a live stream.",
   species_note: "A round pink creature with large ears and a wide mouth.",
   model: "MODEL_HOST",
   budget_share: 0.05,

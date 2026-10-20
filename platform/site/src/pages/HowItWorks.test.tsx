@@ -99,7 +99,7 @@ describe('How it works', () => {
     for (const figure of figures()) expect(figure.querySelector('figcaption')?.textContent).toMatch(/^Example/);
     for (const rule of legal.fixedRules) expect(screen.getByText(rule)).toBeTruthy();
     expect(screen.getByText(legal.artPolicy)).toBeTruthy();
-    // Who made what, under the rules: the agents, the code they wrote and the board.
+    // Who made what, under the rules: the agents, the code they wrote and the owner.
     const rules = screen.getByRole('region', { name: page.rulesHeading });
     expect(within(rules).getByRole('heading', { level: 3, name: copy.whoMadeWhat.heading })).toBeTruthy();
     expect(within(rules).getByText(copy.whoMadeWhat.body.join(' '))).toBeTruthy();
@@ -207,15 +207,16 @@ describe('How it works', () => {
     expect(example.textContent).not.toMatch(/operations/i);
   });
 
-  it('names the board, what it can do and what it files, and what code and the agents do (docs/specs/copy-pass.md)', () => {
+  it('names the owner, what he can do and what he files, and what code and the agents do (docs/specs/copy-pass.md)', () => {
     renderPage(null);
     const who = screen.getByRole('region', { name: legal.whoRuns.heading });
     const text = who.textContent ?? '';
-    expect(text).toContain('Mob Machine is run by AI agents and a board: the people who own the studio and can step in, today Kyle Smith.');
+    expect(text).toContain('Mob Machine is run by AI agents and its owner, Kyle Smith, who can pause the agents, cancel a card and change the spending caps.');
     expect(text).toMatch(/pause the agents, cancel a card and change the spending caps/);
-    expect(text).toMatch(/The board may file cards too\./);
+    expect(text).toMatch(/The owner may also file cards\./);
+    expect(text).not.toMatch(/board/i);
     expect(text).toMatch(/When too few cards are open, the Game Designer, an AI agent, drafts one and the Game Director grades it before it opens\./);
-    // The board's standing duties stay in PLAN.md §4 The Board, not on the page (the copy audit of 18 October 2026).
+    // The owner's standing duties stay in PLAN.md §4 The Board, not on the page (the copy audit of 18 October 2026).
     expect(within(who).queryAllByRole('listitem')).toHaveLength(0);
     expect(text).not.toMatch(/standing duties|model credit|bank dispute/);
     const code = screen.getByRole('region', { name: page.codeHeading });
@@ -227,11 +228,11 @@ describe('How it works', () => {
     expect(code.textContent).not.toMatch(/dispatcher|the gate/i);
     expect(code.textContent).toMatch(/rolled back/);
     expect(code.textContent).toMatch(/design, build and review the cards/);
-    // No public list of the board's actions exists, so nothing says they are published.
+    // No public list of the owner's actions exists, so nothing says they are published.
     for (const region of [who, code]) expect(region.textContent).not.toMatch(/publish|public list|with (its|their) reasons?/i);
   });
 
-  it('shows no paused notice while the board has paused the agents (decision 62)', async () => {
+  it('shows no paused notice while the studio is paused (decision 62)', async () => {
     renderPage(sourceOf(snapshot({ paused: true, pauseReason: 'incident' })));
     await screen.findAllByRole('heading', { level: 2 });
     expect(document.querySelector('p.notice')).toBeNull();

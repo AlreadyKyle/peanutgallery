@@ -12,5 +12,5 @@
   "class": "read_only",
   "write_access": false,
   "status": "starts",
-  "trigger": "Starts once the first Stripe payout has bought the agents' model credit."
+  "trigger": "Starts when the review team joins the benchmark review, a backlog entry."
 }

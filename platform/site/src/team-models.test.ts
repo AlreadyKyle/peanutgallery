@@ -7,7 +7,7 @@ const row = (model: string, name = 'Builder A') => ({ name, facts: `${model} · 
 const MESSAGE = '/team 3 running roles on claude-opus-5-5, the Game Designer on claude-sonnet-5-5';
 
 describe('the /team model check live-check.mjs runs on production', () => {
-  it('names the model the board set for every role that runs, and the Game Designer’s (PLAN.md §10 decision 77)', () => {
+  it('names the model the owner set for every role that runs, and the Game Designer’s (PLAN.md §10 decision 77)', () => {
     expect(RUNNING_MODEL).toBe('claude-opus-5-5');
     expect(DESIGNER_ROLE).toBe('Game Designer');
     expect(DESIGNER_MODEL).toBe('claude-sonnet-5-5');

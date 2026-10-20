@@ -1,6 +1,6 @@
-# War stories: facts for posts the board writes
+# War stories: facts for posts the owner writes
 
-Posts about what went wrong, what it cost and what changed travel further than posts about the product, and they suit Reddit and Hacker News, where readers ask for a person's own words. Each story below lists only facts from the repository. The board writes the post in its own voice, takes the cost from the card's page or https://mobmachine.games/ledger on the day, and links the pull request.
+Posts about what went wrong, what it cost and what changed travel further than posts about the product, and they suit Reddit and Hacker News, where readers ask for a person's own words. Each story below lists only facts from the repository. The owner writes the post in his own voice, takes the cost from the card's page or https://mobmachine.games/ledger on the day, and links the pull request.
 
 ## 1. The gate turned away 4 of the first 15 cards
 

@@ -96,7 +96,7 @@ describe('Avatar', () => {
     for (const colour of CREATURE_COLOURS) expect(css).toMatch(new RegExp(`--creature-${colour}:\\s*#[0-9a-f]{6};`));
   });
 
-  it('draws every agent with its eyes open, never asleep (the board, 19 October 2026)', () => {
+  it('draws every agent with its eyes open, never asleep (the owner, 19 October 2026)', () => {
     for (const note of Object.values(NOTES)) {
       const { container } = render(<Avatar note={note} />);
       const svg = container.querySelector('svg.avatar')!;

@@ -13,6 +13,8 @@ export const copy = {
   createdByName: 'Clayhouse',
   createdByUrl: 'https://clayhouse.studio',
   home: 'Home',
+  // The frame's skip link, the first focus stop on every page (App.tsx SkipLink, WCAG 2.4.1).
+  skipToContent: 'Skip to content',
   play: 'Play',
   // Home's hero button to the game, in the words of the video's closer (PLAN.md §10 decision 58).
   playFree: 'Play free',
@@ -78,7 +80,7 @@ export const copy = {
   cardsUnavailable: 'The cards did not load.',
   statusBuilding: 'Building',
   statusGated: 'Being checked',
-  statusPicked: 'Picked by the board',
+  statusPicked: 'Picked by the studio',
   statusOpen: 'Open for funding',
   // The card's state words, one per face (Card.tsx). Paused and Not built show only on the design
   // guide until a public read lists those cards.
@@ -145,7 +147,7 @@ export const copy = {
     body: [
       "The AI agents write the games' code, numbers and text, and they make every change.",
       'The code they wrote draws the art, and no image, sound or music model is used.',
-      'The human board sets the rules and the checks and decides what can be built.',
+      "The studio's owner sets the rules and the checks and decides what can be built.",
     ],
   },
   // Beside agent-written card text only (docs/specs/agent-workflows.md): the drafting role's title,
@@ -155,7 +157,8 @@ export const copy = {
   // The one polite announcer's words.
   announceFunded: '{title} is fully funded.',
   announceShipped: '{title} is live.',
-  sources: { board: 'Filed by the board', community: 'Suggested by the community', agent: 'Drafted by an agent' },
+  // The keys are cards.source's values; 'board' is a card the studio filed itself.
+  sources: { board: 'Filed by the studio', community: 'Suggested by the community', agent: 'Drafted by an agent' },
 
   howItWorksPage: {
     title: 'How it works',
@@ -187,9 +190,9 @@ export const copy = {
     startsLaterIntro: 'Each of these roles starts when the step beside it happens.',
     planned: 'Planned',
     plannedIntro: 'These roles are planned, with no start set yet.',
-    // A card role whose folder the board has not opened (the platform code lane).
+    // A card role whose folder is not open (the platform code lane, while platform_lane_open is false).
     laneClosed: 'Starts when studio cards open for funding.',
-    rolePaused: 'The board has paused this agent.',
+    rolePaused: 'The studio has paused this agent.',
     statusPaused: 'Paused',
     // Home's team strip shows three agents; this link goes to the rest on /team.
     meetAll: 'Meet the whole team',
@@ -384,7 +387,7 @@ export const copy = {
     workFaces: 'Cards planned, at work, then finished',
     faces: {
       open: 'Open for funding: the bar, the spec rows and the Fund button.',
-      picked: 'Picked by the board: a signal ribbon inside the top edge, and the same money as open.',
+      picked: 'Picked by the studio: a signal ribbon inside the top edge, and the same money as open.',
       funded: 'Funded: a full bar, the Funded glyph filled with the coin, and the button slot says it is waiting.',
       building: 'Building: the work face, a pale tint of the signal, and no bar.',
       checks: 'Being checked: the work face. There is no public record of each check.',

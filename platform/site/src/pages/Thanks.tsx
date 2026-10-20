@@ -240,7 +240,7 @@ export function Thanks() {
       </main>
     );
   }
-  // No session, the board's own test payment, or not recorded after three minutes: a plain thank-you.
+  // No session, the studio's own test payment, or not recorded after three minutes: a plain thank-you.
   return (
     <main className="title-stays sheet">
       <div className="band">

@@ -452,7 +452,7 @@ describe('bands', () => {
 });
 
 describe('no dead space (DESIGN.md)', () => {
-  // Grid cells (the board, 26 Sep 2026; PLAN §10 decision 49): one item in each cell, no spans.
+  // Grid cells (the owner, 26 Sep 2026; PLAN §10 decision 49): one item in each cell, no spans.
   // /contribute's card choices are a grid of the same columns, like home's fund grid.
   const GRIDS = ['.card-grid', '.choices', '.team-grid', '.fill-grid'];
   const namesGrid = (rule: Rule) => selectorsOf(rule).some((s) => GRIDS.some((grid) => s.includes(grid)));

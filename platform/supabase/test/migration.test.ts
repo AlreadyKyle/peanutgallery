@@ -1903,6 +1903,9 @@ const TERMS_VERSION_3_FILE = "20260925000000_terms_version_3.sql";
 const termsVersionsSql = launchFile(TERMS_VERSIONS_FILE);
 const termsVersion2Sql = launchFile(TERMS_VERSION_2_FILE);
 const termsVersion3Sql = launchFile(TERMS_VERSION_3_FILE);
+// Version 4: version 3's words with "or the studio cancels it" (docs/specs/governance-copy.md).
+const TERMS_VERSION_4_FILE = "20261020210100_terms_version_4.sql";
+const termsVersion4Sql = launchFile(TERMS_VERSION_4_FILE);
 
 describe("terms-versions migrations", () => {
   it("come after the board-site file, in order, and the first sets a lock timeout first", () => {
@@ -1931,6 +1934,8 @@ describe("terms-versions migrations", () => {
     expect(withoutComments(termsVersion3Sql)).toBe("insert into public.terms_versions (version) values (3) on conflict (version) do nothing;");
     const names = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql")).sort();
     expect(names.indexOf(TERMS_VERSION_3_FILE)).toBeGreaterThan(names.indexOf(MONEY_LOGIC_FILE));
+    expect(withoutComments(termsVersion4Sql)).toBe("insert into public.terms_versions (version) values (4) on conflict (version) do nothing;");
+    expect(names.indexOf(TERMS_VERSION_4_FILE)).toBeGreaterThan(names.indexOf(TERMS_VERSION_3_FILE));
   });
 
   it("keeps the table behind row level security, readable by the service role only, and revokes before it grants", () => {

@@ -51,7 +51,7 @@ export function isRunnable(card: Card): boolean {
 export type CardGroups = {
   /** Building or in the gate, in server order. */
   now: Card[];
-  /** Open for funding or picked by the board and still filling, in the waterfall's order (`place`). */
+  /** Open for funding or picked by the studio and still filling, in the waterfall's order (`place`). */
   fund: Card[];
   /** Funded and waiting for the agents, oldest first. */
   queued: Card[];
@@ -84,7 +84,7 @@ export function groupCards(cards: readonly Card[], place: (card: Card) => number
 
 /**
  * Home's Next up lane: the agents' approved cards waiting to open for funding (an approval sets
- * opens_at), held cards left out, the soonest first. The board's backlog (docs/BACKLOG.md, horizon next
+ * opens_at), held cards left out, the soonest first. The studio's backlog (docs/BACKLOG.md, horizon next
  * or later with no approval) is the repository's plan, not a public card, so it never shows here
  * (docs/specs/always-open.md).
  */
@@ -167,7 +167,7 @@ export function inCategory(card: Card, filter: CategoryFilter): boolean {
 /**
  * The category chips to show for these cards: All and The games always, The studio only while at least
  * one card is in it. The platform code lane is closed at launch, so the studio chip stays hidden
- * until the board files studio cards again.
+ * until the studio files studio cards again.
  */
 export function visibleFilters(cards: readonly Card[]): CategoryFilter[] {
   return CATEGORY_FILTERS.filter(
