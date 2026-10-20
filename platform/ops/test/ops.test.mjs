@@ -1275,6 +1275,29 @@ describe('make-jobs-env.sh', () => {
     assert.deepEqual(Object.keys(run.files).sort(), ['backup.env', 'quota.env']);
   });
 
+  // docs/specs/marketing-engine.md: marketing.env holds the service key and the channels .env sets.
+  test('writes marketing.env when asked for by name, with each channel .env sets and none it leaves unset', () => {
+    const hook = `https://discord.com/api/webhooks/123/${'t'.repeat(40)}`;
+    const dotenv = { ...DOTENV, BLUESKY_HANDLE: 'mobmachine.bsky.social', BLUESKY_APP_PASSWORD: 'abcd-efgh-ijkl-mnop', DISCORD_WEBHOOK_SHIPS: hook, MASTODON_INSTANCE_URL: '' };
+    const run = makeJobs(dotenv, JOB_OPERATOR, ['marketing']);
+    assert.equal(run.status, 0, run.output);
+    assert.deepEqual(run.files['marketing.env'], [
+      ['SUPABASE_URL', 'https://fixture.supabase.local'],
+      ['SUPABASE_SERVICE_ROLE_KEY', 'sb_secret_fixture'],
+      ['NTFY_TOPIC_URL', 'https://ntfy.sh/fixture-topic'],
+      ['BLUESKY_HANDLE', 'mobmachine.bsky.social'],
+      ['BLUESKY_APP_PASSWORD', 'abcd-efgh-ijkl-mnop'],
+      ['DISCORD_WEBHOOK_SHIPS', hook],
+    ]);
+    assert.ok(!run.output.includes('abcd-efgh-ijkl-mnop') && !run.output.includes(hook), 'the output names keys only');
+    const check = spawnSync(process.execPath, [path.join(OPS_DIR, 'jobs', 'check-env.mjs'), 'marketing', path.join(run.dir, 'marketing.env')], { encoding: 'utf8' });
+    assert.equal(check.stdout, 'valid\n');
+    const refused = makeJobs({ ...dotenv, BLUESKY_APP_PASSWORD: 'the-account-password' }, JOB_OPERATOR, ['marketing']);
+    assert.equal(refused.status, 1);
+    assert.match(refused.stderr, /marketing\.env not written:\n {2}- BLUESKY_APP_PASSWORD must be an app password/);
+    assert.ok(!refused.output.includes('the-account-password'));
+  });
+
   test('refuses a Stripe secret key as the read key, and writes nothing when every job asked for is refused', () => {
     const run = makeJobs({ ...DOTENV, STRIPE_READ_KEY: 'sk_live_fixture' }, JOB_OPERATOR, ['controller']);
     assert.equal(run.status, 1);
