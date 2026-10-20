@@ -43,6 +43,10 @@ describe('netlify.toml security headers', () => {
     expect(headers['Permissions-Policy']).toBe('camera=(), microphone=(), geolocation=(), payment=(), usb=()');
   });
 
+  it('sends HSTS for two years on every subdomain, preload-eligible, in place of Netlify\'s one-year default', () => {
+    expect(headers['Strict-Transport-Security']).toBe('max-age=63072000; includeSubDomains; preload');
+  });
+
   it('enforces every directive: same-origin sources, no plugins, no framing', () => {
     const enforced = directives(headers['Content-Security-Policy'] ?? '');
     expect(Object.keys(enforced)).toEqual(['default-src', 'script-src', 'style-src', 'img-src', 'font-src', 'connect-src', 'object-src', 'base-uri', 'form-action', 'frame-ancestors']);

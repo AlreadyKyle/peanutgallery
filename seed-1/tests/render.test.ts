@@ -40,6 +40,10 @@ describe('number formatting', () => {
   it('shows one decimal for small rates and whole numbers for large ones', () => {
     expect(formatRate(1)).toBe('1.0');
     expect(formatRate(39.24)).toBe('39.2');
+    expect(formatRate(0.25)).toBe('0.25');
+    expect(formatRate(0.3)).toBe('0.3');
+    expect(formatRate(1.25)).toBe('1.25');
+    expect(formatRate(9.999)).toBe('10.0');
     expect(formatRate(1674.3)).toBe('1,674');
     expect(formatRate(2e6)).toBe('2.00M');
   });
@@ -86,7 +90,7 @@ describe('number formatting at the edges', () => {
     expect(groupThousands(0 / 0)).toBe('0');
     expect(formatRate(0 / 0)).toBe('0.0');
     expect(formatRate(Number.POSITIVE_INFINITY)).toBe('0.0');
-    expect(formatRate(-1.25)).toBe('-1.3');
+    expect(formatRate(-1.25)).toBe('-1.25');
   });
 });
 
