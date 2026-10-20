@@ -15,7 +15,7 @@ import { Contribute } from './pages/Contribute';
 import { Ledger } from './pages/Ledger';
 import { Contact, Privacy, Refunds, RefundsVersion, Terms, TermsVersion } from './pages/Legal';
 import { Thanks } from './pages/Thanks';
-import { communityNav, footerNav, pageNav, pageRoutes, youSlot, type PageRoute } from './routes';
+import { communityNav, footerNav, menuYou, pageNav, pageRoutes, youSlot, type PageRoute } from './routes';
 
 // Kernel (docs/specs/board-site.md): the frame of every page (the top bar, the footer with the legal
 // links and the credit, and the not found page, drawn by components/NotFound.tsx) and the routes of
@@ -96,6 +96,34 @@ function useRouteChange(onRouteChange: (() => void) | undefined) {
   }, [pathname, onRouteChange]);
 }
 
+/**
+ * The skip link's words. copy.ts is where the site's words live; this one waits here until it moves
+ * there, so the frame's first focus stop is never missing.
+ */
+const SKIP_TO_CONTENT = 'Skip to content';
+
+/**
+ * The first focus stop on every page (WCAG 2.4.1): hidden until focused, it moves focus past the top
+ * bar to the page's main element. Each page draws its own main, so the link finds it when pressed.
+ */
+function SkipLink() {
+  return (
+    <a
+      className="skip-link"
+      href="#main"
+      onClick={(event) => {
+        const main = document.querySelector('main');
+        if (main === null) return;
+        event.preventDefault();
+        if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1');
+        main.focus();
+      }}
+    >
+      {SKIP_TO_CONTENT}
+    </a>
+  );
+}
+
 /** The broadcast overlay (docs/specs/final-state.md, Channels) is a frame for a streaming tool: no top bar or footer. */
 const BARE_PATHS: readonly string[] = ['/broadcast'];
 
@@ -113,6 +141,7 @@ export function App({ onRouteChange }: { onRouteChange?: () => void } = {}) {
       <div className="page" data-bare={bare ? 'true' : undefined}>
         <ScrollOnNavigate />
         <ViewTransitions />
+        {bare ? null : <SkipLink />}
         {bare ? null : <TopBar />}
         <Routes>
           <Route path="/contribute" element={<Contribute />} />
@@ -228,8 +257,18 @@ function TopBar() {
           <MachineMark />
           <span className="wordmark-text">{copy.studioName}</span>
         </Link>
-        {/* Who is here (routes.tsx, youSlot): Sign in, or the player's avatar and level. */}
-        {kernelPage ? null : <span className="you-slot">{youSlot}</span>}
+        {/* Who is here (routes.tsx, youSlot): Sign in, or the player's avatar and level. A kernel page
+            draws none of it, but holds a blank slot a visitor's Sign in wide while sign-in is open, so the
+            page links and the buttons stand where they do on every other page. */}
+        {kernelPage ? (
+          signInOpen ? (
+            <span className="you-slot-held" aria-hidden="true">
+              <span className="you-chip">{copy.you.signIn}</span>
+            </span>
+          ) : null
+        ) : (
+          <span className="you-slot">{youSlot}</span>
+        )}
         {play === null ? null : (
           <a className="button button-secondary nav-play" href={play}>
             <CartridgeMark />
@@ -263,11 +302,9 @@ function TopBar() {
           <li>
             <NavLink to="/ledger">{legal.ledger}</NavLink>
           </li>
-          {signInOpen ? (
-            <li className="menu-you">
-              <NavLink to="/me">{copy.nav.me}</NavLink>
-            </li>
-          ) : null}
+          {/* Below 30rem the you slot leaves the row, and this carries it: Sign in for a visitor, Your
+              desk for a player (routes.tsx, menuYou); a kernel page keeps its own plain desk link. */}
+          {signInOpen ? <li className="menu-you">{kernelPage ? <NavLink to="/me">{copy.nav.me}</NavLink> : menuYou}</li> : null}
           {play === null ? null : (
             <li className="menu-play">
               <a href={play}>{copy.play}</a>

@@ -105,6 +105,9 @@ test('a wrong password says so without saying which part was wrong, and an uncon
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveText('That email and password do not match. Try again, or reset your password.');
   await expect(page).toHaveURL(/\/sign-in$/);
+  // Each field names the refusal, so going back to fix one reads why (aria-describedby).
+  await expect(page.getByLabel('Email')).toHaveAccessibleDescription('That email and password do not match. Try again, or reset your password.');
+  await expect(page.getByLabel('Password', { exact: true })).toHaveAccessibleDescription('That email and password do not match. Try again, or reset your password.');
 
   const later: Post[] = [];
   await page.unrouteAll();

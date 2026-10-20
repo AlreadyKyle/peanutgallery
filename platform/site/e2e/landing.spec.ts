@@ -58,14 +58,14 @@ for (const viewport of WIDTHS) {
       for (const href of await team.locator('a.member').evaluateAll((as) => as.map((a) => a.getAttribute('href')))) expect(href).toMatch(/^\/team#agent-/);
       await expect(team.getByRole('link', { name: 'Meet the whole team' })).toHaveAttribute('href', '/team');
 
-      await expect(station('shipped').getByRole('heading', { level: 4 })).toHaveText([
+      await expect(station('shipped').locator('li.card').getByRole('heading', { level: 3 })).toHaveText([
         'The unlock list fits any number of unlocks',
         'Save progress and resume on reload',
       ]);
       // Next up: only approved agent cards waiting to open; the fixture's planned cards are backlog
       // entries and board work, which never show (docs/specs/always-open.md). The Game Designer's line
       // says what it is doing instead.
-      await expect(station('next').getByRole('heading', { level: 4 })).toHaveCount(0);
+      await expect(station('next').locator('li.card').getByRole('heading')).toHaveCount(0);
       await expect(station('next').locator('.flow-agent')).toBeVisible();
 
       const money = page.getByRole('region', { name: 'Where the money goes' });

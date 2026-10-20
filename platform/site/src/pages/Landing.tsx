@@ -268,7 +268,7 @@ export function Landing() {
         )}
         {/* While the snapshot loads, the room is drawn empty in its own box and the pipe tells the feed,
             so nothing under them moves when the agents arrive. */}
-        <LiveStudio snapshot={view?.snapshot ?? null} pipeSize={2} />
+        <LiveStudio snapshot={view?.snapshot ?? null} pipeSize={2} unavailable={view === null && studio.state !== 'loading' ? unavailableLine(studio) : null} />
       </div>
       {/* The stations in the machine's order, the rail with the room's small map beside them from
           64rem; then the first game. */}

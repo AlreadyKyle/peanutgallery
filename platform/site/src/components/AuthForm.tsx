@@ -51,6 +51,7 @@ export function PasswordField({
   hint,
   aside,
   invalid,
+  describedBy,
 }: {
   label: string;
   value: string;
@@ -59,8 +60,11 @@ export function PasswordField({
   hint?: string;
   aside?: ReactNode;
   invalid?: boolean;
+  /** The id of the form's error line, while it shows one: read out with the field. */
+  describedBy?: string;
 }) {
   const id = useId();
+  const described = [hint === undefined ? null : `${id}-hint`, describedBy ?? null].filter((part) => part !== null).join(' ');
   const [shown, setShown] = useState(false);
   return (
     <div className="auth-field">
@@ -77,7 +81,7 @@ export function PasswordField({
           minLength={autoComplete === 'new-password' ? PASSWORD_MIN : undefined}
           value={value}
           aria-invalid={invalid ? true : undefined}
-          aria-describedby={hint === undefined ? undefined : `${id}-hint`}
+          aria-describedby={described === '' ? undefined : described}
           onChange={(event) => onChange(event.currentTarget.value)}
         />
         <button type="button" className="password-toggle" aria-label={shown ? words.hideLabel : words.showLabel} onClick={() => setShown((was) => !was)}>
@@ -251,6 +255,9 @@ export function AuthForm({
   const Heading = title;
   const heading = mode === 'sign-in' ? words.signInTitle : mode === 'sign-up' ? words.signUpTitle : words.forgotTitle;
   const message = problem === null ? null : words[problem];
+  // While the form shows a refusal, each field names it (aria-describedby), so moving back to a field
+  // to fix it reads why it was refused.
+  const problemId = message === null ? undefined : `${id}-problem`;
   const submitLabel =
     mode === 'sign-in'
       ? busy === 'submit'
@@ -295,6 +302,7 @@ export function AuthForm({
                 inputMode="email"
                 required
                 value={email}
+                aria-describedby={problemId}
                 onChange={(event) => setEmail(event.currentTarget.value)}
               />
             </div>
@@ -306,12 +314,13 @@ export function AuthForm({
                 autoComplete={mode === 'sign-up' ? 'new-password' : 'current-password'}
                 hint={mode === 'sign-up' ? words.passwordHint : undefined}
                 invalid={problem === 'wrong' || problem === 'weak'}
+                describedBy={problemId}
                 aside={mode === 'sign-in' ? switchTo('forgot', words.forgot) : null}
               />
             )}
             {message === null ? null : (
               <div className="auth-problem" role="alert">
-                <p>{message}</p>
+                <p id={problemId}>{message}</p>
                 {problem === 'unconfirmed' ? (
                   <p>
                     <button type="button" className="text-button" disabled={busy !== null} onClick={confirmAgain}>
@@ -353,6 +362,7 @@ export function AuthForm({
 
 /** /reset-password: the reset link signed the player in; they choose a new password here. */
 export function NewPasswordForm({ onDone }: { onDone: () => void }) {
+  const id = useId();
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<ResetProblem | null>(null);
@@ -373,10 +383,18 @@ export function NewPasswordForm({ onDone }: { onDone: () => void }) {
   };
   return (
     <form className="auth-form" onSubmit={submit}>
-      <PasswordField label={words.newPassword} value={password} onChange={setPassword} autoComplete="new-password" hint={words.passwordHint} invalid={problem === 'weak' || problem === 'same'} />
+      <PasswordField
+        label={words.newPassword}
+        value={password}
+        onChange={setPassword}
+        autoComplete="new-password"
+        hint={words.passwordHint}
+        invalid={problem === 'weak' || problem === 'same'}
+        describedBy={problem === null ? undefined : `${id}-problem`}
+      />
       {problem === null ? null : (
         <div className="auth-problem" role="alert">
-          <p>{problem === 'expired' ? words.resetExpired : words[problem]}</p>
+          <p id={`${id}-problem`}>{problem === 'expired' ? words.resetExpired : words[problem]}</p>
           {problem === 'expired' ? (
             <p>
               <Link to="/forgot-password">{words.sendReset}</Link>

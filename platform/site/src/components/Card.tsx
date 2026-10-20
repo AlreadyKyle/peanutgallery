@@ -68,6 +68,11 @@ export type CardFaceProps = {
    * live face says how it was built instead of Play.
    */
   compact?: boolean;
+  /**
+   * The title's heading level: one below the heading the card sits under. A compact face defaults to
+   * an h4 (under a flow lane's h3); home's stations put theirs straight under the station's h2, so an h3.
+   */
+  titleLevel?: 3 | 4;
 };
 
 /** A Next up card's line: approved and opening soon, kernel work (cards.board_work), or planned. */
@@ -80,13 +85,13 @@ export function plannedLine(card: Card): string {
  * One card, in the face its stage gives. In example mode (/how-it-works) it renders no link, button
  * or disclosure at all, whatever the Payment Link says, so an illustration can never take a payment.
  */
-export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, reason, changed = [], focusable = false, watch = true, ghost = false, compact = false }: CardFaceProps) {
+export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, reason, changed = [], focusable = false, watch = true, ghost = false, compact = false, titleLevel }: CardFaceProps) {
   const env = siteEnv();
   const shown = face ?? faceOf(card);
   const titleId = `${mode}-title-${card.id}`;
   const playable = shown === 'live' && card.folder === 'seed-1' && env.playUrl !== '';
   const byline = writtenBy(card, snapshot);
-  const Title = compact ? 'h4' : 'h3';
+  const Title = (titleLevel ?? (compact ? 4 : 3)) === 4 ? 'h4' : 'h3';
   const summary = compact || blank(card.summary) ? null : <p className="card-summary">{card.summary}</p>;
   const rarity = rarityOf(card);
   return (
@@ -101,7 +106,8 @@ export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, r
         <SuitTag suit={suitOf(card)} />
         <StateTag face={shown} stamp={stamp && shown === 'live'} />
       </p>
-      {/* In home's flow a card sits under its lane's h3, so its title is an h4. */}
+      {/* The title is one level under the heading over the card: an h4 under a flow lane's h3, an h3
+          under a station's h2 (titleLevel). */}
       <Title id={ghost ? undefined : titleId} tabIndex={focusable ? -1 : undefined}>
         {card.title}
       </Title>

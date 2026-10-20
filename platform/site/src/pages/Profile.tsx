@@ -25,10 +25,13 @@ export function Profile() {
   const title = doc.state === 'ready' ? doc.data.displayName : copy.profile.title;
   return (
     // The profile arrives after first paint and a missing one is short: the title stays where it
-    // first renders (main.title-stays).
-    <main className="wide title-stays">
+    // first renders (main.title-stays), and the body's band keeps the window's height whatever comes
+    // (main.profile-page), so the footer that waited below the fold during the load never rises into view.
+    <main className="wide title-stays profile-page">
       <div className="band">
-        <PageHeader title={title} lede={doc.state === 'ready' ? `@${doc.data.handle}` : undefined} />
+        {/* The handle's line is held (a no-break space) until there is a handle to show, so the title's
+            band keeps one height whether the profile arrives or not. */}
+        <PageHeader title={title} lede={doc.state === 'ready' ? `@${doc.data.handle}` : '\u00a0'} />
       </div>
       <div className="band">
         {doc.state === 'loading' ? (

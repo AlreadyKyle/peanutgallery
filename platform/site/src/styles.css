@@ -33,6 +33,34 @@ body {
   outline-offset: 2px;
 }
 
+/* Skip to content (App.tsx): the first focus stop on every page, off screen until it takes focus,
+   then a paper tab over the top bar's corner. The main element it focuses draws no ring of its own. */
+.skip-link {
+  position: absolute;
+  top: var(--space-1);
+  left: var(--space-1);
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  padding: 0 var(--space-2);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: var(--weight-strong);
+  text-decoration: none;
+  transform: translateY(calc(-100% - var(--space-2)));
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
+main[tabindex='-1']:focus {
+  outline: none;
+}
+
 .page {
   display: flex;
   flex-direction: column;
@@ -290,7 +318,8 @@ main.title-stays > .band:last-child {
 /* A band that holds nothing yet but its loading line (/card/:id, /thanks, /reports, /team) reaches to
    the foot of the window while it waits, so what follows it, the rest of the page and the footer,
    waits below the fold rather than showing and then being pushed down when the body arrives. */
-main:is(.title-stays, .team-page) > .band:has(> [aria-busy='true']) {
+main:is(.title-stays, .team-page, .me-page) > .band:has(> [aria-busy='true']),
+main.profile-page > .band:last-child {
   min-height: calc(100vh - var(--bar));
 }
 
@@ -627,8 +656,22 @@ nav a.active {
   }
 }
 
+/* A kernel page's held slot (App.tsx): a visitor's Sign in, laid out but not drawn or read, so the
+   row keeps its width; below 30rem it leaves the row as a visitor's slot does. */
+.you-slot-held {
+  display: inline-flex;
+  visibility: hidden;
+}
+
+@media (max-width: 29.99rem) {
+  .you-slot-held {
+    display: none;
+  }
+}
+
 @media (min-width: 64rem) {
-  .you-slot {
+  .you-slot,
+  .you-slot-held {
     margin-left: var(--space-1);
   }
 }
@@ -1253,8 +1296,9 @@ button.link:hover:not(:disabled) {
   margin-bottom: var(--space-2);
 }
 
-/* Home's flow: a compact card's title keeps the card title's size under its lane's h3. */
-.card h4 {
+/* A compact card's title (home's stations and flow) keeps the body size, whichever level it is. */
+.card h4,
+.card[data-compact] > h3 {
   font-size: var(--size-body);
 }
 
@@ -3079,13 +3123,34 @@ input[type='radio'] {
     grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
   }
 
+  /* At 80rem the game's half is about 410px: a 13rem box art left its text 160px, and Play Dust free
+     broke over two lines. The art takes 9rem and a closer gap there, so the text column holds Play on
+     one line; from 90rem the half is wide enough for the 13rem art again. */
   .showcase > .game-tile {
-    grid-template-columns: minmax(0, 13rem) minmax(0, 1fr);
-    column-gap: var(--space-4);
+    grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+    column-gap: var(--space-3);
+  }
+
+  .showcase > .game-tile .button {
+    white-space: nowrap;
   }
 
   .showcase > .game-tile + .explainer {
     margin-top: 0;
+  }
+
+  /* Beside the game the frame is under 400px wide (342px at 80rem), so the play mark keeps to the
+     poster's corner, clear of its headline, which comes down to the pill's top at the usual inset. */
+  .showcase:has(> .game-tile) .explainer-play {
+    left: var(--space-1);
+    bottom: var(--space-1);
+  }
+}
+
+@media (min-width: 90rem) {
+  .showcase > .game-tile {
+    grid-template-columns: minmax(0, 13rem) minmax(0, 1fr);
+    column-gap: var(--space-4);
   }
 }
 
@@ -3281,7 +3346,7 @@ input[type='radio'] {
   margin-bottom: var(--space-1);
 }
 
-.card[data-compact] h4 {
+.card[data-compact] > :is(h3, h4) {
   margin-bottom: var(--space-1);
 }
 
@@ -4406,6 +4471,14 @@ ol.timeline {
   }
 }
 
+/* Five chips need 252px to keep each a 44px target (WCAG 2.5.5); narrower than that (a 320px phone),
+   they wrap to rows of three, so no chip shrinks under a fingertip. */
+@container (max-width: 15.74rem) {
+  .machine-amounts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @container (min-width: 44rem) {
   .machine-card > .machine-about,
   .machine-card > .machine-fund {
@@ -4636,15 +4709,42 @@ ol.timeline {
 .era-stepper {
   display: grid;
   grid-template-columns: auto 1fr auto;
+  grid-template-areas: 'earlier range later';
   gap: var(--space-2);
   align-items: center;
   margin-top: var(--space-3);
 }
 
+.era-earlier {
+  grid-area: earlier;
+}
+
+.era-later {
+  grid-area: later;
+}
+
 .era-range {
+  grid-area: range;
+  width: 100%;
+  min-width: 0;
   border: 0;
   padding: 0;
   accent-color: var(--ink);
+}
+
+/* Below 24rem the two buttons leave the slider too little of the row (24px at 320px), so the slider
+   takes a full-width row of its own over Earlier and Later. */
+@media (max-width: 23.99rem) {
+  .era-stepper {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      'range range'
+      'earlier later';
+  }
+
+  .era-later {
+    justify-self: end;
+  }
 }
 
 .era-rows {
@@ -4925,6 +5025,28 @@ button.text-button:active:not(:disabled) {
 
 button.text-button:hover:not(:disabled) {
   text-decoration-thickness: 2px;
+}
+
+/* The form's text links keep a press area a fingertip can find: Forgot password? beside its label
+   is 24px tall (WCAG 2.5.8), so the label stays close over its field; the switch under the form
+   (Create an account, Sign in) takes the full 44px, as it has the line to itself. */
+.auth-label-row > a,
+.auth-label-row > button.text-button,
+.auth-label-row > button.text-button:hover:not(:disabled),
+.auth-label-row > button.text-button:active:not(:disabled) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5rem;
+}
+
+.auth-switch > a,
+.auth-switch > button.text-button,
+.auth-switch > button.text-button:hover:not(:disabled),
+.auth-switch > button.text-button:active:not(:disabled) {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  vertical-align: middle;
 }
 
 .auth-switch > .text-button,

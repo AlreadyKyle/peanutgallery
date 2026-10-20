@@ -8,9 +8,10 @@ import { expect, test } from './fixtures';
 // pill, so it holds for any poster the explainer job draws.
 test.use({ reducedMotion: 'reduce' });
 
-// Both cuts (below 768 the 4:5 phone poster, from 768 the 16:9 one) and the widths around the hero's
-// two-column switch at 1024 and the frame's 544px limit at 1200.
-const WIDTHS = [320, 375, 414, 767, 768, 900, 1023, 1024, 1060, 1100, 1140, 1160, 1200, 1440, 1920];
+// Both cuts (below 768 the 4:5 phone poster, from 768 the 16:9 one), the widths around the hero's
+// two-column switch at 1024 and the frame's 544px limit at 1200, and home's showcase from 1280, where
+// the frame shares its row with the first game and is narrowest (342px at 1280).
+const WIDTHS = [320, 375, 414, 767, 768, 900, 1023, 1024, 1060, 1100, 1140, 1160, 1200, 1280, 1300, 1366, 1440, 1920];
 
 /** How many pixels of the poster under the pill differ from its background, and the pill's own size. */
 async function pictureUnderPill(page: import('@playwright/test').Page): Promise<{ ink: number; pixels: number; pill: { width: number; height: number } }> {

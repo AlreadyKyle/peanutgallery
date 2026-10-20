@@ -78,9 +78,14 @@ export type PipeProps = {
   paging?: boolean;
   /** False on an overlay that is watched, not clicked (/broadcast): rows carry no links. */
   linked?: boolean;
+  /**
+   * The line to show instead of the rows when nothing loaded and nothing will (the snapshot failed
+   * and the feed has no rows): the unavailable line every other part of the page shows then.
+   */
+  unavailable?: string | null;
 };
 
-export function Pipe({ events, live, loading, hasOlder, loadingOlder, onOlder, pageSize = 8, headingLevel = 3, paging = true, linked = true }: PipeProps) {
+export function Pipe({ events, live, loading, hasOlder, loadingOlder, onOlder, pageSize = 8, headingLevel = 3, paging = true, linked = true, unavailable = null }: PipeProps) {
   const list = useRef<HTMLOListElement>(null);
   const known = useRef<Set<string> | null>(null);
   const [count, setCount] = useState(pageSize);
@@ -120,6 +125,8 @@ export function Pipe({ events, live, loading, hasOlder, loadingOlder, onOlder, p
         <p className="muted" aria-busy="true">
           {copy.pipe.loading}
         </p>
+      ) : shown.length === 0 && unavailable !== null ? (
+        <p className="muted">{unavailable}</p>
       ) : shown.length === 0 ? (
         <p className="pipe-empty">
           <Glyph name="coin-outline" />

@@ -15,7 +15,7 @@ import { HowItWorks } from './pages/HowItWorks';
 import { Landing } from './pages/Landing';
 import { Reports } from './pages/Reports';
 import { Team } from './pages/Team';
-import { YouChip } from './components/YouChip';
+import { YouChip, YouMenuLink } from './components/YouChip';
 
 // The site's pages in the platform code lane and their links in the top bar. This list is a
 // kernel design file (platform/gate/design-paths.txt, docs/specs/design-review.md): a new page is
@@ -69,6 +69,9 @@ export const pageNav: readonly NavItem[] = [
  * a link to /me. App.tsx (kernel) draws it from here, so the frame imports no community code itself.
  */
 export const youSlot: ReactNode = <YouChip />;
+
+/** The Menu's you link below 30rem (docs/specs/place.md): Sign in for a visitor, Your desk for a player. */
+export const menuYou: ReactNode = <YouMenuLink />;
 
 /** The footer's Follow along links to these pages, after the reports and the feed. */
 export const footerNav: readonly NavItem[] = [{ to: '/studio/history', label: copy.nav.history }];

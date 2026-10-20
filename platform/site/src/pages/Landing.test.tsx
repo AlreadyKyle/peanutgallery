@@ -263,10 +263,10 @@ function lane(name: Lane): HTMLElement {
   return document.querySelector(`[data-station-part="${name}"]`) as HTMLElement;
 }
 
-/** The card titles a lane shows, in order (h4 on home's compact faces). */
+/** The card titles a lane shows, in order (h3 on home's compact faces, under the station's h2). */
 function laneTitles(name: Lane): string[] {
-  return within(lane(name))
-    .queryAllByRole('heading', { level: 4 })
+  return [...lane(name).querySelectorAll<HTMLElement>('li.card')]
+    .flatMap((card) => within(card).queryAllByRole('heading', { level: 3 }))
     .map((h) => h.textContent ?? '');
 }
 

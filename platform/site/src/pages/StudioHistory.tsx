@@ -89,7 +89,7 @@ export function StudioHistory() {
           </div>
           {eras.length > 1 ? (
             <div className="era-stepper">
-              <button type="button" className="button button-secondary" onClick={() => setIndex(Math.max(0, at - 1))} disabled={at === 0}>
+              <button type="button" className="button button-secondary era-earlier" onClick={() => setIndex(Math.max(0, at - 1))} disabled={at === 0}>
                 <Glyph name="arrow-left" />
                 {copy.history.earlier}
               </button>
@@ -107,7 +107,7 @@ export function StudioHistory() {
                 aria-valuetext={era?.name}
                 onChange={(event) => setIndex(Number(event.currentTarget.value))}
               />
-              <button type="button" className="button button-secondary" onClick={() => setIndex(Math.min(eras.length - 1, at + 1))} disabled={at === eras.length - 1}>
+              <button type="button" className="button button-secondary era-later" onClick={() => setIndex(Math.min(eras.length - 1, at + 1))} disabled={at === eras.length - 1}>
                 {copy.history.later}
                 <Glyph name="arrow-right" />
               </button>
