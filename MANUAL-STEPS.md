@@ -4,11 +4,7 @@ Do these in order. After each one, tell Claude "done" and Claude checks it.
 
 Never paste a key or secret into chat. Keys go into the website's settings, or into the `.env` file in this repo.
 
-## 1. Apple sign-in button (optional: needs a $99/year Apple Developer membership)
-
-Skip unless you have the membership. Claude can do the clicks in your browser once you're signed in to developer.apple.com.
-
-## 2. Bluesky key (optional)
+## 1. Bluesky key (optional)
 
 1. Go to https://bsky.app and sign in to the studio's account (create one first if needed).
 2. Go to https://bsky.app/settings/app-passwords
@@ -20,7 +16,7 @@ Skip unless you have the membership. Claude can do the clicks in your browser on
    ```
 5. Save the file.
 
-## 3. Mastodon key (optional)
+## 2. Mastodon key (optional)
 
 1. Sign in to the studio's Mastodon account.
 2. Go to Preferences → Development (the address is `https://<your-instance>/settings/applications`).
@@ -34,9 +30,9 @@ Skip unless you have the membership. Claude can do the clicks in your browser on
    ```
 7. Save the file.
 
-After steps 2 and 3, tell Claude. Claude rebuilds `MARKETING_ENV` with the new keys and shows you a dry run first. Discord already posts.
+After steps 1 and 2, tell Claude. Claude rebuilds `MARKETING_ENV` with the new keys and shows you a dry run first. Discord already posts.
 
-## 4. Switch to the Clayhouse Anthropic key (on 2026-10-27)
+## 3. Switch to the Clayhouse Anthropic key (on 2026-10-27)
 
 A reminder fires that day.
 
@@ -47,7 +43,7 @@ A reminder fires that day.
 5. Tell Claude. Claude puts it into the dispatcher and confirms the agents run on it.
 6. Only after Claude confirms, delete the old key in the old organization.
 
-## 5. Optional, whenever
+## 4. Optional, whenever
 
 - **GitHub token permission:** go to https://github.com/settings/personal-access-tokens, open the dispatcher's token, and under **Account permissions** set **Plan** to **Read only**. Save. (Today one check couldn't read your Actions minutes without it.)
 - **USD bank account in Stripe:** Settings → Payouts → External accounts → Add. Saves the 2% conversion fee on each payout.
@@ -57,11 +53,11 @@ A reminder fires that day.
 
 ## Done
 
-- **Google sign-in (2026-10-20):** Claude set up the Google Auth Platform on the Peanut Gallery project (`peanut-gallery-509513`), with branding, privacy and terms links and authorized domains. It created the "Mob Machine web" client, loaded it into Supabase from the downloaded file (the file is deleted) and published the app, so it's in production. Check: `/api/community/auth/settings` returns `{"signIn":true,"providers":["google"]}`. The support email is kyle@clayhouse.studio, because the existing hello@ group doesn't list you as owner. Make yourself Owner in Admin → Groups → Hello if you want hello@ instead.
+- **Google sign-in (2026-10-20):** Claude set up the Google Auth Platform on the Google Cloud project `peanut-gallery-509513`, with branding, privacy and terms links and authorized domains. It created the "Mob Machine web" client, loaded it into Supabase from the downloaded file (the file is deleted) and published the app, so it's in production. Check: `/api/community/auth/settings` returns `{"signIn":true,"providers":["google"]}`. The support email is kyle@clayhouse.studio, because the existing hello@ group doesn't list you as owner. Make yourself Owner in Admin → Groups → Hello if you want hello@ instead.
 - **GitHub sign-in (2026-10-20):** Claude created the "Mob Machine" OAuth app (client `Ov23liDgCjWBd6iOvkcf`) and loaded it into Supabase. Check: `/api/community/auth/settings` returns `{"signIn":true,"providers":["google","github"]}`, /sign-in shows "Continue with Google" and "Continue with GitHub", and `/auth/v1/authorize?provider=github` answers 302 to github.com. Housekeeping: delete the older, unused client secret (ending `1528dd20`) on the GitHub app page.
 - **Old promo poster (checked 2026-10-20):** already off. `promo.yml` in AlreadyKyle/mobmachine-ops is `disabled_manually`, and that repo has no `PROMO_ENV` secret, so nothing can double-post.
 - **Marketing engine, Discord channel (2026-10-20):** Claude built `MARKETING_ENV` (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, NTFY_TOPIC_URL, DISCORD_WEBHOOK_SHIPS) and set it on the `ops` environment. Dry run: `PASS: marketing (dry run): discord would post 0, failed 0, skipped 0, waiting 0; bsky not set; mastodon not set`. Run 39483172611 on Actions: `marketing exited 0 (PASS)`.
-- **Discord sign-in:** skipped (you chose not to set it up).
+- **Discord and Apple sign-in:** skipped (you chose not to set them up).
 
-- **Anthropic credit (2026-10-20):** you confirmed the current key's organization has about $10 of credit. It stays in use until step 4.
+- **Anthropic credit (2026-10-20):** you confirmed the current key's organization has about $10 of credit. It stays in use until step 3.
 - **Stripe minimum balance (2026-10-20):** the Stripe API reads 2.00 CAD. The "Not yet reconciled" note on /ledger goes away once the first contribution arrives.
