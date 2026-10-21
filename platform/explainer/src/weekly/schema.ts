@@ -83,10 +83,6 @@ export type Segment = {
 export type WeekProps = {
   /** The week's last day, ISO (also the captures folder's name). */
   date: string;
-  /** The label over the intro's headline, such as "The week to 20 October 2026". */
-  label: string;
-  /** The intro: the headline, the studio's one line, and the capture behind it. */
-  intro: { headline: string; support: string; shot: Shot };
   segments: Segment[];
   /** The closing plate: one line a beat, each with its site glyph, then the address. */
   outro: { lines: { glyph: GlyphName; text: string }[]; address: string };

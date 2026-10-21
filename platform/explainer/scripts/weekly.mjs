@@ -30,8 +30,8 @@ const value = (name) => {
 
 const week = value('--week');
 if (week === undefined) throw new Error('--week <date> is required, for example --week 2026-10-20');
+// Optional: a week of drawn scenes has no captures, and check() refuses a beat that names a missing one.
 const captures = join(root, 'weekly-captures', week);
-if (!existsSync(captures)) throw new Error(`${captures} is missing: run scripts/weekly-capture.mjs ${join('weekly-captures', week)} first`);
 const out = value('--out') ?? join(dist, 'weekly');
 const CUTS = { wide: { id: 'weekly-wide', file: `weekly-${week}.mp4` }, tall: { id: 'weekly-tall', file: `weekly-${week}-tall.mp4` } };
 
@@ -68,7 +68,7 @@ async function plan() {
 
 function check(props, rects) {
   // Every capture and every rect a beat names must exist, or the frame would show nothing.
-  const beats = [props.intro, ...props.segments.flatMap((s) => s.beats)];
+  const beats = props.segments.flatMap((s) => s.beats);
   const missing = [];
   for (const beat of beats) {
     if ('src' in beat.shot && !existsSync(join(captures, beat.shot.src))) missing.push(beat.shot.src);
@@ -81,7 +81,8 @@ const size = (path) => `${(statSync(path).size / 1024 / 1024).toFixed(2)} MB`;
 const ffmpeg = (...rest) => execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', ...rest], { stdio: 'inherit' });
 
 const { props, layout } = await plan();
-const rects = JSON.parse(readFileSync(join(captures, 'rects.json'), 'utf8'));
+const rectsFile = join(captures, 'rects.json');
+const rects = existsSync(rectsFile) ? JSON.parse(readFileSync(rectsFile, 'utf8')) : {};
 check(props, rects);
 
 mkdirSync(publicDir, { recursive: true });
@@ -90,7 +91,7 @@ copyFileSync(join(site, 'public', 'fonts', 'atkinson-hyperlegible-next-400-700.w
 copyFileSync(join(root, 'assets', 'dust-3600.png'), join(publicDir, 'dust-3600.png'));
 copyFileSync(join(root, '..', '..', 'seed-1', 'box-art.svg'), join(publicDir, 'box-art.svg'));
 rmSync(join(publicDir, 'weekly', week), { recursive: true, force: true });
-cpSync(captures, join(publicDir, 'weekly', week), { recursive: true, filter: (src) => !src.endsWith('rects.json') });
+if (existsSync(captures)) cpSync(captures, join(publicDir, 'weekly', week), { recursive: true, filter: (src) => !src.endsWith('rects.json') });
 const wav = join(publicDir, `weekly-soundtrack-${week}.wav`);
 if (flag('--music') || !existsSync(wav)) execFileSync('node', [join(root, 'scripts', 'music.mjs'), '--weekly', week], { stdio: 'inherit' });
 
@@ -110,7 +111,7 @@ for (const [name, cut] of Object.entries(CUTS)) {
     mkdirSync(dir, { recursive: true });
     const frames = [
       ['00-plate', Math.round(120 * 1.4)],
-      ...layout.beats.map((b, i) => [`${String(i + 1).padStart(2, '0')}-${b.segment === -1 ? 'intro' : `s${b.segment + 1}b${b.index + 1}`}`, b.start + b.length - 22]),
+      ...layout.beats.map((b, i) => [`${String(i + 1).padStart(2, '0')}-s${b.segment + 1}b${b.index + 1}`, b.start + b.length - 22]),
       ['99-close', layout.duration - 30],
     ];
     for (const [label, frame] of frames) {

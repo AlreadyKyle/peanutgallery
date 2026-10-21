@@ -29,7 +29,10 @@ export const TAIL = BEAT * 2;
  * headline alone. `opener` adds to a segment's first beat; it is 0, since the label comes in with
  * the headline and holds for the whole segment.
  */
-export const HOLD = { headline: 1.25, support: 1.75, long: 2.0, opener: 0, list: 1.25, intro: 2.0 };
+export const HOLD = { headline: 1.25, support: 1.75, long: 2.0, opener: 0, list: 1.25 };
+
+/** The longest a week may run, in seconds: past this the video drags. */
+export const MAX_SECONDS = 45;
 
 /** A beat's length in bars, from its words unless the props say. */
 export function beatBars(beat: Beat, segment: Segment | null, first: boolean): number {
@@ -42,7 +45,6 @@ export function beatBars(beat: Beat, segment: Segment | null, first: boolean): n
 
 export type PlacedBeat = {
   beat: Beat;
-  /** -1 for the intro. */
   segment: number;
   /** The beat's index inside its segment. */
   index: number;
@@ -63,9 +65,6 @@ export type Layout = {
 export function layout(week: WeekProps): Layout {
   const beats: PlacedBeat[] = [];
   let bar = PLATE.content;
-  const introBars = HOLD.intro;
-  beats.push({ beat: { ...week.intro }, segment: -1, index: 0, start: Math.round(bar * BAR), length: Math.round(introBars * BAR) });
-  bar += introBars;
   const segments: Layout['segments'] = [];
   week.segments.forEach((segment, s) => {
     const from = bar;

@@ -21,7 +21,7 @@ export function Weekly({ format, week: id, rects = {} }: WeeklyInput) {
   return (
     <AbsoluteFill style={{ background: C.paper }}>
       <Scenes frame={frame} g={g} plan={plan} />
-      <Words frame={frame} g={g} plan={plan} weekLabel={week.label} />
+      <Words frame={frame} g={g} plan={plan} />
       <Plate frame={frame} g={g} plan={plan} week={week} />
       <Audio src={staticFile(`weekly-soundtrack-${week.date}.wav`)} />
     </AbsoluteFill>
