@@ -105,13 +105,14 @@ for (const [name, cut] of Object.entries(CUTS)) {
   const inputProps = { format: name, week, rects };
   const composition = await selectComposition({ serveUrl, id: cut.id, inputProps, browserExecutable });
   if (flag('--stills')) {
-    // One still per beat, late in its hold (the words in, the push settled, the ring drawn), and one
-    // of each plate.
+    // One still per beat, late in its hold (the words in, the push settled, the ring drawn), one of
+    // each wipe with its number in, and one of each plate.
     const dir = join(out, name === 'wide' ? 'weekly-stills' : `weekly-stills-${name}`);
     mkdirSync(dir, { recursive: true });
     const frames = [
       ['00-plate', Math.round(120 * 1.4)],
       ...layout.beats.map((b, i) => [`${String(i + 1).padStart(2, '0')}-s${b.segment + 1}b${b.index + 1}`, b.start + b.length - 22]),
+      ...layout.wipes.map((w) => [`${String(layout.beats.findIndex((b) => b.segment === w.segment)).padStart(2, '0')}-wipe-s${w.segment + 1}`, w.start + 30]),
       ['99-close', layout.duration - 30],
     ];
     for (const [label, frame] of frames) {

@@ -54,4 +54,5 @@ Label any capture that shows a money figure with `asOf`. Two beats in a row on t
 
 - `geometry.ts`: each cut's text column, the one frame box, and the three type sizes (label, headline, support).
 - `layout.ts`: the plate and closing times, the hold times (`HOLD`), the push-in (`PUSH`) and ring timing, all on the explainer's 60 fps, 120 BPM grid. The score reads the same table.
+- `Wipe.tsx`: the wipe between segments, in its own half bar (`WIPE`, `WIPE_AT` in `layout.ts`): two agent colours and ink sweep across on a slant with the next segment's number and name, then sweep off.
 - `Scenes.tsx`: the drawn scenes and the cross-fade between beats. `Words.tsx`: the label, the rising headline, the support line. `Plate.tsx`: the plate, the top bar's segment counter and the closing lines. `score.ts`: the soundtrack.
