@@ -25,7 +25,7 @@ export function Root() {
           fps={FPS}
           width={g.format.width}
           height={g.format.height}
-          defaultProps={{ format: g.format.name, week: LATEST, rects: {} } satisfies WeeklyInput}
+          defaultProps={{ format: 'wide', week: LATEST, rects: {} } satisfies WeeklyInput}
           calculateMetadata={({ props }) => ({ durationInFrames: layout(WEEKS[props.week]!).duration })}
         />
       ))}

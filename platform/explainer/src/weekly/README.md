@@ -19,7 +19,7 @@ The weekly update video (`docs/specs/weekly-video.md`): the explainer's plate, t
    Videos (`.mp4`) and stills (`.png`) are 1920 by 1080 frames of a 1280 by 720 page. Each shot can measure the element a beat points at with `mark(page, '<capture>.<name>', locator)`; the rects go to `rects.json`. Load and look only: never submit a form, make an account or open checkout. `weekly-captures/` is not committed.
 3. **Write the props.** Copy `weeks/2026-10-20.ts` to `weeks/<date>.ts`, add it to `weeks/index.ts` and point `LATEST` at it.
 4. **Test and look.** `pnpm --filter @backseat/explainer test` checks the words, opener lengths, hold times and the 45 s cap. Then `node scripts/weekly.mjs --week <date> --stills` writes one still per beat to `dist/weekly/weekly-stills/`; look at every one.
-5. **Render.** `node scripts/weekly.mjs --week <date>` writes `dist/weekly/weekly-<date>.mp4` (16:9) and `weekly-<date>-tall.mp4` (4:5). Add `--only wide`, `--out <dir>`, or `--music` to render the soundtrack again (it renders on its own when missing, from `scripts/music.mjs --weekly <date>`).
+5. **Render.** `node scripts/weekly.mjs --week <date>` writes `dist/weekly/weekly-<date>.mp4` (16:9; there is no tall cut). Add `--out <dir>`, or `--music` to render the soundtrack again (it renders on its own when missing, from `scripts/music.mjs --weekly <date>`).
 
 ## Props
 

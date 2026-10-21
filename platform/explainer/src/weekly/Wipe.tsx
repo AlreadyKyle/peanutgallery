@@ -23,7 +23,7 @@ export function Wipe({ frame, g, plan }: { frame: number; g: WeeklyGeometry; pla
   if (wipe === undefined) return null;
   const f = frame - (wipe.start - WIPE_AT.lead);
   const segment = plan.segments[wipe.segment]!;
-  const big = g.format.name === 'wide' ? 132 : 112;
+  const big = 132;
   const chip = Math.round(big * 1.5);
   const numberK = pop(f, WIPE_AT.pop, 'bouncy');
   const titleK = progress(f, WIPE_AT.pop + 6, 18);

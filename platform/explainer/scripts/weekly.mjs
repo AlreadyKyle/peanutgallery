@@ -1,8 +1,7 @@
 // Renders the weekly update video (docs/specs/weekly-video.md) from a week's props in
 // src/weekly/weeks/<date>.ts and its captures in weekly-captures/<date>/.
 //
-//   node scripts/weekly.mjs --week 2026-10-20                    both cuts, wide first, into dist/weekly/
-//   node scripts/weekly.mjs --week 2026-10-20 --only wide
+//   node scripts/weekly.mjs --week 2026-10-20                    the 16:9 video, into dist/weekly/
 //   node scripts/weekly.mjs --week 2026-10-20 --stills           one still per beat (held, ring drawn), plus the plates
 //   node scripts/weekly.mjs --week 2026-10-20 --out <dir>        write the files there instead
 //
@@ -33,7 +32,8 @@ if (week === undefined) throw new Error('--week <date> is required, for example 
 // Optional: a week of drawn scenes has no captures, and check() refuses a beat that names a missing one.
 const captures = join(root, 'weekly-captures', week);
 const out = value('--out') ?? join(dist, 'weekly');
-const CUTS = { wide: { id: 'weekly-wide', file: `weekly-${week}.mp4` }, tall: { id: 'weekly-tall', file: `weekly-${week}-tall.mp4` } };
+// Horizontal only: the owner's call, 21 Oct 2026.
+const CUTS = { wide: { id: 'weekly-wide', file: `weekly-${week}.mp4` } };
 
 function chrome() {
   if (process.env.REMOTION_CHROME) return process.env.REMOTION_CHROME;
@@ -97,17 +97,15 @@ if (flag('--music') || !existsSync(wav)) execFileSync('node', [join(root, 'scrip
 
 const serveUrl = await bundle({ entryPoint: join(root, 'src', 'index.ts'), publicDir });
 const browserExecutable = chrome();
-const only = value('--only');
 mkdirSync(out, { recursive: true });
 
 for (const [name, cut] of Object.entries(CUTS)) {
-  if (only !== undefined && only !== name) continue;
   const inputProps = { format: name, week, rects };
   const composition = await selectComposition({ serveUrl, id: cut.id, inputProps, browserExecutable });
   if (flag('--stills')) {
     // One still per beat, late in its hold (the words in, the push settled, the ring drawn), one of
     // each wipe with its number in, and one of each plate.
-    const dir = join(out, name === 'wide' ? 'weekly-stills' : `weekly-stills-${name}`);
+    const dir = join(out, 'weekly-stills');
     mkdirSync(dir, { recursive: true });
     const frames = [
       ['00-plate', Math.round(120 * 1.4)],

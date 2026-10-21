@@ -1,8 +1,8 @@
-import { FORMATS, type Format, type FormatName } from '../format';
+import { FORMATS, type Format } from '../format';
 
 // Where everything sits in each cut. One frame position and scale for every capture in the video,
-// one headline size and one support size, wide margins. The wide cut puts the words in a column on
-// the left and the frame on the right; the 4:5 cut, like the explainer's, stacks the words over it.
+// one headline size and one support size, wide margins. The video is horizontal only: the words in a
+// column on the left and the frame on the right.
 
 export type WeeklyGeometry = {
   format: Format;
@@ -24,20 +24,13 @@ function frameFor(x: number, width: number, centreY: number | null, bottom: numb
   return { x, y, width, bar: BAR_H, border: BORDER };
 }
 
-export const WEEKLY: Record<FormatName, WeeklyGeometry> = {
+export const WEEKLY: Record<'wide', WeeklyGeometry> = {
   wide: {
     format: FORMATS.wide,
     id: 'weekly-wide',
     text: { x: 120, width: 560, y: 592, anchor: 'centre' },
     type: { label: 28, headline: 64, support: 34 },
     frame: frameFor(760, 1040, 592, null),
-  },
-  tall: {
-    format: FORMATS.tall,
-    id: 'weekly-tall',
-    text: { x: 72, width: 936, y: 300, anchor: 'top' },
-    type: { label: 26, headline: 62, support: 32 },
-    frame: frameFor(72, 936, null, 1350 - 72),
   },
 };
 
