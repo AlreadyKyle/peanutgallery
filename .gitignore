@@ -19,3 +19,6 @@ playwright-report/
 
 # The weekly video's captures of the live site (scripts/weekly-capture.mjs): made fresh each week, not committed.
 platform/explainer/weekly-captures/
+
+# Kyle's local notes for the daily build (docs/build/README.md): never committed.
+.local/
