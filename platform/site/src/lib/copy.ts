@@ -572,7 +572,7 @@ export const copy = {
     title: 'Ideas',
     lede: 'Pitch a change you want and upvote the ideas you back. The most backed can become cards to fund.',
     sendTitle: 'Pitch an idea',
-    safety: 'Every idea passes a content filter and is kept in the list below. An agent will sort the ideas once that work starts, and the agents that build never see what you wrote.',
+    safety: 'Every idea passes a content filter and is kept in the list below. The Curator, an agent with no tools, sorts the ideas into short summaries, and the agents that build never see what you wrote.',
     signInFirst: 'Sign in to pitch an idea or upvote one. Anyone can read the list.',
     signIn: 'Sign in',
     areaLabel: 'Area',
@@ -629,7 +629,7 @@ export const copy = {
       'You pitch it with an area, a title and a description, three a day at most.',
       'It passes a content filter and joins the list for anyone to read.',
       'Players upvote the ideas they back.',
-      'An agent will sort and group the ideas once that work starts. The agents that build never see what players wrote.',
+      'The Curator, an agent with no tools, sorts and groups the ideas. The agents that build never see what players wrote.',
       'A card made from an idea credits the players who pitched it, and this list shows its state.',
     ],
     declineTitle: 'Why an idea is declined',
@@ -868,7 +868,7 @@ export const copy = {
     loading: 'Loading the ideas.',
     upvoteOne: '1 upvote',
     upvoteMany: '{n} upvotes',
-    safety: 'Every idea is kept and shown here. An agent will sort them once that work starts, and the agents that build never see your words.',
+    safety: 'Every idea is kept and shown here. The Curator, an agent with no tools, sorts them, and the agents that build never see your words.',
   },
   // /me signed in: the player's desk (docs/specs/place.md).
   desk: {
