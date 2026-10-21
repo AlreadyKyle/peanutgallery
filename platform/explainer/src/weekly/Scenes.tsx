@@ -182,7 +182,8 @@ function AgentCardScene({ frame, local }: { frame: number; local: number }) {
             <div style={{ fontSize: 34, fontWeight: 700 }}>{curator.title}</div>
             <div style={{ marginLeft: 'auto', ...pill({ padding: '6px 14px', fontSize: 22, borderColor: C.live, color: C.live, borderWidth: 3 }) }}>Running</div>
           </div>
-          <div style={{ marginTop: 18, fontSize: 26, lineHeight: 1.35 }}>Reads the ideas players pitch and sorts them into clear summaries.</div>
+          {/* What is live: the site says the sorting starts later (copy.ts suggest.safety, #251). */}
+          <div style={{ marginTop: 18, fontSize: 26, lineHeight: 1.35 }}>Will sort the ideas players pitch, once that work starts.</div>
         </div>
       </At>
       <Pointer x={ptr.x} y={ptr.y} press={press(local, T)} opacity={progress(local, 0, 12) * (1 - progress(local, T + 30, 16))} />
