@@ -2,8 +2,9 @@ import type { WeekProps } from '../schema';
 
 // The week to 20 October 2026: what merged to main from 13 October (git log --since=2026-10-13) and
 // the pull requests' own descriptions, cited beside each beat. Every beat is a drawn scene (Scenes.tsx); no captures. Not claimed, though asked
-// for: Dust's "what's new" line (it shipped on 11 October, #186, the week before), and that an agent
-// sorts ideas (the site says that work has not started, #251). Cut to fit 45 s, as not worth a
+// for: Dust's "what's new" line (it shipped on 11 October, #186, the week before). The Curator's role
+// card, which says it sorts ideas, is true: #255 turned it on (curator_triage, every 15 minutes), and
+// #264 brings the site's copy level. Cut to fit 45 s, as not worth a
 // player's time: passwords and resets (#247), the Curator joining (#255), and the fixes list (#249 to #256).
 
 const week: WeekProps = {

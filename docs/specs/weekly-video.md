@@ -46,4 +46,4 @@ Run in the `weekly-video` worktree on 20 Oct 2026, for the week to 20 October 20
 
 - 2026-10-20: horizontal first. Every earlier studio video is 16:9, so the weekly video is built from the explainer, and the 4:5 cut mirrors the explainer's tall cut.
 - 2026-10-21: horizontal only. The 4:5 cut is dropped (the owner's call); the video runs 45 s at most and opens on its first segment.
-- 2026-10-20: the week to 20 October leaves out Dust's "what's new" line (it shipped on 11 October, #186) and any claim that an agent sorts ideas (the site says that work has not started, #251).
+- 2026-10-20: the week to 20 October leaves out Dust's "what's new" line (it shipped on 11 October, #186). The Curator's role card may say it sorts ideas: #255 turned it on (the curator_triage flag and a 15-minute schedule), and #264 brings the site's copy, which still said that work had not started, level (checked 21 Oct 2026).
