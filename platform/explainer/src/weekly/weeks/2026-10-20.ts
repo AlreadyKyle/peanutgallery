@@ -22,7 +22,7 @@ const week: WeekProps = {
         {
           // #194, #208: an agent opens its role card when pressed or hovered.
           headline: 'Click an agent to meet it',
-          support: 'Its role card says what its job is.',
+          support: 'Its role card says what it is doing right now.',
           shot: { scene: 'agent-card' },
         },
       ],
