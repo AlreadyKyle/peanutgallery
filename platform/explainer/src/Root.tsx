@@ -6,7 +6,7 @@ import './styles.css';
 import { DURATION, FPS } from './timeline';
 import { WEEKLY } from './weekly/geometry';
 import { layout } from './weekly/layout';
-import type { WeeklyInput } from './weekly/schema';
+import type { WeeklyCut, WeeklyInput } from './weekly/schema';
 import { Weekly } from './weekly/Weekly';
 import { LATEST, WEEKS } from './weekly/weeks';
 
@@ -16,7 +16,7 @@ export function Root() {
       {Object.values(FORMATS).map((format) => (
         <Composition key={format.id} id={format.id} component={Explainer} durationInFrames={DURATION} fps={FPS} width={format.width} height={format.height} defaultProps={{ format: format.name, social: false }} />
       ))}
-      {Object.values(WEEKLY).map((g) => (
+      {(Object.entries(WEEKLY) as [WeeklyCut, (typeof WEEKLY)[WeeklyCut]][]).map(([cut, g]) => (
         <Composition
           key={g.id}
           id={g.id}
@@ -25,7 +25,7 @@ export function Root() {
           fps={FPS}
           width={g.format.width}
           height={g.format.height}
-          defaultProps={{ format: 'wide', week: LATEST, rects: {} } satisfies WeeklyInput}
+          defaultProps={{ format: cut, week: LATEST, rects: {} } satisfies WeeklyInput}
           calculateMetadata={({ props }) => ({ durationInFrames: layout(WEEKS[props.week]!).duration })}
         />
       ))}

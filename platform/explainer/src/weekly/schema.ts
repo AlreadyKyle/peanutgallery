@@ -89,7 +89,10 @@ export type WeekProps = {
 };
 
 /** The composition's input: which week, which cut, and the rects the capture script measured. */
-export type WeeklyInput = { format: 'wide'; week: string; rects?: Rects };
+/** The cuts: 16:9, and 9:16 for Reels and TikTok. */
+export type WeeklyCut = 'wide' | 'vertical';
+
+export type WeeklyInput = { format: WeeklyCut; week: string; rects?: Rects };
 
 export function isCapture(shot: Shot): shot is Extract<Shot, { src: string }> {
   return 'src' in shot;

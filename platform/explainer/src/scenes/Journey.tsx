@@ -97,16 +97,18 @@ export function Journey({ format }: { format: Format }) {
   move(progress(f, J('split', 0), 40, EASE_IN_OUT), 450, 628, SPLIT_SCALE, 0);
   move(progress(f, J('fills', 0), 36, EASE_IN_OUT), 450, 430, HERO_SCALE, 0);
   move(progress(f, J('fills', CHOREO.fills.queue), 44, EASE_IN_OUT), 260, 250, 1, 0);
-  // On the phone cut the pile is centred under the words, so the card first rises to the middle.
-  const tall = format.name === 'tall';
-  const PILE = tall ? { x: 450, y: 612 } : { x: 600, y: 602 };
+  // On the phone cuts the pile is centred under the words, so the card first rises to the middle. The
+  // 9:16 cut's captions run a line longer, so its pile stays low instead of rising into them.
+  const tall = format.name !== 'wide';
+  const vertical = format.name === 'vertical';
+  const PILE = tall ? { x: 450, y: vertical ? 640 : 612 } : { x: 600, y: 602 };
   if (tall) move(progress(f, J('shipped', 0), 30, EASE_IN_OUT), 450, 190, 1, 0);
   const slam = J('shipped', CHOREO.shipped.slam);
   const toPile = progress(f, slam - 26, 26, EASE_IN);
   move(toPile, PILE.x, PILE.y - 12, 1, -1.5);
   y -= Math.sin(toPile * Math.PI) * 90;
   // Once it has landed, the pile and the card on it settle up to the middle of the stage.
-  const settle = progress(f, slam + 24, 44, EASE_IN_OUT) * (tall ? 150 : 90);
+  const settle = progress(f, slam + 24, 44, EASE_IN_OUT) * (vertical ? 0 : tall ? 150 : 90);
   y -= settle;
   const landed = f >= slam ? Math.exp(-(f - slam) / 5) * Math.sin((f - slam) * 0.9) : 0;
   s *= 1 + landed * 0.035;

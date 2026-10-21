@@ -10,7 +10,7 @@ docs/BRAND.md lists a weekly update video, but there was no template for one: ea
 
 ## Scope
 
-In: a `weekly` template in `platform/explainer/src/weekly/` (the 16:9 `weekly-wide` composition only), a capture script for the live site, a render script, a soundtrack from the same timeline, and a test that holds every week's props to the rules below. The first week's props (`weeks/2026-10-20.ts`).
+In: a `weekly` template in `platform/explainer/src/weekly/` (the 16:9 `weekly-wide` composition, and `weekly-vertical`, 9:16, for Instagram Reels and TikTok), a capture script for the live site, a render script, a soundtrack from the same timeline, and a test that holds every week's props to the rules below. The first week's props (`weeks/2026-10-20.ts`).
 Out: posting the video anywhere, the explainer's own composition and its published files (unchanged), a voiceover, captions files.
 
 ## Behaviour
@@ -26,7 +26,7 @@ Out: posting the video anywhere, the explainer's own composition and its publish
 
 ## Acceptance criteria
 
-- [x] `weekly-wide` (1920 by 1080) renders at 60 fps from a week's props, with the length worked out from them.
+- [x] `weekly-wide` (1920 by 1080) and `weekly-vertical` (1080 by 1920) render at 60 fps from a week's props, with the length worked out from them.
 - [x] `weekly.test.ts` holds every week to: no dashes, exclamation marks, inside terms or "first"; segment openers under 8 words; the hold times; list beats headline-only; 45 s at most; beats on the grid.
 - [x] `scripts/weekly.mjs` refuses a week whose captures or named rects are missing.
 - [x] The explainer's compositions and their output are unchanged.
@@ -45,5 +45,6 @@ Run in the `weekly-video` worktree on 20 Oct 2026, for the week to 20 October 20
 ## Decisions
 
 - 2026-10-20: horizontal first. Every earlier studio video is 16:9, so the weekly video is built from the explainer, and the 4:5 cut mirrors the explainer's tall cut.
-- 2026-10-21: horizontal only. The 4:5 cut is dropped (the owner's call); the video runs 45 s at most and opens on its first segment.
+- 2026-10-21: no 4:5 cut (the owner's call); the video runs 45 s at most and opens on its first segment.
+- 2026-10-21: a 9:16 cut for Instagram Reels and TikTok (the owner's call): the words over the scene, both above the bottom fifth and clear of the right edge, where those apps lay their caption and buttons.
 - 2026-10-20: the week to 20 October leaves out Dust's "what's new" line (it shipped on 11 October, #186). The Curator's role card may say it sorts ideas: #255 turned it on (the curator_triage flag and a 15-minute schedule), and #264 brings the site's copy, which still said that work had not started, level (checked 21 Oct 2026).
