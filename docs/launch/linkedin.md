@@ -1,6 +1,6 @@
 # LinkedIn
 
-The owner's personal post, outside PLAN.md §7's channel order: post it after the X thread, once the studio is building again ("It's live now" must be true). LinkedIn allows 3,000 characters; the first two lines show before "see more". The link carries `?from=linkedin`, the tag the site counts (`docs/specs/channel-counters.md`).
+The owner's personal post, outside PLAN.md §7's channel order: post it at least two days after the X thread, while the studio is building ("It's live now" must be true: go line 1 in `README.md`). LinkedIn allows 3,000 characters; the first two lines show before "see more". The link carries `?from=linkedin`, the tag the site counts (`docs/specs/channel-counters.md`).
 
 ## Post
 
