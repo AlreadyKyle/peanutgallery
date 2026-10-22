@@ -32,6 +32,9 @@ export function draftingLine(snapshot: Snapshot): { text: string; drafting: bool
     return { text: copy.flow.draftingDone.replace('{n}', String(supply.run_limit)), drafting: false };
   }
   if (supply?.reason === 'no_money') return { text: copy.flow.draftingNoMoney, drafting: false };
+  // The hold (docs/PLAN.md §10 decision 77): with cards open and none funded in 7 days, no new draft
+  // is queued until one is, so the lane says what it waits for instead of the idle line.
+  if (supply?.reason === 'no_sales') return { text: copy.flow.draftingHeld, drafting: false };
   return { text: copy.flow.draftingIdle, drafting: false };
 }
 

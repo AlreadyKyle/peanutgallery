@@ -56,6 +56,7 @@ export function LiveStudio({
   pipeSize = 1,
   pipe = true,
   unavailable = null,
+  openCards,
 }: {
   /** Null while home's snapshot loads: the room is drawn empty in its own box and the pipe tells the feed. */
   snapshot: Snapshot | null;
@@ -68,6 +69,8 @@ export function LiveStudio({
    * or null while it is still loading. The pipe then stops saying it is loading and says so too.
    */
   unavailable?: string | null;
+  /** How many cards are open for funding, once known: a quiet pipe says it under its rows. */
+  openCards?: number;
 }) {
   const studio = useStudioDoc();
   const feed = useFeed();
@@ -121,6 +124,7 @@ export function LiveStudio({
           // (pipeSize), and the ledger keeps the rest.
           pageSize={pipeSize}
           paging={false}
+          openCards={openCards}
         />
         ) : null}
       </div>

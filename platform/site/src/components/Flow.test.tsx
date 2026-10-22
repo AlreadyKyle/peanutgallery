@@ -216,6 +216,7 @@ describe('MachineFlow', () => {
       ['done for today', supply({ reason: 'daily_limit', run_limit: 4, runs_today: 4 }), copy.flow.draftingDone.replace('{n}', '4'), null],
       ['at a zero limit', supply({ reason: 'daily_limit', run_limit: 0 }), copy.flow.draftingIdle, null],
       ['not short', supply({ reason: 'not_short' }), copy.flow.draftingIdle, null],
+      ['held for a sale', supply({ reason: 'no_sales' }), copy.flow.draftingHeld, null],
       ['idle', supply(), copy.flow.draftingIdle, null],
       ['without a supply row', null, copy.flow.draftingIdle, null],
       ['offline', supply({ offline: true, reason: 'already_queued' }), copy.agentsOffline, null],
