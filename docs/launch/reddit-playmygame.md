@@ -1,6 +1,6 @@
 # r/playmygame
 
-Fourth in the posting order (`README.md`). Its rules as of October 2026: the game is free to play, the post has a written description, you are on the team, there is a direct link to the game, platform flair is added after posting, and there is at most one post a calendar month. Reddit takes one post type, so post the gameplay video and put the description in the first comment (the moderators count comments toward the rules). Every link carries `?from=reddit` (`docs/specs/channel-counters.md`).
+Fourth in the posting order, at least two days after r/WebGames (`README.md`). Its rules as of October 2026: the game is free to play, the post has a written description, you are on the team, there is a direct link to the game, platform flair is added after posting, and there is at most one post a calendar month. Reddit takes one post type, so post the gameplay video and put the description in the first comment (the moderators count comments toward the rules). Every link carries `?from=reddit` (`docs/specs/channel-counters.md`).
 
 ## Post
 

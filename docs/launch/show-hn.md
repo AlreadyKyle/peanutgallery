@@ -1,11 +1,11 @@
 # Show HN
 
-Fifth in the posting order, after the four Reddit posts (`README.md`). Hacker News allows an 80-character title. Every link carries `?from=hn`, the tag the site and Dust count (`docs/specs/channel-counters.md`).
+Fifth in the posting order, at least two days after r/playmygame, the last of the four Reddit posts (`README.md`). Hacker News allows an 80-character title. Every link carries `?from=hn`, the tag the site and Dust count (`docs/specs/channel-counters.md`).
 
 Two Hacker News rules shape this draft:
 
 - Show HN is for something people can play with, and asks for no landing pages or fundraisers. Home's first button funds a card, so the submission is the game, which plays with no sign-up, and the studio is linked from the comment.
-- The guidelines ask for no generated or AI-edited text. The comment below is a fact sheet: the owner writes the comment himself, in his own words, from these facts.
+- The guidelines ask for no generated or AI-edited text. The comment below is a draft fact sheet: Kyle writes the comment himself, in his own words, from these facts.
 
 ## Title
 
@@ -15,9 +15,9 @@ Show HN: Dust, a free idle game built by AI agents, with every cost on a ledger
 
 https://play.mobmachine.games/?from=hn
 
-## First comment (facts for the owner's own words)
+## First comment: a DRAFT for Kyle to rewrite
 
-The owner posts his comment right after the submission and keeps it under 2,000 characters. Hacker News does not render Markdown, so the comment is plain paragraphs.
+This is a draft, not the comment. Kyle rewrites it in his own words before posting (go line 10 in `README.md`); every fact in it is true on the live site or in the repository, so keep the facts and change the words. He posts his comment right after the submission and keeps it under 2,000 characters. Hacker News does not render Markdown, so the comment is plain paragraphs.
 
 ```text
 I'm Kyle, the owner of Mob Machine, the studio that makes Dust. The site's line is "Watch AI agents build a game studio and free games. Fund the card you want built next." https://mobmachine.games/?from=hn

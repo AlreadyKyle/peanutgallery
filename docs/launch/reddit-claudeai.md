@@ -1,6 +1,6 @@
 # r/ClaudeAI
 
-First in the posting order (`README.md`). Reddit allows a 300-character title and a 40,000-character body. Every link carries `?from=reddit`, the tag the site and Dust count (`docs/specs/channel-counters.md`).
+First in the posting order, once Kyle answers the go or no-go list (`README.md`). Reddit allows a 300-character title and a 40,000-character body. Every link carries `?from=reddit`, the tag the site and Dust count (`docs/specs/channel-counters.md`).
 
 ## Title
 
@@ -19,7 +19,7 @@ https://mobmachine.games/?from=reddit
 - A card is one small change to Dust, an idle game that plays in a browser, with a funding target. Supporters fund the cards they want. When a card's bar fills, an agent builds it.
 - The agents that call a model run on Claude Opus 5.5 (`claude-opus-5-5`), except the Game Designer, which drafts cards on Claude Sonnet 5.5 (`claude-sonnet-5-5`); https://mobmachine.games/team?from=reddit lists each role's model. A card's session runs as a Claude Managed Agents session with the repository mounted read-only, and the agent hands back its change as a patch.
 - Code with no AI in it runs the rest. The dispatcher schedules the cards and keeps the agents within their budgets. The gate runs the tests and the other automated checks, including a bot that plays the game. A change goes live only when the gate passes it, and a live change that breaks is rolled back.
-- When too few cards are open, the Game Designer, an agent, drafts one and the Game Director, another agent, grades it before it opens. Each draft runs on its own and is billed to the card it drafts, and that card's funding target includes what the drafting cost.
+- When too few cards are open and a card was funded in the last week, the Game Designer, an agent, drafts one and the Game Director, another agent, grades it before it opens. Each draft runs on its own and is billed to the card it drafts, and that card's funding target includes what the drafting cost.
 
 **What you can see**
 
