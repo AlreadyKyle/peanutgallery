@@ -2,9 +2,10 @@ import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { Glyph, type GlyphName } from '../components/Glyph';
+import { MoreLink } from '../components/MoreLink';
 import { PageHeader } from '../components/PageHeader';
 import { useCommunity } from '../lib/community';
-import type { Goal, GoalsDoc } from '../lib/community-types';
+import type { Goal, GoalsDoc, StudioDoc } from '../lib/community-types';
 import { copy } from '../lib/copy';
 import { formatDate, formatUsd } from '../lib/format';
 import { legal } from '../lib/legal';
@@ -104,6 +105,28 @@ function Milestone({ goal }: { goal: Goal }) {
   );
 }
 
+/**
+ * Before any milestone is set (no empty rooms, QUEUE Q-012): what the money already grows, the
+ * studio's next era and the line that says when it is reached, both from /api/community/studio.
+ * Nothing is drawn when that document does not answer, and nothing is made up in its place.
+ */
+function NextEra() {
+  const doc = useCommunity<StudioDoc>('/studio');
+  if (doc.state !== 'ready') return null;
+  const next = [...doc.data.eras].sort((a, b) => a.index - b.index).find((era) => era.reachedAt === null);
+  if (next === undefined) return null;
+  return (
+    <div className="goals-era">
+      <p>
+        {copy.goals.nextEra.replace('{era}', next.name)} {next.unlockedBy}
+      </p>
+      <p className="more">
+        <MoreLink to="/studio/history">{copy.goals.erasLink}</MoreLink>
+      </p>
+    </div>
+  );
+}
+
 export function Goals() {
   const doc = useCommunity<GoalsDoc>('/goals');
   const goals = doc.state === 'ready' ? [...doc.data.goals].sort((a, b) => a.amountCents - b.amountCents) : [];
@@ -138,7 +161,10 @@ export function Goals() {
               {/* With no milestone the track would measure the total against itself and draw full, as
                   if a goal were reached, so it waits for the first milestone. */}
               {goals.length === 0 ? (
-                <p className="muted">{copy.goals.none}</p>
+                <>
+                  <NextEra />
+                  <EmptyState line={copy.goals.none} next={{ to: '/contribute', label: copy.goals.fundLink }} />
+                </>
               ) : (
                 <>
                   <Track doc={{ ...doc.data, goals }} />

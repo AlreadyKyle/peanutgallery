@@ -4280,6 +4280,13 @@ ol.timeline {
   color: var(--text-muted);
 }
 
+/* A quiet pipe says since when, and how many cards are open now, under its rows (Pipe.tsx quietLine). */
+.pipe-quiet {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: var(--size-small);
+}
+
 .person-link {
   display: inline-flex;
   align-items: center;
@@ -4494,6 +4501,19 @@ ol.timeline {
 /* Goals: one long track of lifetime funding, the milestones as ticks on it and rows under it. */
 .goals-lifetime {
   font-size: var(--size-lead);
+}
+
+/* Before any milestone: the studio's next era and the line that says when it is reached. */
+.goals-era {
+  margin-block: 0 var(--space-3);
+}
+
+.goals-era > p {
+  margin: 0;
+}
+
+.goals-era > .more {
+  margin-top: var(--space-1);
 }
 
 .goals-figure {

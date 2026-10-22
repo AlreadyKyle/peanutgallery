@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import type { FeedEvent, FeedKind } from '../lib/community-types';
 import { copy } from '../lib/copy';
 import { relativeTime } from '../lib/community';
+import { formatDate } from '../lib/format';
 import { motionAllowed } from '../lib/motion';
 import { PersonLink } from './Person';
 import { Glyph, RarityTag, type GlyphName } from './Glyph';
@@ -74,6 +75,25 @@ export function PipeRow({ event, now, linked = true }: { event: FeedEvent; now: 
   );
 }
 
+/** A pipe whose newest row is older than this reads as quiet, and says since when. */
+export const QUIET_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
+
+/**
+ * The line a quiet pipe adds under its rows (no empty rooms, QUEUE Q-012): when the newest row is
+ * more than three days old, it says plainly since when nothing has happened and how many cards are
+ * open now, both from the data, so a stale date never stands alone. Null while the pipe is not quiet.
+ */
+export function quietLine(events: readonly FeedEvent[], openCards: number, now: number = Date.now()): string | null {
+  const newest = events[0];
+  if (newest === undefined) return null;
+  const at = Date.parse(newest.at);
+  if (!Number.isFinite(at) || now - at <= QUIET_AFTER_MS) return null;
+  const since = copy.pipe.quiet.since.replace('{date}', formatDate(newest.at));
+  if (openCards <= 0) return since;
+  const open = openCards === 1 ? copy.pipe.quiet.openOne : copy.pipe.quiet.openMany.replace('{n}', String(openCards));
+  return `${since} ${open}`;
+}
+
 export type PipeProps = {
   events: readonly FeedEvent[];
   /** The feed answered; false when the pipe tells the snapshot's events instead. */
@@ -94,9 +114,14 @@ export type PipeProps = {
    * and the feed has no rows): the unavailable line every other part of the page shows then.
    */
   unavailable?: string | null;
+  /**
+   * How many cards are open for funding now. Given, a quiet pipe says since when it has been quiet
+   * and this count under its rows (quietLine); left out (the broadcast overlay), it says nothing.
+   */
+  openCards?: number;
 };
 
-export function Pipe({ events, live, loading, hasOlder, loadingOlder, onOlder, pageSize = 8, headingLevel = 3, paging = true, linked = true, unavailable = null }: PipeProps) {
+export function Pipe({ events, live, loading, hasOlder, loadingOlder, onOlder, pageSize = 8, headingLevel = 3, paging = true, linked = true, unavailable = null, openCards }: PipeProps) {
   const list = useRef<HTMLOListElement>(null);
   const known = useRef<Set<string> | null>(null);
   const [count, setCount] = useState(pageSize);
@@ -107,6 +132,7 @@ export function Pipe({ events, live, loading, hasOlder, loadingOlder, onOlder, p
     setCount((n) => n + pageSize);
   };
   const now = Date.now();
+  const quiet = openCards === undefined ? null : quietLine(events, openCards, now);
   // A row that arrives after the first paint slides in; the first paint is drawn as it is.
   useEffect(() => {
     const ids = new Set(shown.map((event) => event.id));
@@ -150,6 +176,7 @@ export function Pipe({ events, live, loading, hasOlder, loadingOlder, onOlder, p
           ))}
         </ol>
       )}
+      {quiet === null ? null : <p className="pipe-quiet">{quiet}</p>}
       {paging && more ? (
         <p className="pipe-older">
           <button type="button" className="button button-secondary" onClick={older} disabled={loadingOlder}>

@@ -130,6 +130,8 @@ export const copy = {
     draftingIdle: 'The Game Designer drafts more cards when the open ones run low.',
     draftingDone: "The Game Designer has used today's {n} drafts and is back tomorrow.",
     draftingNoMoney: 'The Game Designer drafts the next card when a contribution comes in.',
+    // While no open card has been funded for a week, drafting waits (decision 77, supply reason no_sales).
+    draftingHeld: 'The Game Designer drafts more once one of the open cards is funded.',
     // A Next up card's line: an approved agent card waiting to open, kernel work, or a planned card.
     kernelWork: 'The studio builds this one itself, with no card',
     planned: 'Planned, opens for funding later',
@@ -480,6 +482,8 @@ export const copy = {
     fallback: 'Newest first, and the ledger keeps the record.',
     loading: 'Loading the latest activity.',
     empty: 'Quiet so far. Every coin, new card and shipment lands here as it happens.',
+    // Under the rows when the newest is more than three days old (Pipe.tsx quietLine): the date and the count come from the data.
+    quiet: { since: 'Quiet since {date}.', openOne: '1 card is open for funding now.', openMany: '{n} cards are open for funding now.' },
     older: 'Older',
     loadingOlder: 'Loading older events.',
     anonymous: 'Anonymous',
@@ -523,6 +527,10 @@ export const copy = {
     lifetime: 'raised since the studio opened.',
     nextLine: 'Next: {title}, {left} to go.',
     none: 'No milestones are set yet.',
+    // Before any milestone: the studio's next era from /api/community/studio, then its own "Reached when..." line.
+    nextEra: 'Next for the studio: the {era}.',
+    erasLink: 'See every era',
+    fundLink: 'Pick a card to fund',
     states: { reached: 'Reached', next: 'Next', later: 'Later' },
     reachedOn: 'Reached on {date}.',
     seeWhat: 'See what it delivered',
@@ -641,7 +649,7 @@ export const copy = {
     sortLabel: 'Sort seeds',
     sorts: { trending: 'Trending', top_week: 'Top this week', top_all: 'Top all time', new: 'New' },
     loading: 'Loading the seeds.',
-    empty: 'No seeds in the gallery yet.',
+    empty: 'No seeds in the gallery yet. The first run someone publishes from Dust shows here.',
     more: 'Show more seeds',
     loadingMore: 'Loading more seeds.',
     moreFailed: 'More seeds did not load. Try again in a moment.',
