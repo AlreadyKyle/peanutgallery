@@ -13,3 +13,10 @@ allowBuilds:
 # earlier one's.
 minimumReleaseAge: 10080
 trustPolicy: no-downgrade
+# Security floors (docs/specs/agent-upkeep.md, the janitor's osv scan): GHSA-68fv-2mgg-jv7q (source-map-js),
+# the vite 8.3.0 advisories fixed in 8.3.3, and the @vitest/mocker 5.0.0 advisories fixed in 5.0.3 (vitest
+# pins its @vitest/* packages to its own version). pnpm 11 reads overrides here, not from package.json.
+overrides:
+  source-map-js: '^1.2.2'
+  vite: '^8.3.3'
+  vitest: '^5.0.3'
