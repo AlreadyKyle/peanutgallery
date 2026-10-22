@@ -1,6 +1,6 @@
 # The weekly video template
 
-The weekly update video (`docs/specs/weekly-video.md`): the explainer's plate, type and band, then a few segments of short beats, each beside a drawn scene that acts out the change (the explainer's own agents, cards, coins, phone and glyphs, moving), then the closing lines. No browser frames and no screenshots. A week is one props file; nothing else changes.
+The weekly update video (`docs/specs/weekly-video.md`): the explainer's plate, type and band, then straight into a few segments of short beats (no intro card), each beside a drawn scene that acts out the change (the explainer's own agents, cards, coins, phone and glyphs, moving), then the closing lines. No browser frames and no screenshots. A week is one props file; nothing else changes.
 
 **The studio.** The studio's beats (`agents`, `agent-card`, `curator-joins`) draw the real live studio: `IsoRoom.tsx` renders the site's own room (`RoomDrawing.tsx`, `lib/studio-scene.ts`) with the running agents wandering between its idle spots on a seeded route worked out from the frame, so it renders the same every time.
 
@@ -8,7 +8,7 @@ The weekly update video (`docs/specs/weekly-video.md`): the explainer's plate, t
 
 ## Make next week's video
 
-1. **List what merged.** `git log --since=<last week's date> --format='%h %ad %s' --date=short origin/main`, then read each pull request's description (`gh pr view <n> --repo AlreadyKyle/peanutgallery`). Only what merged that week goes in. Note each beat's pull request beside it.
+1. **List what merged, then cut.** The video runs 45 s at most (`MAX_SECONDS` in `layout.ts`), so keep only what a player would want to see: new things to do, play or watch. Leave out housekeeping such as passwords and resets, copy, Terms versions, fixes and speed-ups. `git log --since=<last week's date> --format='%h %ad %s' --date=short origin/main`, then read each pull request's description (`gh pr view <n> --repo AlreadyKyle/peanutgallery`). Only what merged that week goes in. Note each beat's pull request beside it.
 2. **Capture the live site.** Edit the constants at the top of `scripts/weekly-capture.mjs` (`CARD`, `CURATOR`, `TODAY`) and the shots in `SHOTS` for the week's features, then, in `platform/explainer`:
 
    ```sh
@@ -18,16 +18,14 @@ The weekly update video (`docs/specs/weekly-video.md`): the explainer's plate, t
 
    Videos (`.mp4`) and stills (`.png`) are 1920 by 1080 frames of a 1280 by 720 page. Each shot can measure the element a beat points at with `mark(page, '<capture>.<name>', locator)`; the rects go to `rects.json`. Load and look only: never submit a form, make an account or open checkout. `weekly-captures/` is not committed.
 3. **Write the props.** Copy `weeks/2026-10-20.ts` to `weeks/<date>.ts`, add it to `weeks/index.ts` and point `LATEST` at it.
-4. **Test and look.** `pnpm --filter @backseat/explainer test` checks the words, opener lengths, hold times and total length. Then `node scripts/weekly.mjs --week <date> --stills` writes one still per beat to `dist/weekly/weekly-stills/`; look at every one.
-5. **Render.** `node scripts/weekly.mjs --week <date>` writes `dist/weekly/weekly-<date>.mp4` (16:9) and `weekly-<date>-tall.mp4` (4:5). Add `--only wide`, `--out <dir>`, or `--music` to render the soundtrack again (it renders on its own when missing, from `scripts/music.mjs --weekly <date>`).
+4. **Test and look.** `pnpm --filter @backseat/explainer test` checks the words, opener lengths, hold times and the 45 s cap. Then `node scripts/weekly.mjs --week <date> --stills` writes one still per beat to `dist/weekly/weekly-stills/`; look at every one.
+5. **Render.** `node scripts/weekly.mjs --week <date>` writes `dist/weekly/weekly-<date>.mp4` (16:9) and `weekly-<date>-vertical.mp4` (9:16, for Instagram Reels and TikTok; there is no 4:5 cut). Add `--only wide` or `--only vertical`, `--out <dir>`, or `--music` to render the soundtrack again (it renders on its own when missing, from `scripts/music.mjs --weekly <date>`).
 
 ## Props
 
 ```ts
 type WeekProps = {
   date: '2026-10-20';                       // the week's last day; also the captures folder
-  label: 'The week to 20 October 2026';     // over the intro's headline
-  intro: { headline; support; shot };       // support: the site's pitch, from copy.ts
   segments: {
     title: 'Ideas';                         // beside its number, over every beat of the segment
     kind?: 'story' | 'list';                // list: quick headline-only beats ("Everything else")
@@ -56,4 +54,5 @@ Label any capture that shows a money figure with `asOf`. Two beats in a row on t
 
 - `geometry.ts`: each cut's text column, the one frame box, and the three type sizes (label, headline, support).
 - `layout.ts`: the plate and closing times, the hold times (`HOLD`), the push-in (`PUSH`) and ring timing, all on the explainer's 60 fps, 120 BPM grid. The score reads the same table.
+- `Wipe.tsx`: the wipe between segments, in its own half bar (`WIPE`, `WIPE_AT` in `layout.ts`): two agent colours and ink sweep across on a slant with the next segment's number and name, then sweep off.
 - `Scenes.tsx`: the drawn scenes and the cross-fade between beats. `Words.tsx`: the label, the rising headline, the support line. `Plate.tsx`: the plate, the top bar's segment counter and the closing lines. `score.ts`: the soundtrack.
