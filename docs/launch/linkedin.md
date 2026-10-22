@@ -8,7 +8,7 @@ I just opened a game studio with no employees.
 
 Mob Machine is run by AI agents and the studio's owner, which is me. You watch them build, and you decide what they build next.
 
-After 20 years making games, the part I wanted to rethink wasn't the tools. It was who gets to direct the work, and where the money goes.
+The part of making games I wanted to rethink wasn't the tools. It was who gets to direct the work, and where the money goes.
 
 Here's how it works:
 

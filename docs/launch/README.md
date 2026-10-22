@@ -9,13 +9,13 @@ This list replaces the hold of 18 October 2026, which kept every post back until
 | # | Condition | State on 22 October 2026 | Read from |
 |---|---|---|---|
 | 1 | The dispatcher runs with no stop (the first condition of the 18 October hold) | Met. Run 39724905732, on main b47424dd, logs `startup probe passed` and `dispatcher drained` and no `stop reason:` line; the studio shows `paused: false` and `offline: false` | `gh run view 39724905732 --log`; https://mobmachine.games/api/live `studio` |
-| 2 | Email sign-ups are on (the hold's second condition) | On: sign-in answers `{"signIn":true,"providers":["google","github"]}`. Not yet proven: that a confirmation, a card-follow email and a ship notice reach a real inbox (QUEUE Q-011, todo) | https://mobmachine.games/api/community/auth/settings |
+| 2 | Email sign-ups are on (the hold's second condition) | On: sign-in answers `{"signIn":true,"providers":["google","github"]}`, Supabase Auth sends through Resend, and Resend has the domain verified with sending on. Each daily reads Resend's delivery log, and the first confirmation a real sign-up gets marks this proven (Q-011) | https://mobmachine.games/api/community/auth/settings |
 | 3 | Every link in every draft answers, with its channel's tag | Met: all 15 distinct links answer 200 | `curl -sI` on each link |
 | 4 | A tagged landing is counted in production | Met: the daily of 22 October checked the channel and funnel counters' migrations against production (Q-003, done), and `play_counts` already holds tagged landings, for example `from_bsky` 29 and `from_mastodon` 26 in total | `docs/build/QUEUE.md`, Done |
 | 5 | The site serves main | Met: home's `build-sha` is 6b60d843 (#259), and nothing under `platform/site` or `seed-1` changed between it and main b47424dd; the live-check workflow's run 39777222698 passed | page source; `git diff --stat 6b60d843 b47424dd -- platform/site seed-1` |
 | 6 | Dust plays with no account | Met: https://play.mobmachine.games answers 200, served from #250 (`build-sha` 44f26987) | `curl -sI`; page source |
 | 7 | A visitor can fund a card | Met: the Payment Link the site serves answers 200, and five cards have room in the funding order | `curl -sI`; `/api/live` `money.funding_order` |
-| 8 | A first visitor finds no empty room | Not met: the goals track reads `"goals":[]` and seeds read `"items":[]` (QUEUE Q-012, todo) | `/api/community/goals`, `/api/community/seeds` |
+| 8 | A first visitor finds no empty room | In progress: every room reads true since #267; the first goal milestones, the era thresholds the site already shows, ride the next train (Q-012) | `/api/community/goals`, `/api/community/seeds` |
 | 9 | Kyle accepts that PLAN.md §8's kill table counts from post 1: under 25 distinct supporters or under $200 gross 30 days after it | Kyle's call. Today `/api/live` shows 1 payment and $5.00 received | `/api/live` `money` |
 | 10 | Kyle has rewritten the Show HN comment in his own words | Open: `show-hn.md` holds the draft | `show-hn.md` |
 | 11 | Post 8 only: Dust shows depth, its last new mechanic well past the first hour | Not met: the active player's last new mechanic comes at 16 m 09 s (golden-broom), and Dust depth (Q-028) is parked | `npx tsx tests/playtest.ts` in `seed-1` |
@@ -85,7 +85,7 @@ Measured on the drafts as written, with the current domain and each link's tag.
 | `show-hn.md` | title 80; the first comment held under 2,000 | title 79, comment 1,862 |
 | `x-thread.md` | 280 a post, a link counted as 23 | 8 posts, the longest 248 counted in full |
 | `x-post.md` | 280, a link counted as 23 | 263 counted, 272 in full |
-| `linkedin.md` | 3,000 | 1,277 |
+| `linkedin.md` | 3,000 | 1,264 |
 | `backlash-line.md` | fits any of the above | 163 |
 
 ## Media
