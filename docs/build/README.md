@@ -2,7 +2,7 @@
 
 How the Claude-session team builds Mob Machine: a build every calendar day that Kyle reviews, a test pass on Monday night, and a release with the weekly video on Tuesday. Kyle set this cadence on 20 October 2026 (`docs/PLAN.md` §10 decision 79). The rest of the studio stays event-driven (`docs/strategy/operating-system.md` §1). Funded cards still ship the moment they pass their gate, because funded-to-live time is the show (`docs/VISION.md` §1). The weekly train carries the team's own work.
 
-Read in this order: this file, [NOW.md](NOW.md) (the order of work), [MILESTONES.md](MILESTONES.md) (where the order leads) and [QUEUE.md](QUEUE.md) (everything we could do, with no order of its own). The routines themselves are the skills in `.claude/skills/`: `daily`, `rc`, `release`, `sweep` and `scout`.
+Read in this order: this file, [NOW.md](NOW.md) (the order of work), [MILESTONES.md](MILESTONES.md) (where the order leads) and [QUEUE.md](QUEUE.md) (everything we could do, with no order of its own). The cloud routines are the prompts in `.claude/routines/` (`build`, `review`, `report` and `watchdog`), and the Mac's are the skills in `.claude/skills/`: `daily`, `rc`, `release`, `sweep` and `scout`. What the team bets each change will move, and what it did move, is in [EXPERIMENTS.md](EXPERIMENTS.md) and [SCOREBOARD.md](SCOREBOARD.md).
 
 ## What we are building towards
 
@@ -12,12 +12,15 @@ Mob Machine is a studio people want to watch, steer, fund and come back to, with
 
 | When (America/Toronto) | Routine | Where it runs | What it does |
 |---|---|---|---|
-| Every day, about 09:20 | `daily` | Kyle's Mac, scheduled task `mobmachine-daily` | Takes Kyle's feedback first. Runs one to three lanes from NOW.md, merges each green lane into `next`, and sends Kyle a one-page report. Sundays add `sweep`, Wednesdays add `scout`, and the first Sunday of the month adds the vision pass. |
+| Every day, three times | Build, then Review an hour later | Cloud routines (`.claude/routines/`) | Build takes Kyle's notes first, then NOW, and opens one green slice as a draft into `next`. Review, a fresh session, passes it (auto-merge on, so GitHub merges it on a green gate) or lists the changes the next Build makes. |
+| Every day, evening | Report | Cloud routine | The one-page report, the scoreboard row and the experiments' results. |
+| Twice a day | Watchdog | Cloud routine | Checks every routine left its proof, and files a QUEUE row for a miss seen twice. |
+| When the Mac is on | `daily` | Kyle's Mac, scheduled task `mobmachine-daily` | Only the steps that need `.env`: production reads, the Mac-only QUEUE rows and Kyle's inbox file. Sundays add `sweep`, Wednesdays add `scout`, and the first Sunday of the month adds the vision pass. |
 | Monday, about 20:40 | `rc` | Mac, `mobmachine-rc` | Cuts the release candidate from `next`, runs the full test pass against the release pull request's deploy preview, and gives a verdict of GO, GO without some pull requests, or NO-GO. |
 | Tuesday, about 07:00 | `release` | Mac, `mobmachine-release` | If the verdict is GO and Kyle has not said hold: takes a backup, applies the migrations, merges `next` into `main`, deploys, runs the live check, and rolls back on a failure. Then the release notes, the tag and the clean-up. |
 | Tuesday, about 10:30 | weekly video | Mac, `mobmachine-weekly-video` | Makes the week's video and drafts the posts from the release notes, never from a guess. |
 
-These routines run on the Mac rather than in the cloud. They need `.env` for production migrations, the backup and the money reads. They have to reach the live site for the live check and delete merged branches, and they hand Kyle the report. A cloud session can do none of these (`docs/LESSONS.md`, Routes from a cloud session). Interactive code work can still run in cloud sessions (CLAUDE.md, Cloud sessions). If the Mac is closed when a routine is due, it runs on the next launch.
+The release candidate and the release run on the Mac, because they need `.env` for production migrations and the backup, and they reach the live site for the live check (`docs/LESSONS.md`, Routes from a cloud session). The build loop runs in the cloud since 26 October 2026 (`docs/PLAN.md` §10 decision 80), because the daily on the Mac ran once in its first five days: a scheduled task only runs while the Mac is awake with the app open. Interactive code work can still run in cloud sessions (CLAUDE.md, Cloud sessions). If the Mac is closed when a routine is due, it runs on the next launch.
 
 ## Branches
 

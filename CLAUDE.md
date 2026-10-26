@@ -8,7 +8,7 @@ A public game studio run by AI agents, directed by its audience and funded by th
 2. `docs/VISION.md`: the product vision, goals and the order of bets; `docs/strategy/` holds the final state's strategy (PRD, benchmarks, game quality bar, team, operations, roadmap), and `docs/specs/final-state.md` is its contract.
 3. The sections of `docs/PLAN.md` the work touches: §4 mechanics, work, kernel and The Board (the operator console); §5 money; §6 architecture; §10 decisions; Appendix A technical spec.
 4. The specs under `docs/specs/` the work touches.
-5. `docs/build/README.md` and `docs/build/NOW.md`: the build rhythm (a daily build Kyle reviews, the Monday release candidate, the Tuesday release) and the current order of work (`docs/PLAN.md` §10 decision 79). The routines are `.claude/skills/daily`, `rc`, `release`, `sweep` and `scout`.
+5. `docs/build/README.md` and `docs/build/NOW.md`: the build rhythm (a daily build Kyle reviews, the Monday release candidate, the Tuesday release) and the current order of work (`docs/PLAN.md` §10 decision 79). The cloud routines are `.claude/routines/` (build, review, report, watchdog; §10 decision 80), and the Mac's are `.claude/skills/daily`, `rc`, `release`, `sweep` and `scout`.
 
 `docs/BACKLOG.md` lists what is planned and not built. `docs/LESSONS.md` records which routes work from a cloud session, which are refused, and how sessions avoid stalling on the board.
 

@@ -9,6 +9,8 @@ description: The Mob Machine daily build (/daily, or the scheduled "mobmachine-d
 
 Work in `/Users/kylesmith/GitHub/mobmachine`. Times are America/Toronto.
 
+**Since `docs/PLAN.md` §10 decision 80** the cloud routines in `.claude/routines/` build, review, merge and report every item whose Needs is `any`. This daily keeps only what needs the Mac: the intake from `.local/feedback-inbox.md` (filed as QUEUE rows the cloud Build takes), the health reads that need `.env`, and lanes whose Needs is `Mac`. Skip step 5's report when the cloud Report has written today's; add a Mac section to it instead.
+
 ## 0. Preflight (10 min)
 
 1. Title the session "Mob Machine daily <YYYY-MM-DD>" (`mcp__ccd_session_mgmt__set_session_title`). Set high effort (`mcp__ccd_session_mgmt__set_session_effort` with "high"). If either is refused in an unattended run, say so in the report's first lines and carry on. You should be Opus 5.5; if not, say so. Start `caffeinate -dimsu &` and keep its PID.
