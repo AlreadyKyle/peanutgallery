@@ -509,6 +509,7 @@ describe('shell scripts', () => {
       'make-jobs-env.sh',
       'oracle-launch.sh',
       'provision.sh',
+      'push-secrets.sh',
     ]);
     for (const script of SHELL_SCRIPTS) {
       const run = spawnSync('bash', ['-n', path.join(OPS_DIR, script)], { encoding: 'utf8' });
@@ -2146,5 +2147,53 @@ describe('the GitHub Actions host', () => {
     assert.match(calls, /^header: http\.https:\/\/github\.com\/\.extraheader$/m);
     assert.doesNotMatch(calls, /fixture-clone/);
     assert.doesNotMatch(readFileSync(path.join(target, '.git', 'config'), 'utf8'), /extraheader|fixture-clone/);
+  });
+});
+
+describe('push-secrets.sh', () => {
+  // Runs push-secrets.sh against a fake gh that records its arguments and the secret it read, with the
+  // fixture .env and an .env.vps holding the operator values.
+  const pushSecrets = (args = []) => {
+    runs += 1;
+    const dir = mkdtempSync(path.join(scratch, 'push-'));
+    const bin = path.join(dir, 'bin');
+    mkdirSync(bin);
+    const calls = path.join(dir, 'calls');
+    writeFileSync(path.join(bin, 'gh'), `#!/usr/bin/env bash\necho "$*" >> "${calls}"\nif [ "$1" = secret ]; then cat > "${dir}/$3"; fi\n`);
+    chmodSync(path.join(bin, 'gh'), 0o755);
+    const dotenvFile = path.join(dir, 'fixture.env');
+    writeFileSync(dotenvFile, dotenvText(MAC_DOTENV));
+    const vpsEnv = path.join(dir, 'fixture.env.vps');
+    writeFileSync(vpsEnv, Object.entries(OPERATOR).map(([key, value]) => `${key}=${value}`).join('\n'));
+    const tmp = mkdtempSync(path.join(dir, 'tmp-'));
+    const result = spawnSync('bash', [path.join(OPS_DIR, 'push-secrets.sh'), ...args], {
+      env: { PATH: `${bin}:${process.env.PATH}`, HOME: process.env.HOME, TMPDIR: tmp, DOTENV: dotenvFile, VPS_ENV: vpsEnv },
+      encoding: 'utf8',
+    });
+    const read = (name) => (existsSync(path.join(dir, name)) ? readFileSync(path.join(dir, name), 'utf8') : null);
+    return { ...result, calls: read('calls') ?? '', read, leftovers: readdirSync(tmp), output: `${result.stdout}${result.stderr}` };
+  };
+
+  test('sets both secrets from fresh env files, deletes them, and prints no value', () => {
+    const run = pushSecrets();
+    assert.equal(run.status, 0, run.output);
+    assert.match(run.calls, /^secret set DISPATCHER_ENV --env dispatcher --repo AlreadyKyle\/peanutgallery$/m);
+    assert.match(run.calls, /^secret set QUOTA_ENV --env ops --repo AlreadyKyle\/peanutgallery$/m);
+    assert.doesNotMatch(run.calls, /workflow run/);
+    assert.match(run.read('DISPATCHER_ENV'), /^GITHUB_TOKEN=github_pat_-fixture-vps$/m);
+    assert.match(run.read('QUOTA_ENV'), /^GITHUB_BILLING_TOKEN=github_pat_-fixture-vps$/m);
+    assert.deepEqual(run.leftovers, [], 'the env files are deleted');
+    for (const value of SECRET_VALUES) assert.ok(!run.output.includes(value), 'the output names keys only');
+  });
+
+  test('--dry-run sets nothing; --restart starts the dispatcher', () => {
+    const dry = pushSecrets(['--dry-run']);
+    assert.equal(dry.status, 0, dry.output);
+    assert.equal(dry.calls, '');
+    assert.deepEqual(dry.leftovers, []);
+    const restart = pushSecrets(['--restart']);
+    assert.equal(restart.status, 0, restart.output);
+    assert.match(restart.calls, /^workflow run dispatcher\.yml --ref main --repo AlreadyKyle\/peanutgallery$/m);
+    assert.equal(pushSecrets(['--force']).status, 2);
   });
 });

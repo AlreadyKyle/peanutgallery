@@ -37,9 +37,9 @@ and its reason.
 | Supabase connector: `apply_migration` | works since 19 October 2026, when the board set the connector's permissions to Always allow; before that its confirmation dialog did not show in the Projects app and timed out |
 | The dispatcher | runs on its own schedule; read its newest run's log rather than starting it |
 | Starting a workflow (the GitHub app, or a workflow on a side branch that starts another) | refused (HTTP 403, and the safety check) |
-| Actions variables and secrets (`STUDIO_REF`, `DISPATCHER_ENV`) | refused from the cloud; set from the Mac with the board's `gh` login |
+| Actions variables and secrets (`STUDIO_REF`, `DISPATCHER_ENV`) | refused from the cloud; set from the Mac with the board's `gh` login, where `platform/ops/push-secrets.sh` is one allowlisted command |
 | Moving `STUDIO_REF` into a committed file | refused (it weakens the ops repository's pin) |
-| A standing permissions allowlist | refused |
+| A standing permissions allowlist | refused when a session writes it on its own; the board approved one on 26 October 2026, in `.claude/settings.json` for every session and `.claude/settings.local.json` on the Mac |
 | Driving the board's browser | refused |
 | Deleting a branch | refused (HTTP 403); GitHub's auto-delete or a local session does it |
 | Re-running a failed job (`rerun-failed-jobs`) | refused (HTTP 403); a push with a real change starts a new gate run |
