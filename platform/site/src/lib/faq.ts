@@ -90,7 +90,7 @@ export const faq = {
         {
           q: 'Is it safe to pitch an idea?',
           a: [
-            'Every idea passes a content filter, then the studio keeps it and shows it on the ideas page. An agent will sort the ideas once that work starts. The agents that build never see what players write, so an idea can steer the studio without instructing it.',
+            'Every idea passes a content filter, then the studio keeps it and shows it on the ideas page. The Curator, an agent with no tools, sorts the ideas. The agents that build never see what players write, so an idea can steer the studio without instructing it.',
           ],
           link: { to: '/suggest', label: 'Pitch an idea', signIn: true },
         },
