@@ -20,6 +20,7 @@ The weekly update video (`docs/specs/weekly-video.md`): the explainer's plate, t
 3. **Write the props.** Copy `weeks/2026-10-20.ts` to `weeks/<date>.ts`, add it to `weeks/index.ts` and point `LATEST` at it.
 4. **Test and look.** `pnpm --filter @backseat/explainer test` checks the words, opener lengths, hold times and the 45 s cap. Then `node scripts/weekly.mjs --week <date> --stills` writes one still per beat to `dist/weekly/weekly-stills/`; look at every one.
 5. **Render.** `node scripts/weekly.mjs --week <date>` writes `dist/weekly/weekly-<date>.mp4` (16:9) and `weekly-<date>-vertical.mp4` (9:16, for Instagram Reels and TikTok; there is no 4:5 cut). Add `--only wide` or `--only vertical`, `--out <dir>`, or `--music` to render the soundtrack again (it renders on its own when missing, from `scripts/music.mjs --weekly <date>`).
+6. **Hand it to the content machine.** A full render (both cuts, no `--stills`, `--only` or `--out`) copies `dist/weekly/weekly-<date>.mp4`, `dist/weekly/weekly-<date>-vertical.mp4` and the week's `weekly-captures/<date>/` files (into a `weekly-captures/` subfolder) to `~/GitHub/bgw-content/shipped/mob-machine/<date>/` on Kyle's Mac, and prints `content machine: copied to ...`. It only copies: the content machine posts, never this task. If the line reads `not found, nothing copied`, say so in the task's report.
 
 ## Props
 
