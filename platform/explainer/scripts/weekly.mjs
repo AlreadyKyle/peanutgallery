@@ -6,6 +6,9 @@
 //   node scripts/weekly.mjs --week 2026-10-20 --stills           one still per beat (held, ring drawn), plus the plates
 //   node scripts/weekly.mjs --week 2026-10-20 --out <dir>        write the files there instead
 //
+// A full render (both cuts, no --stills, --only or --out) then copies the two cuts and the week's
+// captures into the content machine's inbox, ~/GitHub/bgw-content/shipped/mob-machine/<date>/,
+// when that folder's parent exists (Kyle's Mac). Copy only: nothing here posts anywhere.
 // The soundtrack comes from `node scripts/music.mjs --weekly <date>`, run here first if it is missing
 // (or with --music). Rendering uses the headless Chromium Playwright installed, or REMOTION_CHROME.
 import { execFileSync } from 'node:child_process';
@@ -150,4 +153,18 @@ for (const [name, cut] of Object.entries(CUTS)) {
   ffmpeg('-i', master, '-c:v', 'libx264', '-preset', 'slow', '-crf', '19', '-profile:v', 'high', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-movflags', '+faststart', file);
   rmSync(master);
   console.log(`${name}: ${file} (${size(file)}, ${(composition.durationInFrames / composition.fps).toFixed(2)} s)`);
+}
+
+// The content machine's inbox (Kyle's ask, 26 Oct 2026). Copy only, never post.
+const shipped = join(homedir(), 'GitHub', 'bgw-content', 'shipped', 'mob-machine');
+if (flag('--stills') || only !== undefined || value('--out') !== undefined) {
+  // A partial or test render is not the week's video.
+} else if (!existsSync(shipped)) {
+  console.log(`content machine: ${shipped} not found, nothing copied`);
+} else {
+  const inbox = join(shipped, week);
+  mkdirSync(inbox, { recursive: true });
+  for (const cut of Object.values(CUTS)) copyFileSync(join(out, cut.file), join(inbox, cut.file));
+  if (existsSync(captures)) cpSync(captures, join(inbox, 'weekly-captures'), { recursive: true });
+  console.log(`content machine: copied to ${inbox}`);
 }
