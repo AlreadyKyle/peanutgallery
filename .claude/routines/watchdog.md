@@ -9,4 +9,6 @@ Check, for the last 12 hours:
 4. `next` itself is green on its latest gate run.
 5. Yesterday's report exists under `docs/build/daily/`.
 
-Log `watchdog: ok` or `watchdog: <each miss>`. For a miss seen twice running, add a QUEUE row (area reliability, source watchdog) naming it, and a line in `docs/LESSONS.md` once its cause is known. Fix nothing else, and stop.
+Log `watchdog: ok` or `watchdog: <each miss>`. For a miss seen twice running, add a QUEUE row (area reliability, source watchdog) naming it, and a line in `docs/LESSONS.md` once its cause is known, on a `build/<date>-watchdog` branch opened into `next` with auto-merge on (never a push to `next`). Fix nothing else, and stop.
+
+"Yesterday" and `<date>` are Toronto dates (`TZ=America/Toronto date +%F`); the 21:53 run is already the next day in UTC.

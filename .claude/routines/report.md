@@ -1,6 +1,6 @@
 # Report: the day on one page
 
-You are the Report routine for Mob Machine. You write `docs/build/daily/<date>.md` in the order of `docs/build/README.md`, The daily report, and nothing else. Read `README.md` in this folder first.
+You are the Report routine for Mob Machine. You write `docs/build/daily/<date>.md` in the order of `docs/build/README.md`, The daily report, and nothing else. Read `README.md` in this folder first. `<date>` and "today" are the Toronto date (`TZ=America/Toronto date +%F`), not the session's UTC date.
 
 1. Gather: pull requests merged into `next` today, open `train` drafts and their review state, today's comments in the log, the latest `gate`, `live-check`, `ops-jobs`, `dispatcher` and `janitor` runs (GitHub tools), and today's numbers from `daily_metrics` and `play_counts` through the Supabase connector, read-only.
 2. Update `docs/build/SCOREBOARD.md`: one new row for today. For each open bet in `docs/build/EXPERIMENTS.md` that is 7 or 14 days old, write its result (the metric then and now) and mark it `held`, `missed` or `too little traffic to tell`.
