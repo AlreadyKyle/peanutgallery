@@ -30,6 +30,7 @@ The dispatcher runs unattended on a small Ubuntu server in a Docker container un
 | `platform/agents/managed/*.yaml`, `pnpm --filter @backseat/dispatcher managed:apply` | the Mac | the Managed Agents agent and environment, applied to the studio organization |
 | `dispatcher.service`, `dispatcher-alert.service` | the VPS | the units |
 | `make-jobs-env.sh` | the Mac | writes the three jobs' env files (Backups and the Controller, below) |
+| `push-secrets.sh` | the Mac | rebuilds `DISPATCHER_ENV` and `QUOTA_ENV` from `.env` and `.env.vps` and sets both Actions secrets in one command (`--dry-run`, `--restart`) |
 | `backup/backup.sh`, `peanutgallery-backup.service`, `.timer` | the VPS, as root | the nightly encrypted database backup and the weekly restore check |
 | `jobs/main.mjs`, `peanutgallery-controller.service`, `.timer` | the VPS, in the image, as nobody | the Controller: the daily reconciliation with Stripe |
 | `jobs/main.mjs`, `peanutgallery-quota.service`, `.timer` | the VPS, in the image, as nobody | the quota check: database size and Actions minutes |
@@ -404,7 +405,7 @@ There is no `--ref` on this host: runs start from main only, which the environme
 
 ### Rotate a key
 
-Pause from /board. Write the env file again with `make-dispatcher-env.sh`, `gh secret set DISPATCHER_ENV --env dispatcher` from it, delete the file, then cancel the run and start one; check `startup probe passed` and the heartbeat. Resume, and only then revoke the old key.
+Pause from /board. Put the new value in `.env` or `.env.vps`, cancel the run in progress, then run `platform/ops/push-secrets.sh --restart`: it writes both env files, sets `DISPATCHER_ENV` and `QUOTA_ENV`, deletes the files and starts a run. Check `startup probe passed` and the heartbeat. Resume, and only then revoke the old key. (By hand: write the env file with `make-dispatcher-env.sh`, `gh secret set DISPATCHER_ENV --env dispatcher` from it, and delete the file.)
 
 ### Read logs
 
