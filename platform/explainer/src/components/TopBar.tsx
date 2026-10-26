@@ -7,11 +7,11 @@ import { Mark, type MarkTimes } from './Mark';
 
 // The black plate, as on the site: every page opens on it. The video opens on the plate with the
 // mark built up in the middle, folds the plate up into the site's top bar (the mark and the wordmark
-// move with it), carries the step counter on the bar's right while the six steps play, and unfolds
+// move with it), carries the step counter on the bar's right while the steps play, and unfolds
 // it again to close.
 
 const FOLD = 54;
-const STEPS: readonly SceneId[] = ['pick', 'split', 'fills', 'build', 'checks', 'shipped'];
+const STEPS: readonly SceneId[] = ['pick', 'fills', 'build', 'shipped'];
 
 function measure(text: string, size: number): number {
   const canvas = document.createElement('canvas').getContext('2d');
@@ -89,13 +89,13 @@ export function TopBar({ frame, format, social = false }: { frame: number; forma
   const wordStart = at(CHOREO.intro.word);
   const letters = labels.wordmark.split('');
 
-  // The step counter: which of the six steps is on screen.
+  // The step counter: which of the steps is on screen.
   const stepIndex = STEPS.findIndex((id) => {
     const start = sceneStart(id);
     const scene = SCENES.find((s) => s.id === id)!;
     return frame >= start && frame < start + scene.bars * BAR;
   });
-  const railIn = progress(frame, sceneStart('pick') - 24, 24) - progress(frame, sceneStart('ledger'), 24);
+  const railIn = progress(frame, sceneStart('pick') - 24, 24) - progress(frame, sceneStart('outro') - 24, 24);
 
   return (
     <div style={{ position: 'absolute', left: 0, top: 0, width: W, height, background: C.ink, overflow: 'hidden' }}>

@@ -208,7 +208,8 @@ export const legal = {
   },
   // The explainer video (docs/specs/explainer-video.md): its words in the order it shows them. Its first and last lines are the owner's own for the video (PLAN.md
   // §10 decision 57); every line between is a sentence the site already says, word for word, and each
-  // step is a heading of howMoneyMoves (platform/explainer/src/data.test.ts). platform/explainer draws
+  // step is a heading of howMoneyMoves, in their order (platform/explainer/src/data.test.ts). It shows
+  // four of the six steps, to keep within 45 s. platform/explainer draws
   // these same strings. It lives here because some lines state money.
   explainer: {
     heading: 'Watch how it works',
@@ -216,18 +217,12 @@ export const legal = {
     // The preview loop's own control (WCAG 2.2.2): it names the loop, not the video.
     pauseLoop: 'Pause the preview',
     playLoop: 'Play the preview',
-    agents: 'The agents',
-    studio: 'The studio',
     beats: [
       { step: null, line: 'Watch AI agents build a game studio and free games.' },
-      { step: null, line: 'The AI agents do the creative work: they design, build and review the cards.' },
       { step: 'Pick a card', line: 'Each card is one change to the game or to this site, with a funding target.' },
-      { step: 'Contribute and choose the split', line: 'You choose how it splits between the agents and the studio, then an amount at checkout.' },
       { step: 'The bar fills', line: 'When the bar is full, the card joins the queue.' },
       { step: 'The agents build it', line: 'An AI agent takes the card and makes the change.' },
-      { step: 'Checks, then live', line: 'Before a change goes live it must pass automated checks, including a bot that plays the game.' },
       { step: 'It shows under Shipped', line: 'Once it is live, the card is listed under Shipped with what it cost and how many people funded it.' },
-      { step: null, line: 'The public ledger shows the money that comes in, where it goes and the cost of all agent work paid for with contributions.' },
       { step: null, line: 'Fund a card. Watch AI agents build it. Play it free.' },
     ],
   },

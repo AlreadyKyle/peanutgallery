@@ -5,15 +5,14 @@ import { Avatar } from '../components/Avatar';
 import { Card, CARD, type CardFace } from '../components/Card';
 import { Coin } from '../components/Coin';
 import { EventLog } from '../components/EventLog';
-import { Phone, PHONE, type Tap } from '../components/Phone';
 import { At, Stage } from '../components/Stage';
-import { builder, hand, HERO, labels, script, shipped } from '../data';
+import { builder, hand, HERO, labels, shipped } from '../data';
 import type { Format } from '../format';
 import { C, EASE_IN, EASE_IN_OUT, EASE_OUT, FONT } from '../theme';
 import { BEAT, CHOREO, sceneBar, type SceneId } from '../timeline';
 
-// The six steps as one unbroken shot: one real card from the deck is picked, funded, split, filled,
-// built, checked and shipped, and never leaves the table. Frames here count from the start of Pick.
+// The steps as one unbroken shot: one real card from the deck is picked, funded, built and shipped,
+// and never leaves the table. Frames here count from the start of Pick.
 
 /** Frames from the start of Pick to `barsIn` bars into `scene`. */
 function J(scene: SceneId, barsIn: number): number {
@@ -21,9 +20,8 @@ function J(scene: SceneId, barsIn: number): number {
 }
 
 const HAND_SCALE = 0.62;
-/** The card on its own in Pick and Fills, and under the split control. */
+/** The card on its own in Pick and Fills. */
 const HERO_SCALE = 1.14;
-const SPLIT_SCALE = 0.8;
 const FAN = [-13, -4.5, 4.5, 13];
 const FAN_RADIUS = 760;
 const DECK = { x: 450, y: 1150 };
@@ -49,25 +47,13 @@ function flipAt(frame: number, t: number): { angle: number; past: boolean; lift:
 const FLIPS: readonly { face: CardFace; t: number }[] = [
   { face: 'funded', t: J('fills', CHOREO.fills.flip) },
   { face: 'building', t: J('build', CHOREO.build.flip) },
-  { face: 'checks', t: J('checks', CHOREO.checks.flip) },
   { face: 'live', t: J('shipped', CHOREO.shipped.flip) },
 ];
 
-/** The fill after each of the four coins in Fills, after the split's first quarter. */
-const FILLS = [0.25, 0.44, 0.63, 0.82, 1];
+/** The fill after each of the four coins in Fills, from empty. */
+const FILLS = [0, 0.25, 0.5, 0.75, 1];
 /** A coin takes this many frames to fall onto the bar. */
 const FALL = 18;
-
-const TAPS: readonly Tap['button'][] = ['strike', 'strike', 'buyMill', 'strike', 'buyGatherer', 'strike'];
-
-function wedge(r: number, from: number, to: number): string {
-  // A pie slice from angle `from` to `to` (0 to 1 of a turn, clockwise from twelve o'clock).
-  if (to - from >= 0.999) return `M ${-r} 0 A ${r} ${r} 0 1 1 ${r} 0 A ${r} ${r} 0 1 1 ${-r} 0 Z`;
-  const p = (t: number) => [Math.sin(t * 2 * Math.PI) * r, -Math.cos(t * 2 * Math.PI) * r];
-  const [x1, y1] = p(from);
-  const [x2, y2] = p(to);
-  return `M 0 0 L ${x1} ${y1} A ${r} ${r} 0 ${to - from > 0.5 ? 1 : 0} 1 ${x2} ${y2} Z`;
-}
 
 export function Journey({ format }: { format: Format }) {
   const f = useCurrentFrame();
@@ -94,7 +80,6 @@ export function Journey({ format }: { format: Format }) {
     r += (tr - r) * k;
   };
   move(q, 450, 400, HERO_SCALE, 0);
-  move(progress(f, J('split', 0), 40, EASE_IN_OUT), 450, 628, SPLIT_SCALE, 0);
   move(progress(f, J('fills', 0), 36, EASE_IN_OUT), 450, 430, HERO_SCALE, 0);
   move(progress(f, J('fills', CHOREO.fills.queue), 44, EASE_IN_OUT), 260, 250, 1, 0);
   // On the phone cuts the pile is centred under the words, so the card first rises to the middle. The
@@ -131,13 +116,12 @@ export function Journey({ format }: { format: Format }) {
     }
     if (state.past) face = flip.face;
   }
-  const splitLand = J('split', CHOREO.split.land);
   const coinLand = CHOREO.fills.coins.map((c) => J('fills', c) + FALL);
-  let fill = tween(f, splitLand, 12, 0, FILLS[0]!);
+  let fill = FILLS[0]!;
   coinLand.forEach((t, i) => {
     fill += tween(f, t, 10, 0, FILLS[i + 1]! - FILLS[i]!);
   });
-  const meta = face === 'funded' ? labels.waiting : face === 'building' ? copy.buildingBy.replace('{name}', builder.title) : face === 'checks' ? builder.title : null;
+  const meta = face === 'funded' ? labels.waiting : face === 'building' ? copy.buildingBy.replace('{name}', builder.title) : null;
   const gear = face === 'building' ? (f - FLIPS[1]!.t) * 2.4 : 0;
   const stamp = face === 'live' ? pop(f, J('shipped', CHOREO.shipped.stamp), 'snappy') : 0;
   const pulse = Math.sin(progress(f, J('pick', CHOREO.pick.target), 36) * Math.PI);
@@ -155,26 +139,6 @@ export function Journey({ format }: { format: Format }) {
     );
   });
 
-  // ---- Split: the coin, the split control and its halves --------------------------------------
-  const sc = CHOREO.split;
-  const coinT = J('split', sc.coin);
-  const coinDrop = pop(f, coinT, 'bouncy');
-  const trackIn = progress(f, coinT + 24, 20);
-  const handleSteps = [50, 70, 90, 70, 80];
-  let handle = handleSteps[0]!;
-  sc.handle.forEach((b, i) => {
-    handle += tween(f, J('split', b), 10, 0, handleSteps[i + 1]! - handleSteps[i]!);
-  });
-  const part = progress(f, J('split', sc.part), 30, EASE_IN_OUT);
-  const splitOut = progress(f, J('split', sc.exit), 24, EASE_IN);
-  const agentsShare = handle / 100;
-  const coinVisible = f >= coinT && part < 1;
-  const coinSpin = Math.cos((1 - Math.min(1, coinDrop)) * Math.PI * 3);
-  const coinY = -160 + (140 + 160) * coinDrop;
-  const barPoint = { x: 450 - BAR_HALF * SPLIT_SCALE + 40, y: 628 + BAR_DY * SPLIT_SCALE };
-  const studioPoint = { x: 760, y: 300 };
-  const TRACK = { x: 150, y: 290, w: 600, h: 40 };
-
   // ---- Fills: the coins that fill the bar -----------------------------------------------------
   const fillCoins = CHOREO.fills.coins.map((c, i) => {
     const t = J('fills', c);
@@ -186,23 +150,17 @@ export function Journey({ format }: { format: Format }) {
     return <Coin key={i} size={64} x={tx} y={-140 + (barY - 18 + 140) * fall} turn={Math.cos(fall * Math.PI * 4)} opacity={1 - soak} />;
   });
 
-  // ---- Build and checks: the builder, the steps, the phone ------------------------------------
+  // ---- Build: the builder and its steps ------------------------------------------------------
   const agentIn = progress(f, J('build', CHOREO.build.agent), 40, EASE_OUT);
-  const agentOut = progress(f, J('checks', CHOREO.checks.flip), 30, EASE_IN);
+  const agentOut = progress(f, J('shipped', CHOREO.shipped.flip), 30, EASE_IN);
   const agentX = 1080 - (1080 - 690) * agentIn + agentOut * 520;
   const agentHop = Math.abs(Math.sin(agentIn * Math.PI * 3)) * 46 * (1 - agentIn) + Math.abs(Math.sin(agentOut * Math.PI * 3)) * 40;
   const beatHop = agentIn >= 1 && agentOut === 0 ? Math.max(0, Math.sin((((f % BEAT) / BEAT) * Math.PI))) * 7 : 0;
   const ev = labels.events;
   const who = builder.title;
-  const rows = [
-    ...[ev.started, ev.read, ev.edited, ev.ran, ev.submitted].map((line, i) => ({ text: `${who} ${line}`, at: J('build', CHOREO.build.events[i]!) })),
-    ...[ev.smoke, ev.passed].map((line, i) => ({ text: `${who} ${line}`, at: J('checks', CHOREO.checks.passed[i]!) })),
-  ];
+  const rows = [ev.started, ev.read, ev.edited, ev.ran, ev.submitted].map((line, i) => ({ text: `${who} ${line}`, at: J('build', CHOREO.build.events[i]!) }));
   const logIn = progress(f, J('build', CHOREO.build.events[0]!) - 10, 16);
   const logOut = progress(f, J('shipped', CHOREO.shipped.flip), 20, EASE_IN);
-  const phoneIn = pop(f, J('checks', CHOREO.checks.phone), 'soft');
-  const phoneOut = progress(f, J('checks', CHOREO.checks.exit), 28, EASE_IN);
-  const taps = CHOREO.checks.taps.map((b, i) => ({ at: J('checks', b), button: TAPS[i]! }));
   const queuedIn = progress(f, J('fills', CHOREO.fills.queue) + 20, 18) - progress(f, J('build', 0), 16);
 
   // ---- Shipped: the pile of real shipped cards -----------------------------------------------
@@ -224,60 +182,6 @@ export function Journey({ format }: { format: Format }) {
         </div>
       ) : null}
 
-      {/* The split control */}
-      {trackIn > 0 && splitOut < 1 ? (
-        <div style={{ position: 'absolute', left: 0, top: 0, width: 900, height: 820, opacity: trackIn * (1 - splitOut), transform: `translateY(${(1 - trackIn) * 20 - splitOut * 30}px)` }}>
-          <div style={{ position: 'absolute', left: TRACK.x, top: TRACK.y, width: TRACK.w, height: TRACK.h, boxSizing: 'border-box', border: `3px solid ${C.ink}`, borderRadius: 9, overflow: 'hidden', background: C.ink }}>
-            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${handle}%`, background: C.coin, borderRight: `3px solid ${C.ink}` }} />
-          </div>
-          {Array.from({ length: 11 }, (_, i) => (
-            <div key={i} style={{ position: 'absolute', left: TRACK.x + (TRACK.w * i) / 10 - 1, top: TRACK.y + TRACK.h + 8, width: 2, height: i % 5 === 0 ? 14 : 8, background: C.field }} />
-          ))}
-          <div
-            style={{
-              position: 'absolute',
-              left: TRACK.x + (TRACK.w * handle) / 100 - 16,
-              top: TRACK.y - 14,
-              width: 32,
-              height: TRACK.h + 28,
-              boxSizing: 'border-box',
-              border: `3px solid ${C.ink}`,
-              borderRadius: 9,
-              background: C.paper,
-            }}
-          />
-          <div style={{ position: 'absolute', left: TRACK.x, top: TRACK.y + TRACK.h + 34, fontFamily: FONT, fontSize: 26, fontWeight: 600, color: C.ink }}>{script.agents}</div>
-          <div style={{ position: 'absolute', left: TRACK.x, width: TRACK.w, textAlign: 'right', top: TRACK.y + TRACK.h + 34, fontFamily: FONT, fontSize: 26, fontWeight: 600, color: C.ink }}>{script.studio}</div>
-        </div>
-      ) : null}
-
-      {/* The contribution, a coin that shows its split and then parts */}
-      {coinVisible ? (
-        <svg style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible' }} width={900} height={820}>
-          {(() => {
-            const R = 72;
-            const agentsAt = { x: 450 + (barPoint.x - 450) * part, y: coinY + (barPoint.y - coinY) * part };
-            const studioAt = { x: 450 + (studioPoint.x - 450) * part, y: coinY + (studioPoint.y - coinY) * part };
-            const shrink = 1 - part * 0.8;
-            const fade = 1 - progress(f, J('split', sc.part) + 18, 12);
-            const split = trackIn > 0;
-            return (
-              <>
-                <g transform={`translate(${agentsAt.x} ${agentsAt.y}) scale(${coinSpin * shrink} ${shrink})`} opacity={part > 0 ? fade : 1}>
-                  <path d={wedge(R, 0, split ? agentsShare : 1)} fill={C.coin} stroke={C.ink} strokeWidth={5} strokeLinejoin="round" />
-                  {part === 0 ? <circle r={R * 0.56} fill="none" stroke={C.ink} strokeWidth={3.5} /> : null}
-                </g>
-                {split ? (
-                  <g transform={`translate(${studioAt.x} ${studioAt.y}) scale(${shrink})`} opacity={part > 0 ? fade : 1}>
-                    <path d={wedge(R, agentsShare, 1)} fill={C.ink} stroke={C.ink} strokeWidth={5} strokeLinejoin="round" />
-                  </g>
-                ) : null}
-              </>
-            );
-          })()}
-        </svg>
-      ) : null}
-
       {/* The builder */}
       {agentIn > 0 && agentOut < 1 ? (
         <At x={agentX} y={250 - agentHop - beatHop} w={220} h={220}>
@@ -292,13 +196,6 @@ export function Journey({ format }: { format: Format }) {
         <div style={{ position: 'absolute', left: 0, top: 470, opacity: logIn * (1 - logOut), transform: `translateY(${logOut * 20}px)` }}>
           <EventLog rows={rows} frame={f} width={560} visible={4} />
         </div>
-      ) : null}
-
-      {/* The phone, where the play bot plays Dust */}
-      {phoneIn > 0 && phoneOut < 1 ? (
-        <At x={720 + (1 - phoneIn) * 480 + phoneOut * 520} y={420} w={PHONE.width} h={PHONE.height} rotate={(1 - phoneIn) * 10} scale={0.96}>
-          <Phone frame={f} taps={taps} style={{ left: 0, top: 0 }} />
-        </At>
       ) : null}
 
       {/* Shipped, and the pile of real shipped cards */}

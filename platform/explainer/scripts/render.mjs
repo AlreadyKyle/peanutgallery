@@ -39,12 +39,14 @@ const SITE_CUTS = ['wide', 'tall'];
 const CUTS = [...SITE_CUTS, 'vertical'];
 const SOCIAL_NAME = { wide: '16x9', tall: '4x5', vertical: '9x16' };
 /**
- * The poster: the team scene, the agents under the line that says what they do. The wide cut waits for
- * the whole roster (16 s); the phone cut stops at its first two rows (12.5 s), so its bottom stays
- * empty for the play pill (e2e/explainer-poster.spec.ts). Frames at 60 fps.
+ * The poster: Pick a card, the hand of four dealt under the line that says what a card is (11.5 s,
+ * before one is lifted). The play pill sits over empty paper at the bottom left in both cuts
+ * (e2e/explainer-poster.spec.ts). Frames at 60 fps.
  */
-const POSTER_FRAME = { 'explainer-wide': 960, 'explainer-tall': 750 };
+const POSTER_FRAME = { 'explainer-wide': 690, 'explainer-tall': 690 };
 const posterFrame = (composition) => POSTER_FRAME[composition.id];
+/** The preview loop: 8 s from the start of Pick a card (bar 4 in timeline.ts SCENES), per cut's size. */
+const LOOP = { from: 8, seconds: 8, size: { wide: '1280:720', tall: '720:900' } };
 
 function chrome() {
   if (process.env.REMOTION_CHROME) return process.env.REMOTION_CHROME;
@@ -79,8 +81,8 @@ async function main() {
     const out = join(site, 'public', 'video');
     mkdirSync(out, { recursive: true });
     for (const cut of SITE_CUTS) {
-      for (const ext of ['mp4', 'webm', 'jpg']) {
-        const name = ext === 'jpg' ? `explainer-${cut}-poster.jpg` : `explainer-${cut}.${ext}`;
+      for (const ext of ['mp4', 'webm', 'jpg', 'loop']) {
+        const name = ext === 'jpg' ? `explainer-${cut}-poster.jpg` : ext === 'loop' ? `explainer-${cut}-loop.mp4` : `explainer-${cut}.${ext}`;
         copyFileSync(join(dist, name), join(out, name));
         console.log(`published ${name} (${size(join(out, name))})`);
       }
@@ -137,6 +139,10 @@ async function main() {
       ffmpeg('-i', master, '-c:v', 'libx264', '-preset', 'slow', '-tune', 'animation', '-crf', '25', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', mp4);
       const webm = join(dist, `explainer-${cut}.webm`);
       ffmpeg('-i', master, '-c:v', 'libsvtav1', '-preset', '5', '-crf', '44', '-pix_fmt', 'yuv420p', '-c:a', 'libopus', '-b:a', '128k', webm);
+      // The poster's muted preview loop (docs/specs/free-games-home.md): the first 8 s of Pick a card,
+      // silent, at 30 fps and the poster's 720 size, about 130 KB.
+      const loop = join(dist, `explainer-${cut}-loop.mp4`);
+      ffmpeg('-ss', String(LOOP.from), '-t', String(LOOP.seconds), '-i', master, '-an', '-vf', `fps=30,scale=${LOOP.size[cut]}:flags=lanczos`, '-c:v', 'libx264', '-preset', 'slow', '-tune', 'animation', '-b:v', '125k', '-maxrate', '160k', '-bufsize', '320k', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', loop);
       rmSync(master);
       const poster = join(dist, `explainer-${cut}-poster.jpg`);
       await renderStill({ serveUrl, composition, frame: posterFrame(composition), output: poster, browserExecutable, imageFormat: 'jpeg', jpegQuality: 90 });
