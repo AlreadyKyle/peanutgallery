@@ -59,7 +59,7 @@ Columns:
 | Q-047 | Visual baselines: Playwright screenshots of every route at 375 and 1440 px in CI, with masks for live data, so the release candidate compares against the last release | design | M4 | M | any | research | todo |
 | Q-049 | /studio/history's era rows say only "Not reached yet"; show each era's unlock line, which the studio data already holds | design | M1 | S | any | daily 2026-10-22 | todo |
 | Q-050 | `docs/PLAN.md` §7 says X waits for the marketing engine's keys, while `docs/specs/marketing-engine.md` leaves X out (Kyle posts X himself, decision 77). Make §7 say what is true | hygiene | M1 | S | any | daily 2026-10-22 | todo |
-| Q-051 | Ship Replays: each shipped card gets a 20 to 30 second before-and-after clip with its timeline, made by the capture tool unattended, shown on the card page and passed to the marketing engine and the weekly report | growth | M3 | M | any | Kyle 2026-10-26 | todo |
+| Q-051 | Ship Replays: each shipped card gets a 20 to 30 second before-and-after clip with its timeline, made by the capture tool unattended, shown on the card page and passed to the marketing engine and the weekly report | growth | M3 | M | any | Kyle 2026-10-26 | doing |
 | Q-052 | Follow it live: the thanks page after checkout tracks the funded card's stage through to live | product | M3 | M | any | Kyle 2026-10-26 | todo |
 | Q-053 | This week, in public: the week's players, cards funded, cards shipped and contributions from public records, which fills the weekly report's numbers | growth | M3 | S | any | Kyle 2026-10-26 | todo |
 
