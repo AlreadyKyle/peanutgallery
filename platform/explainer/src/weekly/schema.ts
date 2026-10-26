@@ -83,17 +83,16 @@ export type Segment = {
 export type WeekProps = {
   /** The week's last day, ISO (also the captures folder's name). */
   date: string;
-  /** The label over the intro's headline, such as "The week to 20 October 2026". */
-  label: string;
-  /** The intro: the headline, the studio's one line, and the capture behind it. */
-  intro: { headline: string; support: string; shot: Shot };
   segments: Segment[];
   /** The closing plate: one line a beat, each with its site glyph, then the address. */
   outro: { lines: { glyph: GlyphName; text: string }[]; address: string };
 };
 
 /** The composition's input: which week, which cut, and the rects the capture script measured. */
-export type WeeklyInput = { format: 'wide' | 'tall'; week: string; rects?: Rects };
+/** The cuts: 16:9, and 9:16 for Reels and TikTok. */
+export type WeeklyCut = 'wide' | 'vertical';
+
+export type WeeklyInput = { format: WeeklyCut; week: string; rects?: Rects };
 
 export function isCapture(shot: Shot): shot is Extract<Shot, { src: string }> {
   return 'src' in shot;

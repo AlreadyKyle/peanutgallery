@@ -1,11 +1,11 @@
 import * as Tone from 'tone';
 import { BAR, FPS } from '../timeline';
-import { CLOSE, layout, PLATE, ringStart } from './layout';
+import { CLOSE, layout, PLATE, ringStart, segmentShown, WIPE_AT } from './layout';
 import type { WeekProps } from './schema';
 
 // The weekly video's soundtrack, the explainer's band and key (D major, 120 BPM, the same four
 // chords) laid on the week's own timeline from layout.ts, so each sound lands on its frame: the mark
-// building up, a soft flick as each capture comes in, a rising note as each segment starts, a tick as
+// building up, a soft flick as each capture comes in, a whoosh across each wipe, a rising note as each segment starts, a tick as
 // each ring draws, and the closing chords. scripts/music.mjs renders it offline with --weekly <date>.
 
 type Chord = { root: string; pad: string[]; arp: string[] };
@@ -139,9 +139,16 @@ export async function render(week: WeekProps): Promise<Tone.ToneAudioBuffer> {
     bloop(bar(PLATE.blink), 'A5', 0.7);
     sweep(bar(PLATE.collapse), 0.9, 300, 2600);
 
-    // Each segment: a rising note a step higher than the last. Each beat: a flick as its capture
+    // Each wipe: a whoosh up as the bands cross, and one down as they leave.
+    plan.wipes.forEach((w) => {
+      const from = w.start - WIPE_AT.lead;
+      sweep(sec(from), sec(WIPE_AT.band + WIPE_AT.stagger * 2), 400, 3200);
+      sweep(sec(from + WIPE_AT.out), sec(WIPE_AT.band + WIPE_AT.stagger * 2), 3200, 400);
+    });
+
+    // Each segment: a rising note a step higher than the last, as its number lands. Each beat: a flick as its capture
     // comes in. Each ring: a tick and a soft bell.
-    plan.segments.forEach((s, i) => bloop(sec(s.start), PENT[i % PENT.length]!));
+    plan.segments.forEach((_, i) => bloop(sec(segmentShown(plan, i)), PENT[i % PENT.length]!));
     plan.beats.forEach((placed, i) => {
       if (i > 0 && placed.index > 0) flick.triggerAttackRelease(0.06, sec(placed.start), 0.7);
       if (placed.beat.ring !== undefined) {

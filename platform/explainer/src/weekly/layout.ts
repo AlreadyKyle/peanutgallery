@@ -19,6 +19,22 @@ export const PLATE = {
   content: 2.0,
 };
 
+/** The wipe between two segments: half a bar of its own, so it hides no words. */
+export const WIPE = 0.5;
+
+/**
+ * The wipe's moves, in frames from `lead` before its slot: three bands sweep in a few frames apart,
+ * the segment's number pops on the last (ink) band at `pop`, and the bands sweep on out, ink first,
+ * from `out`, uncovering the words' column first.
+ */
+export const WIPE_AT = { lead: 12, stagger: 5, band: 20, pop: 26, out: 58 };
+
+/** The frame a segment takes over the top bar's counter: its wipe's pop, or its start for the first. */
+export function segmentShown(plan: Pick<Layout, 'segments' | 'wipes'>, s: number): number {
+  const wipe = plan.wipes.find((w) => w.segment === s);
+  return wipe === undefined ? plan.segments[s]!.start : wipe.start - WIPE_AT.lead + WIPE_AT.pop;
+}
+
 /** The closing plate, in bars from its start. */
 export const CLOSE = { expand: 0, lines: [0.75, 1.125, 1.5, 1.875], address: 2.0, blink: 2.5, bars: 3 };
 export const TAIL = BEAT * 2;
@@ -29,7 +45,10 @@ export const TAIL = BEAT * 2;
  * headline alone. `opener` adds to a segment's first beat; it is 0, since the label comes in with
  * the headline and holds for the whole segment.
  */
-export const HOLD = { headline: 1.25, support: 1.75, long: 2.0, opener: 0, list: 1.25, intro: 2.0 };
+export const HOLD = { headline: 1.25, support: 1.75, long: 2.0, opener: 0, list: 1.25 };
+
+/** The longest a week may run, in seconds: past this the video drags. */
+export const MAX_SECONDS = 45;
 
 /** A beat's length in bars, from its words unless the props say. */
 export function beatBars(beat: Beat, segment: Segment | null, first: boolean): number {
@@ -42,7 +61,6 @@ export function beatBars(beat: Beat, segment: Segment | null, first: boolean): n
 
 export type PlacedBeat = {
   beat: Beat;
-  /** -1 for the intro. */
   segment: number;
   /** The beat's index inside its segment. */
   index: number;
@@ -53,6 +71,8 @@ export type PlacedBeat = {
 export type Layout = {
   beats: PlacedBeat[];
   segments: { title: string; start: number; end: number }[];
+  /** The wipe before each segment after the first: its slot's first frame and its length. */
+  wipes: { segment: number; start: number; length: number }[];
   /** The closing plate's first frame. */
   outro: number;
   duration: number;
@@ -63,11 +83,13 @@ export type Layout = {
 export function layout(week: WeekProps): Layout {
   const beats: PlacedBeat[] = [];
   let bar = PLATE.content;
-  const introBars = HOLD.intro;
-  beats.push({ beat: { ...week.intro }, segment: -1, index: 0, start: Math.round(bar * BAR), length: Math.round(introBars * BAR) });
-  bar += introBars;
   const segments: Layout['segments'] = [];
+  const wipes: Layout['wipes'] = [];
   week.segments.forEach((segment, s) => {
+    if (s > 0) {
+      wipes.push({ segment: s, start: Math.round(bar * BAR), length: Math.round(WIPE * BAR) });
+      bar += WIPE;
+    }
     const from = bar;
     segment.beats.forEach((beat, i) => {
       const n = beatBars(beat, segment, i === 0);
@@ -78,7 +100,7 @@ export function layout(week: WeekProps): Layout {
   });
   const outro = Math.round(bar * BAR);
   bar += CLOSE.bars;
-  return { beats, segments, outro, duration: Math.round(bar * BAR) + TAIL, bars: bar };
+  return { beats, segments, wipes, outro, duration: Math.round(bar * BAR) + TAIL, bars: bar };
 }
 
 export const seconds = (frames: number) => frames / FPS;

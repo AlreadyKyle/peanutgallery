@@ -3,12 +3,10 @@ import { at } from './anim';
 import { Caption } from './components/Caption';
 import { Closing } from './components/Closing';
 import { TopBar } from './components/TopBar';
-import { script, stepHeadings } from './data';
+import { script } from './data';
 import { FORMATS, type FormatName } from './format';
 import { Intro } from './scenes/Intro';
 import { Journey } from './scenes/Journey';
-import { Ledger } from './scenes/Ledger';
-import { Team } from './scenes/Team';
 import { C } from './theme';
 import { CHOREO, SCENES, sceneLength, sceneStart } from './timeline';
 
@@ -22,20 +20,16 @@ export function Explainer({ format: name, social = false }: ExplainerProps) {
   const frame = useCurrentFrame();
   const format = FORMATS[name];
   const journeyStart = sceneStart('pick');
-  const journeyEnd = sceneStart('ledger');
+  const journeyEnd = sceneStart('outro');
+  // The steps the video shows, numbered in the order it shows them.
+  const steps = script.beats.flatMap((beat) => (beat.step === null ? [] : [beat.step]));
   return (
     <AbsoluteFill style={{ background: C.paper }}>
       <Sequence from={sceneStart('intro')} durationInFrames={sceneLength('intro')} layout="none">
         <Intro format={format} />
       </Sequence>
-      <Sequence from={sceneStart('team')} durationInFrames={sceneLength('team')} layout="none">
-        <Team format={format} />
-      </Sequence>
       <Sequence from={journeyStart} durationInFrames={journeyEnd - journeyStart} layout="none">
         <Journey format={format} />
-      </Sequence>
-      <Sequence from={sceneStart('ledger')} durationInFrames={sceneLength('ledger')} layout="none">
-        <Ledger format={format} />
       </Sequence>
 
       {SCENES.filter((scene) => scene.id !== 'outro').map((scene) => {
@@ -43,7 +37,7 @@ export function Explainer({ format: name, social = false }: ExplainerProps) {
         const start = sceneStart(scene.id);
         const moments = CHOREO[scene.id];
         const lineAt = at('line' in moments ? moments.line : 0);
-        const number = beat.step === null ? -1 : stepHeadings.indexOf(beat.step);
+        const number = beat.step === null ? -1 : steps.indexOf(beat.step);
         return (
           <Sequence key={scene.id} from={start} durationInFrames={sceneLength(scene.id)} layout="none">
             <Caption

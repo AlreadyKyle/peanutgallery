@@ -5,7 +5,7 @@ import { plateLockup } from '../components/TopBar';
 import { labels } from '../data';
 import { C, EASE_IN_OUT, FONT } from '../theme';
 import type { WeeklyGeometry } from './geometry';
-import { CLOSE, PLATE, type Layout } from './layout';
+import { CLOSE, PLATE, segmentShown, type Layout } from './layout';
 import type { WeekProps } from './schema';
 
 // The explainer's black plate, on the weekly clock: the mark builds up in the middle, the plate folds
@@ -71,7 +71,9 @@ export function Plate({ frame, g, plan, week }: { frame: number; g: WeeklyGeomet
   const blinks = [...plan.segments.map((s) => s.start + 6), plan.outro + at(CLOSE.blink)];
   const letters = labels.wordmark.split('');
 
-  const segIndex = plan.segments.findIndex((s) => frame >= s.start && frame < s.end);
+  // The counter moves on as each wipe shows the next segment's number.
+  const shown = plan.segments.map((_, i) => frame >= segmentShown(plan, i)).lastIndexOf(true);
+  const segIndex = frame >= plan.outro ? -1 : shown;
   const railIn = progress(frame, plan.segments[0]!.start - 24, 24) - progress(frame, plan.outro - 24, 24);
 
   const lines = closing(g, count);
@@ -110,7 +112,7 @@ export function Plate({ frame, g, plan, week }: { frame: number; g: WeeklyGeomet
             {plan.segments.map((s, i) => {
               const active = i === segIndex;
               const done = segIndex > i;
-              const on = active ? progress(frame, s.start, 12) : 0;
+              const on = active ? progress(frame, segmentShown(plan, i), 12) : 0;
               return (
                 <span
                   key={s.title}

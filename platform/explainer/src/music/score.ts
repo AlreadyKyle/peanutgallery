@@ -33,13 +33,10 @@ const HOOK: [number, string, number][] = [
 
 // Where the music is: bars from the start of the video.
 const S = {
-  groove: sceneBar('intro') + 3,
-  team: sceneBar('team'),
+  groove: sceneBar('intro') + 2,
   pick: sceneBar('pick'),
   build: sceneBar('build'),
-  checks: sceneBar('checks'),
   shipped: sceneBar('shipped'),
-  ledger: sceneBar('ledger'),
   outro: sceneBar('outro'),
   end: TOTAL_BARS,
 };
@@ -167,11 +164,10 @@ export async function render(): Promise<Tone.ToneAudioBuffer> {
       const c = chord(n);
       const t0 = bar(n);
       const inOutro = n >= S.outro;
-      // The pad holds every bar; the checks open its filter bar by bar, the shipped section keeps it open.
+      // The pad holds every bar; the build opens its filter bar by bar, the shipped section keeps it open.
       if (n < S.end - 1) pad.triggerAttackRelease(c.pad, SPB * 0.98, t0, n === 0 ? 0.6 : 0.8);
-      if (n >= S.checks && n < S.shipped) padFilter.frequency.setValueAtTime(900 + (n - S.checks + 1) * 450, t0);
+      if (n >= S.build && n < S.shipped) padFilter.frequency.setValueAtTime(900 + (n - S.build + 1) * 300, t0);
       if (n === S.shipped) padFilter.frequency.setValueAtTime(2200, t0);
-      if (n === S.ledger) padFilter.frequency.setValueAtTime(1300, t0);
       if (n === S.outro) {
         padFilter.frequency.setValueAtTime(1300, t0);
         padFilter.frequency.linearRampToValueAtTime(800, t0 + SPB * 2);
@@ -179,7 +175,7 @@ export async function render(): Promise<Tone.ToneAudioBuffer> {
 
       const grooving = n >= S.groove && !inOutro;
       if (!grooving) continue;
-      const full = n >= S.shipped && n < S.ledger;
+      const full = n >= S.shipped && n < S.outro;
       const busy = n >= S.build && n < S.shipped;
       for (let beat = 0; beat < 4; beat += 1) {
         const tb = t0 + (beat * SPB) / 4;
@@ -207,12 +203,16 @@ export async function render(): Promise<Tone.ToneAudioBuffer> {
       }
     }
 
-    // The hook: over the shipped section, and softly again on the closing plate.
-    const playHook = (from: number, synth: Tone.PolySynth<Tone.FMSynth>, velocity: number) => {
-      for (const [beat, note, beats] of HOOK) synth.triggerAttackRelease(note, (beats * SPB) / 4, bar(from) + (beat * SPB) / 4, velocity);
+    // The hook: over the shipped section, and softly again on the closing plate, each cut to its
+    // section's bars so the two never overlap.
+    const playHook = (from: number, to: number, synth: Tone.PolySynth<Tone.FMSynth>, velocity: number) => {
+      for (const [beat, note, beats] of HOOK) {
+        if (beat >= (to - from) * 4) continue;
+        synth.triggerAttackRelease(note, (Math.min(beats, (to - from) * 4 - beat) * SPB) / 4, bar(from) + (beat * SPB) / 4, velocity);
+      }
     };
-    playHook(S.shipped, lead, 0.9);
-    playHook(S.outro, bell, 0.4);
+    playHook(S.shipped, S.outro, lead, 0.9);
+    playHook(S.outro, S.end, bell, 0.4);
 
     // ---- The opening: the mark builds up note by note ---------------------------------------------
     const intro = CHOREO.intro;
@@ -229,25 +229,11 @@ export async function render(): Promise<Tone.ToneAudioBuffer> {
     bloop(at('intro', intro.tag), 'D5');
     sweep(at('intro', intro.exit), 0.6, 1800, 400);
 
-    // ---- The team pops up, one agent an eighth ------------------------------------------------------
-    const pent = ['D5', 'E5', 'F#5', 'A5', 'B5', 'D6', 'E6', 'F#6', 'A6'];
-    CHOREO.team.pops.forEach((b, i) => bloop(at('team', b), pent[i]!));
-    CHOREO.team.blinks.forEach((b) => bloop(at('team', b), 'A6', 0.8));
-    sweep(at('team', CHOREO.team.exit), 0.5, 1800, 400);
-
     // ---- Pick: five cards dealt, one lifted ----------------------------------------------------------
     CHOREO.pick.deal.forEach((b) => flick.triggerAttackRelease(0.06, at('pick', b)));
     sweep(at('pick', CHOREO.pick.lift), 0.5, 400, 2400);
     bell.triggerAttackRelease(['A5', 'D6'], 0.8, at('pick', CHOREO.pick.target), 0.5);
     sweep(at('pick', CHOREO.pick.exit), 0.4, 1600, 500);
-
-    // ---- Split: the coin lands, the handle clicks along, the coin parts ----------------------------------
-    const sp = CHOREO.split;
-    coin.triggerAttackRelease(['B5', 'E6'], 0.4, at('split', sp.coin) + 0.18, 0.9);
-    coin.triggerAttackRelease('E6', 0.25, at('split', sp.coin) + 0.34, 0.4);
-    sp.handle.forEach((b, i) => tick.triggerAttackRelease(i % 2 === 0 ? 'E5' : 'A5', 0.05, at('split', b)));
-    sweep(at('split', sp.part), 0.5, 900, 2800);
-    coin.triggerAttackRelease(['A5', 'D6'], 0.4, at('split', sp.land), 0.8);
 
     // ---- Fills: four coins, each a step higher, then the flip to Funded ------------------------------------
     const coinNotes: [string, string][] = [['A5', 'D6'], ['B5', 'E6'], ['C#6', 'F#6'], ['D6', 'A6']];
@@ -265,16 +251,6 @@ export async function render(): Promise<Tone.ToneAudioBuffer> {
       if (i === CHOREO.build.events.length - 1) bell.triggerAttackRelease('A5', 0.6, at('build', b), 0.5);
     });
 
-    // ---- Checks: the flip, the phone, the play bot's taps, two passes -------------------------------------
-    const ch = CHOREO.checks;
-    for (const d of [0, 0.22, 0.44]) bloop(at('checks', ch.flip) + d, 'F#5', 1.3);
-    sweep(at('checks', ch.flip), 0.35, 700, 3000);
-    sweep(at('checks', ch.phone), 0.6, 500, 1800);
-    ch.taps.forEach((b) => tick.triggerAttackRelease('A4', 0.05, at('checks', b), 0.9));
-    bell.triggerAttackRelease(['A5', 'E6'], 0.8, at('checks', ch.passed[0]), 0.7);
-    bell.triggerAttackRelease(['D6', 'F#6', 'A6'], 1.2, at('checks', ch.passed[1]), 0.8);
-    sweep(at('checks', ch.exit), 0.5, 1800, 400);
-
     // ---- Shipped: the flip, the stamp, the pile, the slam ----------------------------------------------------
     const sh = CHOREO.shipped;
     sweep(at('shipped', sh.flip), 0.35, 700, 3000);
@@ -282,10 +258,6 @@ export async function render(): Promise<Tone.ToneAudioBuffer> {
     [0, 15, 30].forEach((d) => hit(at('shipped', sh.pile) + (d + 10) / FPS));
     hit(at('shipped', sh.slam), true);
     sweep(at('shipped', sh.exit), 0.5, 1800, 400);
-
-    // ---- The ledger: each row a soft coin -------------------------------------------------------------------
-    CHOREO.ledger.rows.forEach((b, i) => coin.triggerAttackRelease(pent[i + 1]!, 0.3, at('ledger', b), 0.45));
-    sweep(at('ledger', CHOREO.ledger.exit), 0.5, 1600, 400);
 
     // ---- The close: the plate unfolds, the wordmark rings, a last blink, the chord rings out ---------------
     const o = CHOREO.outro;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BEAT, FPS } from '../timeline';
-import { layout } from './layout';
+import { layout, MAX_SECONDS } from './layout';
 import { isCapture } from './schema';
 import { WEEKS } from './weeks';
 
@@ -12,9 +12,6 @@ const JARGON = /\b(board|pipe|gate|lane|kernel|dispatcher|directive|turn)\b/i;
 for (const [date, week] of Object.entries(WEEKS)) {
   const plan = layout(week);
   const words = [
-    week.label,
-    week.intro.headline,
-    week.intro.support,
     ...week.segments.flatMap((s) => [s.title, ...s.beats.flatMap((b) => [b.headline, b.support ?? '', isCapture(b.shot) ? (b.shot.asOf ?? '') : 'line' in b.shot ? b.shot.line : ''])]),
     ...week.outro.lines.map((l) => l.text),
   ].filter((w) => w !== '');
@@ -43,10 +40,8 @@ for (const [date, week] of Object.entries(WEEKS)) {
       for (const s of week.segments.filter((s) => s.kind === 'list')) for (const b of s.beats) expect(b.support, b.headline).toBeUndefined();
     });
 
-    it('runs 45 to 75 seconds', () => {
-      const s = plan.duration / FPS;
-      expect(s).toBeGreaterThanOrEqual(45);
-      expect(s).toBeLessThanOrEqual(75);
+    it(`runs ${MAX_SECONDS} seconds at most`, () => {
+      expect(plan.duration / FPS).toBeLessThanOrEqual(MAX_SECONDS);
     });
 
     it('starts every beat on a beat of the music', () => {

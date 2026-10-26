@@ -28,7 +28,7 @@ Columns:
 | Q-016 | Bluesky and Mastodon keys (`MANUAL-STEPS.md` steps 1 and 2), then `MARKETING_ENV` rebuilt with a dry run | marketing | M2 | S | Kyle | MANUAL-STEPS | optional |
 | Q-017 | Show HN ready: the game loads with no account, the landing page explains itself in one screen, and Kyle has a draft comment to rewrite in his own words | marketing | M2 | S | any | PLAN §7 | todo |
 | Q-018 | The press list in §7: a one-paragraph pitch for each outlet, sent by Kyle once the Reddit and HN numbers exist | marketing | M3 | S | Kyle | PLAN §7 | todo |
-| Q-019 | The weekly video every Tuesday from the release notes, horizontal, from `platform/explainer` | marketing | M3 | S | any | Kyle 2026-10-20 | running |
+| Q-019 | The weekly video every Tuesday from the release notes, 16:9 and 9:16 (Instagram, TikTok), from `platform/explainer` | marketing | M3 | S | any | Kyle 2026-10-20 | running |
 | Q-020 | The studio's Anthropic key moves to its new Console organisation (the reminder fires on 27 October 2026), then the dispatcher's probe is confirmed | agents | M1 | S | Kyle, Mac | memory | todo |
 | Q-021 | Discord ready for strangers: rules, the ship posts channel, a support path and a moderation path | community | M2 | S | Kyle | operating-system §4 | todo |
 | Q-022 | Support: an FAQ line for sign-in trouble; hello@clayhouse.studio answered (Kyle is not the group's owner, per MANUAL-STEPS) | community | M2 | S | Kyle | MANUAL-STEPS | todo |

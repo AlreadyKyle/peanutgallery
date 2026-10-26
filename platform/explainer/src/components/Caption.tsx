@@ -3,7 +3,7 @@ import { progress, tween } from '../anim';
 import type { Format } from '../format';
 import { C, EASE_IN, FONT } from '../theme';
 
-// A scene's words: the step's number and heading (the six steps of /how-it-works), then the line,
+// A scene's words: the step's number and heading (steps of /how-it-works), then the line,
 // word by word. Each word rises out of its own slot, a few frames after the one before, and the
 // block lifts away as the scene ends. Sentence case, upright, ink on paper or paper on ink.
 
