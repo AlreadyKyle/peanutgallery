@@ -1,6 +1,6 @@
 # QUEUE: everything the team could do
 
-The pool, with no order of its own. [NOW.md](NOW.md) is the order. A row is one item, and its done line says how we would know. `docs/BACKLOG.md` stays the public card backlog the studio's agents build from, and a row here that becomes a card names its entry. Rows come from Kyle (`source: Kyle <date>`, paraphrased, because this file is public), the scout (`scout <date>`), the sweep, a review or the audit of 20 October 2026. The daily adds rows, strikes done ones with their pull request, and keeps ids stable; the next free id is Q-051.
+The pool, with no order of its own. [NOW.md](NOW.md) is the order. A row is one item, and its done line says how we would know. `docs/BACKLOG.md` stays the public card backlog the studio's agents build from, and a row here that becomes a card names its entry. Rows come from Kyle (`source: Kyle <date>`, paraphrased, because this file is public), the scout (`scout <date>`), the sweep, a review or the audit of 20 October 2026. The daily adds rows, strikes done ones with their pull request, and keeps ids stable; the next free id is Q-054.
 
 Columns:
 - **M:** the milestone in [MILESTONES.md](MILESTONES.md).
@@ -37,7 +37,7 @@ Columns:
 | Q-025 | Return after ship: the first player-funded card that ships sends its ship notice and follow emails, and they are read back | product | M2 | S | Mac | ROADMAP | todo |
 | Q-026 | Dust's welcome-back credit counts up as it lands (VISION §6, `seed-1/render/scene.ts`), and is skipped under reduced motion | game | M3 | S | any | VISION | todo |
 | Q-027 | Shipped-in-game marker: a one-time note in Dust naming the card behind a new unit or unlock (VISION §4 item 12) | game | M3 | M | any | VISION | todo |
-| Q-028 | Dust depth: the next mechanics, so the incremental crowd stays past four minutes (the gate for r/incremental_games) | game | M3 | L | any | PLAN §7 | parked |
+| Q-028 | Dust depth: the next mechanics, so the incremental crowd stays past four minutes (the gate for r/incremental_games) | game | M3 | L | any | PLAN §7 | todo |
 | Q-029 | Each card's link preview names its bar state in words (VISION §6, ShareCard) | growth | M3 | S | any | VISION | todo |
 | Q-030 | A creative guide for Dust (BACKLOG entry) | design | M3 | M | any | BACKLOG | todo |
 | Q-031 | Record Dust's game quality score with the Game Director's rubric (`docs/strategy/game-quality.md`) | game | M4 | S | any | audit | todo |
@@ -59,6 +59,9 @@ Columns:
 | Q-047 | Visual baselines: Playwright screenshots of every route at 375 and 1440 px in CI, with masks for live data, so the release candidate compares against the last release | design | M4 | M | any | research | todo |
 | Q-049 | /studio/history's era rows say only "Not reached yet"; show each era's unlock line, which the studio data already holds | design | M1 | S | any | daily 2026-10-22 | todo |
 | Q-050 | `docs/PLAN.md` §7 says X waits for the marketing engine's keys, while `docs/specs/marketing-engine.md` leaves X out (Kyle posts X himself, decision 77). Make §7 say what is true | hygiene | M1 | S | any | daily 2026-10-22 | todo |
+| Q-051 | Ship Replays: each shipped card gets a 20 to 30 second before-and-after clip with its timeline, made by the capture tool unattended, shown on the card page and passed to the marketing engine and the weekly report | growth | M3 | M | any | Kyle 2026-10-26 | todo |
+| Q-052 | Follow it live: the thanks page after checkout tracks the funded card's stage through to live | product | M3 | M | any | Kyle 2026-10-26 | todo |
+| Q-053 | This week, in public: the week's players, cards funded, cards shipped and contributions from public records, which fills the weekly report's numbers | growth | M3 | S | any | Kyle 2026-10-26 | todo |
 
 ## Parked
 

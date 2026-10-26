@@ -44,7 +44,7 @@ Work in the rhythm worktree, `/Users/kylesmith/GitHub/mobmachine/.claude/worktre
 1. Tag `release-<date>` at the merge commit, push it, and create a GitHub release with the notes: `gh release create release-<date> --notes-file docs/build/releases/<date>.md`.
 2. Fast-forward `next`: `git push origin origin/main:next`. This is a fast-forward because `next` is an ancestor. If it is refused, merge `main` into `next` instead, and never force.
 3. Comment on the release pull request with the merge sha and the live-check first line (CLAUDE.md, Long runs and merging).
-4. Delete every merged `build/*` and release branch, and remove their worktrees. Close QUEUE rows that shipped with the release tag.
+4. Delete every merged `build/*` and release branch, then run `bash scripts/tidy-local.sh` in the main checkout and quote its last line. Close QUEUE rows that shipped with the release tag.
 5. On `next`, append the result to `docs/build/releases/<date>.md`: shipped at the merge sha, the live-check line, and the production steps run. Tick `docs/ROADMAP.md` for any spec the train finished. Commit and push both to `next`, where they ride the next train. Docs-only commits by the routines go straight to `next`. Everything else goes through a pull request.
 6. Send Kyle the release report with `SendUserFile` (status proactive), with these lines:
    - shipped (or held, or rolled back), and why;
