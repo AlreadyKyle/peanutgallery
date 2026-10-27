@@ -6,7 +6,7 @@ import { changedLines, idName, plainCheck } from '../lib/config-words';
 import { LAST_VISIT_KEY, readLastVisit, shippedSince, SINCE_LIMIT, writeLastVisit } from '../lib/last-visit';
 import { legal } from '../lib/legal';
 import type { Card, Snapshot } from '../lib/source';
-import { currentStep } from '../pages/Thanks';
+import { currentStep, stepState } from '../pages/Thanks';
 import { CardFace } from './Card';
 import { closestToFunded, leftLine } from './Funding';
 import { SinceLastVisit } from './SinceLastVisit';
@@ -222,5 +222,13 @@ describe("/thanks's next step", () => {
     expect(currentStep('live')).toBe('live');
     expect(currentStep('proposed')).toBeNull();
     expect(currentStep(undefined)).toBeNull();
+  });
+
+  it('marks the steps before the current one done, and every step next while the card is open', () => {
+    const states = (now: ReturnType<typeof currentStep>) => (['drafting', 'building', 'gate', 'live'] as const).map((step) => stepState(step, now));
+    expect(states('drafting')).toEqual(['now', 'next', 'next', 'next']);
+    expect(states('gate')).toEqual(['done', 'done', 'now', 'next']);
+    expect(states('live')).toEqual(['done', 'done', 'done', 'now']);
+    expect(states(null)).toEqual(['next', 'next', 'next', 'next']);
   });
 });

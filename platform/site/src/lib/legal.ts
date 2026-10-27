@@ -482,6 +482,13 @@ export const legal = {
       { key: 'live', label: 'Live', body: 'It ships in the game for everyone.' },
     ],
     nextNow: 'Now',
+    // Follow it live (docs/specs/supporter-loop.md, Q-052): the steps the card has passed, and what
+    // to open at the step it is on.
+    nextDone: 'Done',
+    watchBuild: 'Watch it being built',
+    liveSince: 'Live since {date}.',
+    seeShipped: 'See what shipped',
+    playIt: 'Play it in Dust',
     shipEmail: 'When it goes live, the studio emails you a ship notice.',
     shareLede: 'Share the card, so friends can follow it too.',
   },

@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { DISCORD_INVITE } from './fixture-env';
+import { DISCORD_INVITE, PLAY_URL } from './fixture-env';
 import { fetchProbe } from './fetch-probe';
 import { copy } from '../src/lib/copy';
 import { expect, mockStudio, test } from './fixtures';
@@ -214,9 +214,28 @@ test('a recorded payment draws the card it went to with the supporter number on 
   await expect(steps.locator('strong')).toHaveText(['Waiting', 'Building', 'Checks', 'Live']);
   // The fixture's card is being built, so Building is the current step.
   await expect(reward.locator('[aria-current="step"]')).toHaveAttribute('data-step', 'building');
+  // Follow it live (Q-052): Waiting is behind it, Checks and Live ahead, and the build is one click away.
+  expect(await steps.evaluateAll((lis) => lis.map((li) => li.getAttribute('data-state')))).toEqual(['done', 'now', 'next', 'next']);
+  await expect(steps.nth(0).locator('.thanks-done')).toHaveText('Done');
+  await expect(steps.nth(1).getByRole('link', { name: 'Watch it being built' })).toHaveAttribute('href', `/card/${BUILDING_CARD_ID}`);
+  await expect(face.getByRole('status')).toHaveText('Being built now.');
   await expect(reward.locator('[data-note="ship-email"]')).toHaveText('When it goes live, the studio emails you a ship notice.');
   const order = await page.locator('main section').evaluateAll((sections) => sections.map((s) => s.getAttribute('aria-labelledby')));
   expect(order.indexOf('reward')).toBeLessThan(order.indexOf('reached'));
+  expect(await reward.textContent()).not.toContain('$');
+});
+
+test('once the card is live, the steps are done and the band links what shipped and the game', async ({ page }) => {
+  await open(page, SESSIONS.shipped);
+  const reward = page.getByRole('region', { name: 'Your card' });
+  const steps = reward.locator('.thanks-next > li');
+  expect(await steps.evaluateAll((lis) => lis.map((li) => li.getAttribute('data-state')))).toEqual(['done', 'done', 'done', 'now']);
+  const shipped = reward.locator('[data-note="shipped"]');
+  await expect(shipped).toContainText('Live since');
+  await expect(shipped.getByRole('link', { name: 'See what shipped' })).toHaveAttribute('href', `/card/${LIVE_CARD_ID}`);
+  await expect(shipped.getByRole('link', { name: 'Play it in Dust' })).toHaveAttribute('href', PLAY_URL);
+  // The email promise is for a card not live yet.
+  await expect(reward.locator('[data-note="ship-email"]')).toHaveCount(0);
   expect(await reward.textContent()).not.toContain('$');
 });
 

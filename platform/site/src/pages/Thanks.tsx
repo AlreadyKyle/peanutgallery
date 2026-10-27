@@ -70,6 +70,52 @@ export function currentStep(stage: string | undefined): Step | null {
 }
 
 /**
+ * Follow it live (Q-052): each step before the one the card is on is done, that one is now and the
+ * rest are next. With no current step (still open, or not in the snapshot) every step is next.
+ */
+export function stepState(step: Step, now: Step | null): 'done' | 'now' | 'next' {
+  if (now === null) return 'next';
+  const keys = words.nextSteps.map((s) => s.key);
+  const at = keys.indexOf(now);
+  const here = keys.indexOf(step);
+  if (here < at) return 'done';
+  return here === at ? 'now' : 'next';
+}
+
+/** At the step the card is on, the one thing to open: the build as it happens, or what shipped. */
+function StepAction({ card, now }: { card: Card; now: Step }) {
+  if (now === 'building' || now === 'gate') {
+    return (
+      <>
+        {' '}
+        <Link to={`/card/${card.id}`}>{words.watchBuild}</Link>
+      </>
+    );
+  }
+  return null;
+}
+
+/** Once the card is live: the day it shipped, its page and, for a Dust card, the game. */
+function Shipped({ card }: { card: Card }) {
+  const play = card.folder === 'seed-1' ? siteEnv().playUrl : '';
+  return (
+    <div className="thanks-shipped" data-note="shipped">
+      {card.live_at === null ? null : <p>{words.liveSince.replace('{date}', formatDay(card.live_at))}</p>}
+      <p className="hero-actions">
+        <Link className="button" to={`/card/${card.id}`}>
+          {words.seeShipped}
+        </Link>
+        {play === '' ? null : (
+          <a className="button button-secondary" href={play}>
+            {words.playIt}
+          </a>
+        )}
+      </p>
+    </div>
+  );
+}
+
+/**
  * The reward (docs/specs/supporter-loop.md): the card the money went to first, drawn as a card with
  * the supporter's number on its face, then what happens to it next and its Share button. A payment
  * with no supporter number draws the face without one; nothing here holds an amount, email or name.
@@ -80,6 +126,7 @@ function RewardBand({ id, answer, snapshot }: { id: string; answer: Recorded; sn
   const title = card?.title ?? stopped?.title ?? words.cardFallback;
   const line = stateLine(card, stopped !== undefined, snapshot !== null && agentsOffline(snapshot));
   const now = stopped === undefined ? currentStep(card?.stage) : null;
+  const open = card !== undefined && OPEN_STAGES.has(card.stage) && card.funding_target_usd > 0;
   return (
     <section className="section thanks-reward" aria-labelledby="reward">
       <h2 id="reward" className="sr-only">
@@ -94,7 +141,11 @@ function RewardBand({ id, answer, snapshot }: { id: string; answer: Recorded; sn
         <h3>
           <Link to={`/card/${id}`}>{title}</Link>
         </h3>
-        {line === null ? null : <p className="card-meta">{line}</p>}
+        {/* The polled snapshot moves this line on its own, so a screen reader hears each new stage. */}
+        <p className="card-meta" role="status">
+          {line}
+        </p>
+        {open ? <FundingBar card={card} /> : null}
       </div>
       <p className="muted">{words.shareLede}</p>
       <ShareCard title={title} url={`${window.location.origin}/card/${id}`} />
@@ -102,14 +153,19 @@ function RewardBand({ id, answer, snapshot }: { id: string; answer: Recorded; sn
         <>
           <h3 id="next">{words.nextHeading}</h3>
           <ol className="thanks-next" aria-labelledby="next">
-            {words.nextSteps.map((step) => (
-              <li key={step.key} data-step={step.key} aria-current={now === step.key ? 'step' : undefined}>
-                <strong>{step.label}</strong> {step.body}
-                {now === step.key ? <span className="thanks-now"> {words.nextNow}</span> : null}
-              </li>
-            ))}
+            {words.nextSteps.map((step) => {
+              const state = stepState(step.key, now);
+              return (
+                <li key={step.key} data-step={step.key} data-state={state} aria-current={state === 'now' ? 'step' : undefined}>
+                  <strong>{step.label}</strong> {step.body}
+                  {state === 'now' ? <span className="thanks-now"> {words.nextNow}</span> : null}
+                  {state === 'done' ? <span className="thanks-done"> {words.nextDone}</span> : null}
+                  {state === 'now' && card !== undefined ? <StepAction card={card} now={step.key} /> : null}
+                </li>
+              );
+            })}
           </ol>
-          <p data-note="ship-email">{words.shipEmail}</p>
+          {now === 'live' && card !== undefined ? <Shipped card={card} /> : <p data-note="ship-email">{words.shipEmail}</p>}
         </>
       ) : null}
       {/* Keep this card (docs/specs/place.md): sign in with the receipt's email and the card is claimed. */}

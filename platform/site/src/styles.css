@@ -3812,7 +3812,8 @@ ol.timeline {
     grid-row: 2;
   }
 
-  main.sheet > .band:not(:first-child) > .thanks-reward > [data-note='ship-email'] {
+  main.sheet > .band:not(:first-child) > .thanks-reward > [data-note='ship-email'],
+  main.sheet > .band:not(:first-child) > .thanks-reward > [data-note='shipped'] {
     grid-row: 3;
   }
 
@@ -3874,6 +3875,21 @@ ol.timeline {
   border-radius: var(--radius);
   font-size: var(--size-small);
   font-weight: var(--weight-bold);
+}
+
+/* Follow it live (Q-052): a step the card has passed reads quieter, with its own stamp. */
+.thanks-next > li[data-state='done'] {
+  color: var(--muted);
+}
+
+.thanks-done {
+  margin-left: var(--space-1);
+  font-size: var(--size-small);
+  font-weight: var(--weight-bold);
+}
+
+.thanks-shipped > p {
+  margin: 0 0 var(--space-1);
 }
 
 /* /thanks: the cards a payment reached, as rows with their bar when open. */
