@@ -37,7 +37,8 @@ Out: site cards (only Dust is captured for now), sound, a vertical cut (the capt
 - [x] Step 1: the composer refuses captures with no differing picture, no shared state or a missing width.
 - [x] Step 1: the clip runs 20 to 30 seconds whether one state changed or two.
 - [x] Step 1: the clip uses the site's tokens (`replay.test.ts` holds them equal to `theme.ts`).
-- [ ] Step 2: a dispatcher ship of a Dust card makes its clip with no hand step.
+- [x] Step 2: a dispatcher ship of a Dust card makes its clip with no hand step (`.github/workflows/replay.yml`; `ship.test.ts`: only a squash commit with a Card-Id trailer that changes what Dust draws goes on, never a revert; the job waits for the card to be live and stops quietly on a card taken back out).
+- [x] Step 2: the replay job holds no credential, since it builds and draws card code (`platform/ops/test/ops.test.mjs`, as the gate).
 - [ ] Step 3: the card's document names the clip, and a card without one is unchanged.
 - [ ] Step 4: a replay plays on a shipped card's page on a deploy preview (Q-051's done line).
 - [ ] Step 5: the ship post links the clip.
@@ -47,6 +48,7 @@ Out: site cards (only Dust is captured for now), sound, a vertical cut (the capt
 - `pnpm --filter @backseat/explainer typecheck` and `pnpm --filter @backseat/explainer test`
 - Two captures, one with a change, then `node scripts/replay.mjs --before <dir> --after <dir> --card <card.json> --out <dir>` in `platform/explainer`, and `ffprobe` on the clip: 1280 by 720, 30 fps, h264, about 24 s. Every slide looked at.
 - The same run with two captures of one commit: refused with "nothing to show before and after".
+- Step 2: `node scripts/replay-ship.mjs check --sha <commit>` on a card commit and on a plain one; `card` against a document that goes live, one taken back out and an address that answers nothing; the workflow's draw and compose steps run by hand on a card commit.
 - `pnpm verify:changed`
 
 ## Evidence
@@ -57,8 +59,17 @@ Step 1 (the composer), in a cloud session on `origin/next` at 7aa4923:
 - Captures at 600 s and 3,600 s, 1280 px: `next` as before, and the same checkout with the Gatherer's rate raised from 0.25 to 0.4 (a stand-in for a config card) as after. The composer printed `replay: .../replay-00000000.mp4, 24 s, states 600, 3600`, and `ffprobe` read `codec_name=h264|width=1280|height=720|pix_fmt=yuv420p|r_frame_rate=30/1` and `duration=24.033333`; the file is 427 KB. The card document was a sample with the public document's shape, since the session cannot reach the site.
 - Captures of 86a43da and 44f2698 (a Dust change that draws no differently at those states): refused with `no picture differs between the captures: nothing to show before and after`.
 
+Step 2 (unattended), in a cloud session on `origin/next` at bf36ebc:
+
+- `vitest run src/replay`: `Tests 20 passed (20)`; `tsc -p tsconfig.json --noEmit` clean; `node --test test/ops.test.mjs` in `platform/ops`: `ok 3 - replay.yml reads contents only, persists no checkout credential and uses no secret`, `# pass 239`, `# fail 0`.
+- A local test commit with the dispatcher's message shape and the Gatherer's rate raised from 0.25 to 0.4: `check` printed `card=e1ee4792-abc0-4dc3-95fa-159b82ac38db`; its parent printed `skip: no Card-Id trailer, so not a card` and wrote `card=` (empty).
+- `card` against a local server that answered 503, then gated, then live: `card e1ee4792-... is live` and `live=true`; one that went rejected: `skip: card e1ee4792-... was taken back out, so this commit did not ship it` and `live=false`, exit 0; an address that answers nothing, 2 tries: `the card was not live after 2 tries: fetch failed`, exit 1.
+- The workflow's draw step run by hand (two worktrees, each with its own install, drawn by this checkout's capture tool): `capture: 6 pictures of 3 states at 1280x720` for each side. Its compose step: `replay: .../replay-e1ee4792.mp4, 24 s, states 600, 3600, 43ab598 to da25ac6` and `name=replay-e1ee4792`; ffprobe `codec_name=h264|width=1280|height=720|pix_fmt=yuv420p|r_frame_rate=30/1`, `duration=24.033333`, 417 KB. The same step with two captures of one commit: `skip: no picture differs`, exit 0, no artifact name.
+- Not yet run on Actions: no dispatcher card has shipped to `main` since the workflow landed. The first Dust card after the release is its live proof.
+
 ## Decisions
 
 - 2026-10-26: the composer lives in `platform/explainer`, not `seed-1/scripts/`. `seed-1/scripts/` is a protected path, and the explainer already owns the studio's video tooling and its tokens.
 - 2026-10-26: slides are drawn as pages by headless Chromium and joined by ffmpeg, not rendered by Remotion. A replay is a few held pictures, made unattended on a runner; Remotion's bundle and render would cost minutes for no motion the clip needs.
+- 2026-10-27: until step 3, the clip is kept as the run's artifact for 90 days. A commit that is not a card ship, a card taken back out and captures that draw the same each end the run green with a `skip:` line, so a red run means the clip should have been made and was not.
 - 2026-10-26: Dust only, captured at 1280 px. A site card's before and after is the gate's own frame pairs (`docs/PLAN.md` Appendix A, frames), which a later step can reuse.
