@@ -7,5 +7,8 @@ Columns are 7-day totals ending that day: home loads, Dust loads, presses into t
 | Day | Home | Dust | Play presses | Dust 4 min | Dust D1 | /contribute | Contributions | Shipped |
 |---|---|---|---|---|---|---|---|---|
 | 2026-10-26 | 185 | 70 | 6 | 6 | 4 | 7 | 0 | 0 |
+| 2026-10-26 (routine) | 101 | 58 | 5 | 6 | 3 | 6 | 0 | 0 |
 
 The baseline row was read by hand on 26 October 2026. No launch post had gone up, and no card had shipped since 10 October.
+
+The routine's rows sum `play_counts` over the seven UTC days ending that day (20 to 26 October for the first), and take contributions from `daily_metrics` `money.payments` and shipped cards from `cards.live`. The hand-read baseline's window still held 19 October, the day with 84 home loads, which is most of the drop to 101; read the two 26 October rows as different windows, not as a fall in one day.
