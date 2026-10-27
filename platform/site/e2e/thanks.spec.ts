@@ -231,7 +231,7 @@ test('once the card is live, the steps are done and the band links what shipped 
   const steps = reward.locator('.thanks-next > li');
   expect(await steps.evaluateAll((lis) => lis.map((li) => li.getAttribute('data-state')))).toEqual(['done', 'done', 'done', 'now']);
   const shipped = reward.locator('[data-note="shipped"]');
-  await expect(shipped).toContainText('Live since');
+  await expect(shipped.locator('p').first()).toHaveText(/^Live since 21\sSep\s2026\.$/);
   await expect(shipped.getByRole('link', { name: 'See what shipped' })).toHaveAttribute('href', `/card/${LIVE_CARD_ID}`);
   await expect(shipped.getByRole('link', { name: 'Play it in Dust' })).toHaveAttribute('href', PLAY_URL);
   // The email promise is for a card not live yet.

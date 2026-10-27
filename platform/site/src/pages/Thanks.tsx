@@ -6,7 +6,7 @@ import { ShareCard } from '../components/ShareCard';
 import { LinkedText } from '../components/TextPage';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
-import { formatDay, formatInteger } from '../lib/format';
+import { formatDate, formatDay, formatInteger } from '../lib/format';
 import { legal } from '../lib/legal';
 import { agentsOffline } from '../lib/offline';
 import type { Card, Snapshot } from '../lib/source';
@@ -100,7 +100,7 @@ function Shipped({ card }: { card: Card }) {
   const play = card.folder === 'seed-1' ? siteEnv().playUrl : '';
   return (
     <div className="thanks-shipped" data-note="shipped">
-      {card.live_at === null ? null : <p>{words.liveSince.replace('{date}', formatDay(card.live_at))}</p>}
+      {card.live_at === null ? null : <p>{words.liveSince.replace('{date}', formatDate(card.live_at))}</p>}
       <p className="hero-actions">
         <Link className="button" to={`/card/${card.id}`}>
           {words.seeShipped}
