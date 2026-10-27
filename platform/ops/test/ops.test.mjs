@@ -1013,9 +1013,10 @@ describe('provision.sh read_token_verdict', () => {
   });
 });
 
-// The CI audit (docs/specs/launch-managed.md): card code runs in the gate workflow, so no job there may
-// hold a credential. The workflow reads contents only, persists no checkout credential, names no
-// secret and runs on no trigger that carries a privileged token.
+// The CI audit (docs/specs/launch-managed.md): card code runs in the gate workflow, and in the replay
+// workflow that draws a shipped card (docs/specs/replays.md), so no job there may hold a credential.
+// Each reads contents only, persists no checkout credential, names no secret and runs on no trigger
+// that carries a privileged token.
 describe('the CI workflows that run card code', () => {
   const workflows = readdirSync(path.join(REPO_ROOT, '.github', 'workflows')).filter((file) => /\.ya?ml$/.test(file));
   // Each step that uses actions/checkout, as the step's lines.
@@ -1041,7 +1042,7 @@ describe('the CI workflows that run card code', () => {
     assert.ok(workflows.includes('gate.yml'), workflows.join(', '));
   });
 
-  for (const file of ['gate.yml']) {
+  for (const file of ['gate.yml', 'replay.yml']) {
     test(`${file} reads contents only, persists no checkout credential and uses no secret`, () => {
       const text = read(`.github/workflows/${file}`);
       assert.match(text, /^permissions:\n {2}contents: read\n(?! )/m, 'top-level permissions are contents: read and nothing else');
