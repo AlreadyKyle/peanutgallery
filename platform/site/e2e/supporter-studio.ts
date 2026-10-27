@@ -165,6 +165,7 @@ export const SESSIONS = {
   notCounted: 'cs_test_boardTestSession01',
   unstamped: 'cs_test_unstampedSession01',
   pending: 'cs_test_pendingSession00001',
+  shipped: 'cs_test_shippedSession00001',
 } as const;
 
 const recorded = (fields: Record<string, unknown> = {}): Record<string, unknown> => ({
@@ -211,6 +212,7 @@ export const SUPPORTER_STUDIO: StudioFixture = {
     [SESSIONS.reversed]: recorded({ credit: 'reversed', reached: [] }),
     [SESSIONS.notCounted]: { status: 'not_counted' },
     [SESSIONS.unstamped]: recorded({ terms_version: null }),
+    [SESSIONS.shipped]: recorded({ named_card_id: LIVE_CARD_ID, reached: [LIVE_CARD_ID] }),
   },
 };
 
