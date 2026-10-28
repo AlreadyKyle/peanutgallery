@@ -32,6 +32,7 @@ export const PAGE_ROUTES: readonly NamedRoute[] = [
   // honest unavailable states; /u/:handle is filled by a sample handle.
   ['goals', '/goals'],
   ['studio-history', '/studio/history'],
+  ['week', '/week'],
   ['suggest', '/suggest'],
   ['seeds', '/seeds'],
   ['profile', '/u/sample-player'],

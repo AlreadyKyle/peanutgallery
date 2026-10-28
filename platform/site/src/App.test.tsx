@@ -196,6 +196,7 @@ describe('Site chrome', () => {
       expect(links, path).toEqual([
         [copy.reportsNav, '/reports'],
         [copy.feedLink, '/feed.xml'],
+        [copy.nav.week, '/week'],
         [copy.nav.history, '/studio/history'],
         [copy.nav.suggest, '/suggest'],
         [copy.nav.seeds, '/seeds'],

@@ -46,6 +46,7 @@ const Me = lazyPage(() => import('./pages/Me'), 'Me');
 const Profile = lazyPage(() => import('./pages/Profile'), 'Profile');
 const Seeds = lazyPage(() => import('./pages/Seeds'), 'Seeds');
 const StudioHistory = lazyPage(() => import('./pages/StudioHistory'), 'StudioHistory');
+const Week = lazyPage(() => import('./pages/Week'), 'Week');
 const Suggest = lazyPage(() => import('./pages/Suggest'), 'Suggest');
 const Guide = lazyPage(() => import('./pages/Guide'), 'Guide');
 
@@ -89,6 +90,8 @@ export const pageRoutes: readonly PageRoute[] = [
   // suggestions, the seed gallery, a player's public profile, the player's own page and the FAQ.
   { path: '/goals', element: later(Goals) },
   { path: '/studio/history', element: later(StudioHistory) },
+  // This week, in public (QUEUE Q-053): the New York week so far, from the public feed.
+  { path: '/week', element: later(Week) },
   { path: '/suggest', element: later(Suggest) },
   { path: '/seeds', element: later(Seeds) },
   { path: '/u/:handle', element: later(Profile) },
@@ -122,7 +125,10 @@ export const youSlot: ReactNode = <YouChip />;
 export const menuYou: ReactNode = <YouMenuLink />;
 
 /** The footer's Follow along links to these pages, after the reports and the feed. */
-export const footerNav: readonly NavItem[] = [{ to: '/studio/history', label: copy.nav.history }];
+export const footerNav: readonly NavItem[] = [
+  { to: '/week', label: copy.nav.week },
+  { to: '/studio/history', label: copy.nav.history },
+];
 
 /** The footer's Take part column: the community pages and the player's own page. */
 export const communityNav: readonly NavItem[] = [
