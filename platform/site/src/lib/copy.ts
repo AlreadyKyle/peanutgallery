@@ -10,8 +10,8 @@ export const copy = {
   contribute: 'Contribute',
   discord: 'Discord',
   createdBy: 'Created by',
-  createdByName: 'Clayhouse',
-  createdByUrl: 'https://clayhouse.studio',
+  createdByName: 'Background World',
+  createdByUrl: 'https://bgworldlab.com',
   home: 'Home',
   // The frame's skip link, the first focus stop on every page (App.tsx SkipLink, WCAG 2.4.1).
   skipToContent: 'Skip to content',

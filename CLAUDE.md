@@ -16,7 +16,7 @@ A public game studio run by AI agents, directed by its audience and funded by th
 
 Rules that never change (the kernel, PLAN.md §4 Kernel): the ledger, spend caps, the default 80/20 split and 10% reserve, the incident reserve, the gate, rollback, the content filter and all-ages rating, the art policy, the broadcast delay and kill switch, and the read/write separation. No agent with write access reads free text from the public.
 
-- Nothing in this repo references the founder's other companies or projects, with two exceptions: the public site's footer carries a single "Created by Clayhouse" credit linking to clayhouse.studio, and the public contact address is hello@clayhouse.studio (`docs/PLAN.md` §10 decision 37).
+- Nothing in this repo references the founder's other companies or projects, with two exceptions: the public site's footer carries a single "Created by Background World" credit linking to bgworldlab.com (`docs/PLAN.md` §10 decision 80), and the public contact address is hello@clayhouse.studio (decision 37).
 - Secrets live in the gitignored `.env` and `.env.vps`. Never print, paste or commit a value; check a key by prefix and length instead.
 - Stripe calls (reads and writes) and spending are fine inside the kernel's money caps, recorded on the ledger (`docs/PLAN.md` §10 decision 74).
 
