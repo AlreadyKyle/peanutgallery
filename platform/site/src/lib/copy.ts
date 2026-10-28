@@ -242,6 +242,30 @@ export const copy = {
     loading: 'Loading the reports.',
     empty: 'No weekly report yet. A report is published after a week in which a card shipped.',
   },
+  // /week (QUEUE Q-053): the New York week so far, counted from the public feed (lib/week.ts).
+  week: {
+    title: 'This week, in public',
+    lede: "The week so far, from Monday in New York time, counted from the studio's public activity feed.",
+    since: 'Counted from {date}, Monday, to now.',
+    loading: 'Counting the week.',
+    figuresTitle: 'The week in numbers',
+    figures: {
+      players: { label: 'Players named', description: 'Players the feed names: contributors who chose to show their name, and players who shared an idea or a seed.' },
+      contributions: { label: 'Contributions', description: 'Payments into a card or into the Machine.' },
+      opened: { label: 'Cards opened', description: 'New cards put up for funding.' },
+      funded: { label: 'Cards funded', description: 'Cards that reached their full funding.' },
+      shipped: { label: 'Cards shipped', description: 'Cards that went live.' },
+    },
+    fundedTitle: 'Funded this week',
+    shippedTitle: 'Shipped this week',
+    noneFunded: 'No card has reached full funding yet this week.',
+    noneShipped: 'No card has shipped yet this week.',
+    partial: 'A busy week: these figures count the newest {n} lines of the feed.',
+    fundLink: 'Pick a card to fund',
+    sources: 'Every figure here comes from the public feed. The ledger holds every payment and every cost.',
+    ledgerLink: 'Check the ledger',
+    reportsLink: 'Read the weekly reports',
+  },
   // Home's strip of cards shipped since this browser's last visit (docs/specs/supporter-loop.md).
   sinceVisit: {
     heading: 'Since your last visit',
@@ -447,7 +471,7 @@ export const copy = {
     },
   },
   // The final state (docs/specs/final-state.md): the community's words. Money is said in legal.ts.
-  nav: { goals: 'Goals', seeds: 'Seeds', suggest: 'Ideas', faq: 'FAQ', history: 'Studio history', me: 'Your desk' },
+  nav: { goals: 'Goals', seeds: 'Seeds', suggest: 'Ideas', faq: 'FAQ', history: 'Studio history', week: 'This week', me: 'Your desk' },
   rarity: { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', legendary: 'Legendary' },
   time: { justNow: 'just now', minutes: '{n} min ago', hours: '{n} h ago', day: 'yesterday', days: '{n} days ago' },
   studioRoom: {

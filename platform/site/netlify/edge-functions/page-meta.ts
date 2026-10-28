@@ -34,6 +34,7 @@ export const config = {
     '/contact',
     '/goals',
     '/studio/history',
+    '/week',
     '/suggest',
     '/seeds',
     '/faq',
