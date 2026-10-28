@@ -243,14 +243,19 @@ describe('POST /api/count (docs/specs/play-counts.md)', () => {
 
   // The four play counts, the benchmarks' aggregate counters (docs/specs/operations.md), Daily Dust's
   // three (docs/specs/daily-dust.md), the channels' landings (docs/specs/channel-counters.md) and the
-  // funnel's three (docs/specs/counter-senders.md), whose migration holds the list count_play_event now takes.
+  // funnel's three and /week's load (docs/specs/counter-senders.md), whose migration holds the list
+  // count_play_event now takes.
   it('takes exactly the play counts and the aggregate counters, the list count_play_event holds', () => {
     expect(PLAY_EVENTS.slice(0, 4)).toEqual(['dust_load', 'dust_share', 'card_share', 'dust_next_card']);
     expect(PLAY_EVENTS.slice(16, 19)).toEqual(['dust_daily_start', 'dust_daily_finish', 'dust_daily_share']);
-    expect(PLAY_EVENTS.slice(33)).toEqual(['contribute_load', 'checkout_open', 'home_play_click']);
-    expect(PLAY_EVENTS).toHaveLength(36);
-    const migration = readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', '20261019020000_funnel_counters.sql'), 'utf8');
+    expect(PLAY_EVENTS.slice(33, 36)).toEqual(['contribute_load', 'checkout_open', 'home_play_click']);
+    expect(PLAY_EVENTS.slice(36)).toEqual(['week_load']);
+    expect(PLAY_EVENTS).toHaveLength(37);
+    const migration = readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', '20261028170000_week_counter.sql'), 'utf8');
     expect(migration).toContain(`in (${PLAY_EVENTS.map((e) => `'${e}'`).join(', ')})`);
+    // The funnel's migration still holds every name before week_load, so the new list only adds.
+    const funnel = readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', '20261019020000_funnel_counters.sql'), 'utf8');
+    expect(funnel).toContain(`in (${PLAY_EVENTS.slice(0, 36).map((e) => `'${e}'`).join(', ')})`);
     // Every channel the site's tags name has its landing count (docs/specs/channel-counters.md).
     expect(PLAY_EVENTS.filter((e) => e.startsWith('from_'))).toEqual(CHANNEL_SOURCES.map((tag) => `from_${tag}`));
   });

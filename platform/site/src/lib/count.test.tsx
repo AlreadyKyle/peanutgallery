@@ -42,7 +42,7 @@ describe('countEvent', () => {
   it('sends the event name alone as a beacon to /api/count', () => {
     const sendBeacon = vi.fn().mockReturnValue(true);
     const fetchFn = vi.fn();
-    const events = ['home_load', 'home_dwell_mid', 'home_dwell_long', 'broadcast_load', 'broadcast_qr', 'discord_click', 'contribute_load', 'checkout_open', 'home_play_click'] as const;
+    const events = ['home_load', 'home_dwell_mid', 'home_dwell_long', 'broadcast_load', 'broadcast_qr', 'discord_click', 'contribute_load', 'checkout_open', 'home_play_click', 'week_load'] as const;
     for (const event of events) countEvent(event, { sendBeacon }, fetchFn);
     expect(sendBeacon.mock.calls.map((call) => call[1])).toEqual(events.map((event) => `{"event":"${event}"}`));
     expect(new Set(sendBeacon.mock.calls.map((call) => call[0]))).toEqual(new Set(['/api/count']));
@@ -210,6 +210,7 @@ describe('useSiteCounts', () => {
         <button type="button" onClick={() => navigate('/team')}>team</button>
         <button type="button" onClick={() => navigate('/broadcast')}>broadcast</button>
         <button type="button" onClick={() => navigate('/contribute')}>contribute</button>
+        <button type="button" onClick={() => navigate('/week')}>week</button>
         <button type="button" onClick={() => rerender((n) => n + 1)}>rerender</button>
         <a href={INVITE} onClick={(event) => event.preventDefault()}>Discord</a>
         <a href="https://discord.com/x" onClick={(event) => event.preventDefault()}>
@@ -336,6 +337,22 @@ describe('useSiteCounts', () => {
     fireEvent.click(view.getByText('team'));
     fireEvent.click(view.getByText('contribute'));
     expect(sent).toEqual(['contribute_load']);
+  });
+
+  it('counts /week once a page load, however it is reached, and nothing for other pages (Q-053)', () => {
+    const view = mount('/team');
+    fireEvent.click(view.getByText('contribute'));
+    expect(sent).toEqual(['contribute_load']);
+    fireEvent.click(view.getByText('week'));
+    fireEvent.click(view.getByText('rerender'));
+    fireEvent.click(view.getByText('team'));
+    fireEvent.click(view.getByText('week'));
+    expect(sent).toEqual(['contribute_load', 'week_load']);
+  });
+
+  it('counts /week opened by address, with a trailing slash', () => {
+    mount('/week/');
+    expect(sent).toEqual(['week_load']);
   });
 
   it('counts a press on a Payment Link once a page load, on any page, and a right-button press not at all', () => {

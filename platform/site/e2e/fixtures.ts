@@ -84,6 +84,7 @@ const PLAY_EVENTS = [
   'from_x', 'from_bsky', 'from_threads', 'from_mastodon', 'from_discord', 'from_yt', 'from_tiktok', 'from_ig', 'from_linkedin',
   'from_reddit', 'from_hn', 'from_itch', 'from_ph', 'from_creator',
   'contribute_load', 'checkout_open', 'home_play_click',
+  'week_load',
 ];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SESSION = /^cs_(live|test)_[A-Za-z0-9]{10,250}$/;
