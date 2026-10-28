@@ -11,7 +11,7 @@ A docs-and-hygiene lane. It keeps the repo and memory telling the truth, so the 
 
 - **Branches.** Delete remote branches that are fully merged into `origin/main`, or that have had no commit for 14 days and have no open pull request: `gh api -X DELETE repos/AlreadyKyle/peanutgallery/git/refs/heads/<b>`. Never delete `main`, `next`, `card/*` with an open card, or a branch another live session owns (`mcp__ccd_session_mgmt__list_sessions`). List what was deleted.
 - **Pull requests** idle for 14 days. Adopt them into QUEUE as a row with the link, then close them with a one-line comment naming the row. A Dependabot pull request is left to the upkeep policy.
-- **Worktrees** of merged or deleted branches: `git worktree remove`, and `git worktree prune`.
+- **Worktrees and local branches** whose work is merged or already on GitHub: run `bash scripts/tidy-local.sh` in the main checkout and quote its last line. It keeps anything uncommitted or unmerged and names it; a kept item two Sundays running gets one line to Kyle.
 - **QUEUE.md.**
   - Done rows are struck with their pull request, then moved to Done. Done rows older than 30 days are deleted, since git keeps them.
   - Duplicates collapse into one row.

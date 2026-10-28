@@ -32,6 +32,7 @@ export const PAGE_META: Readonly<Record<string, PageMeta>> = {
   '/contact': { title: 'Contact', description: 'How to reach the studio.' },
   '/goals': { title: 'Goals', description: 'One track shows everything the studio has raised and what each milestone delivers.' },
   '/studio/history': { title: 'Studio history', description: 'Each era of the studio is kept here as a blueprint, from the garage on.' },
+  '/week': { title: 'This week, in public', description: "The week so far, from Monday in New York time, counted from the studio's public activity feed." },
   '/suggest': { title: 'Ideas', description: 'Pitch a change you want and upvote the ideas you back. The most backed can become cards to fund.' },
   '/seeds': { title: 'Seeds', description: 'Saved runs anyone can open and play from the same moment.' },
   '/faq': { title: 'Questions', description: 'Plain answers about the studio, the money, the cards and your account.' },

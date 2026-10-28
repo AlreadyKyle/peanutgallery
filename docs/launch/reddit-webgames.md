@@ -1,6 +1,6 @@
 # r/WebGames
 
-Third in the posting order (`README.md`). r/WebGames wants games that play in the browser, a direct link to the game and the game's name first in the title. Read the sidebar rules on the day; post a link post to the game, then add the description as the first comment. Every link carries `?from=reddit` (`docs/specs/channel-counters.md`).
+Third in the posting order, at least two days after r/artificial (`README.md`). r/WebGames wants games that play in the browser, a direct link to the game and the game's name first in the title. Read the sidebar rules on the day; post a link post to the game, then add the description as the first comment. Every link carries `?from=reddit` (`docs/specs/channel-counters.md`).
 
 ## Title
 

@@ -1,6 +1,6 @@
 # X thread
 
-Sixth in the posting order (`README.md`). X allows 280 characters a post and counts a link as 23; every post here is under 280 counted in full. Post them as one thread, in order. Every link carries `?from=x`, the tag the site and Dust count (`docs/specs/channel-counters.md`).
+Sixth in the posting order, at least two days after the Show HN, posted by hand by Kyle (`README.md`). X allows 280 characters a post and counts a link as 23; every post here is under 280 counted in full. Post them as one thread, in order. Every link carries `?from=x`, the tag the site and Dust count (`docs/specs/channel-counters.md`).
 
 ## 1
 

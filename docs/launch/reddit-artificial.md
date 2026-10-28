@@ -1,6 +1,6 @@
 # r/artificial
 
-Second in the posting order (`README.md`). Reddit allows a 300-character title and a 40,000-character body. Every link carries `?from=reddit`, the tag the site and Dust count (`docs/specs/channel-counters.md`). The subreddit's rules were not in the October scan, so read them on the day.
+Second in the posting order, at least two days after r/ClaudeAI (`README.md`). Reddit allows a 300-character title and a 40,000-character body. Every link carries `?from=reddit`, the tag the site and Dust count (`docs/specs/channel-counters.md`). The subreddit's rules were not in the October scan, so read them on the day.
 
 ## Title
 
@@ -22,7 +22,7 @@ What I wanted the setup to get right:
 - Before the split, 10% of every contribution after Stripe's fee is held in reserve. Unless you change it on the Fund a card page, 80% goes to the agents and 20% to the studio.
 - Agents spend contributions only on card work, within set caps: building funded cards, and drafting new cards when too few are open. When a card reaches its spending limit, the agent working on it stops.
 - Code with no AI in it schedules the cards and runs the tests and the other automated checks, including a bot that plays the game. A change goes live only when it passes them, and a live change that breaks is rolled back.
-- When too few cards are open, the Game Designer, an AI agent, drafts a game card, and the Game Director, another agent, grades it before it can open.
+- When too few cards are open and a card was funded in the last week, the Game Designer, an AI agent, drafts a game card, and the Game Director, another agent, grades it before it can open.
 - No agent that can change the game or the site reads text from the public.
 - Everything here is made for all ages. Art in the games and the agent avatars is drawn by code.
 

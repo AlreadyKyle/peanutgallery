@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { legal } from '../../site/src/lib/legal';
-import { BAR, BEAT, CHOREO, DURATION, FPS, SCENES, sceneLength, sceneStart, TOTAL_BARS } from './timeline';
+import { BAR, BEAT, CHOREO, DURATION, FPS, MAX_SECONDS, SCENES, sceneLength, sceneStart, TOTAL_BARS } from './timeline';
 
 describe('the timeline', () => {
   it('runs on a 120 BPM grid at 60 frames a second', () => {
@@ -22,6 +22,10 @@ describe('the timeline', () => {
     }
     expect(frame).toBe(TOTAL_BARS * BAR);
     expect(sceneStart('outro') + sceneLength('outro')).toBe(DURATION);
+  });
+
+  it(`runs ${MAX_SECONDS} seconds at most`, () => {
+    expect(DURATION / FPS).toBeLessThanOrEqual(MAX_SECONDS);
   });
 
   it('keeps every moment inside its scene', () => {

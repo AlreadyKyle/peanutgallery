@@ -130,6 +130,8 @@ export const copy = {
     draftingIdle: 'The Game Designer drafts more cards when the open ones run low.',
     draftingDone: "The Game Designer has used today's {n} drafts and is back tomorrow.",
     draftingNoMoney: 'The Game Designer drafts the next card when a contribution comes in.',
+    // While no open card has been funded for a week, drafting waits (decision 77, supply reason no_sales).
+    draftingHeld: 'The Game Designer drafts more once one of the open cards is funded.',
     // A Next up card's line: an approved agent card waiting to open, kernel work, or a planned card.
     kernelWork: 'The studio builds this one itself, with no card',
     planned: 'Planned, opens for funding later',
@@ -239,6 +241,30 @@ export const copy = {
     lede: "Each report covers one week, Monday to Sunday in New York time, and code builds it from the studio's public records. A week with nothing shipped has no report.",
     loading: 'Loading the reports.',
     empty: 'No weekly report yet. A report is published after a week in which a card shipped.',
+  },
+  // /week (QUEUE Q-053): the New York week so far, counted from the public feed (lib/week.ts).
+  week: {
+    title: 'This week, in public',
+    lede: "The week so far, from Monday in New York time, counted from the studio's public activity feed.",
+    since: 'Counted from {date}, Monday, to now.',
+    loading: 'Counting the week.',
+    figuresTitle: 'The week in numbers',
+    figures: {
+      players: { label: 'Players named', description: 'Players the feed names: contributors who chose to show their name, and players who shared an idea or a seed.' },
+      contributions: { label: 'Contributions', description: 'Payments into a card or into the Machine.' },
+      opened: { label: 'Cards opened', description: 'New cards put up for funding.' },
+      funded: { label: 'Cards funded', description: 'Cards that reached their full funding.' },
+      shipped: { label: 'Cards shipped', description: 'Cards that went live.' },
+    },
+    fundedTitle: 'Funded this week',
+    shippedTitle: 'Shipped this week',
+    noneFunded: 'No card has reached full funding yet this week.',
+    noneShipped: 'No card has shipped yet this week.',
+    partial: 'A busy week: these figures count the newest {n} lines of the feed.',
+    fundLink: 'Pick a card to fund',
+    sources: 'Every figure here comes from the public feed. The ledger holds every payment and every cost.',
+    ledgerLink: 'Check the ledger',
+    reportsLink: 'Read the weekly reports',
   },
   // Home's strip of cards shipped since this browser's last visit (docs/specs/supporter-loop.md).
   sinceVisit: {
@@ -445,7 +471,7 @@ export const copy = {
     },
   },
   // The final state (docs/specs/final-state.md): the community's words. Money is said in legal.ts.
-  nav: { goals: 'Goals', seeds: 'Seeds', suggest: 'Ideas', faq: 'FAQ', history: 'Studio history', me: 'Your desk' },
+  nav: { goals: 'Goals', seeds: 'Seeds', suggest: 'Ideas', faq: 'FAQ', history: 'Studio history', week: 'This week', me: 'Your desk' },
   rarity: { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', legendary: 'Legendary' },
   time: { justNow: 'just now', minutes: '{n} min ago', hours: '{n} h ago', day: 'yesterday', days: '{n} days ago' },
   studioRoom: {
@@ -480,6 +506,8 @@ export const copy = {
     fallback: 'Newest first, and the ledger keeps the record.',
     loading: 'Loading the latest activity.',
     empty: 'Quiet so far. Every coin, new card and shipment lands here as it happens.',
+    // Under the rows when the newest is more than three days old (Pipe.tsx quietLine): the date and the count come from the data.
+    quiet: { since: 'Quiet since {date}.', openOne: '1 card is open for funding now.', openMany: '{n} cards are open for funding now.' },
     older: 'Older',
     loadingOlder: 'Loading older events.',
     anonymous: 'Anonymous',
@@ -523,6 +551,10 @@ export const copy = {
     lifetime: 'raised since the studio opened.',
     nextLine: 'Next: {title}, {left} to go.',
     none: 'No milestones are set yet.',
+    // Before any milestone: the studio's next era from /api/community/studio, then its own "Reached when..." line.
+    nextEra: 'Next for the studio: the {era}.',
+    erasLink: 'See every era',
+    fundLink: 'Pick a card to fund',
     states: { reached: 'Reached', next: 'Next', later: 'Later' },
     reachedOn: 'Reached on {date}.',
     seeWhat: 'See what it delivered',
@@ -572,7 +604,7 @@ export const copy = {
     title: 'Ideas',
     lede: 'Pitch a change you want and upvote the ideas you back. The most backed can become cards to fund.',
     sendTitle: 'Pitch an idea',
-    safety: 'Every idea passes a content filter and is kept in the list below. An agent will sort the ideas once that work starts, and the agents that build never see what you wrote.',
+    safety: 'Every idea passes a content filter and is kept in the list below. The Curator, an agent with no tools, sorts the ideas into short summaries, and the agents that build never see what you wrote.',
     signInFirst: 'Sign in to pitch an idea or upvote one. Anyone can read the list.',
     signIn: 'Sign in',
     areaLabel: 'Area',
@@ -629,7 +661,7 @@ export const copy = {
       'You pitch it with an area, a title and a description, three a day at most.',
       'It passes a content filter and joins the list for anyone to read.',
       'Players upvote the ideas they back.',
-      'An agent will sort and group the ideas once that work starts. The agents that build never see what players wrote.',
+      'The Curator, an agent with no tools, sorts and groups the ideas. The agents that build never see what players wrote.',
       'A card made from an idea credits the players who pitched it, and this list shows its state.',
     ],
     declineTitle: 'Why an idea is declined',
@@ -641,7 +673,7 @@ export const copy = {
     sortLabel: 'Sort seeds',
     sorts: { trending: 'Trending', top_week: 'Top this week', top_all: 'Top all time', new: 'New' },
     loading: 'Loading the seeds.',
-    empty: 'No seeds in the gallery yet.',
+    empty: 'No seeds in the gallery yet. The first run someone publishes from Dust shows here.',
     more: 'Show more seeds',
     loadingMore: 'Loading more seeds.',
     moreFailed: 'More seeds did not load. Try again in a moment.',
@@ -868,7 +900,7 @@ export const copy = {
     loading: 'Loading the ideas.',
     upvoteOne: '1 upvote',
     upvoteMany: '{n} upvotes',
-    safety: 'Every idea is kept and shown here. An agent will sort them once that work starts, and the agents that build never see your words.',
+    safety: 'Every idea is kept and shown here. The Curator, an agent with no tools, sorts them, and the agents that build never see your words.',
   },
   // /me signed in: the player's desk (docs/specs/place.md).
   desk: {

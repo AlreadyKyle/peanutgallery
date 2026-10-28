@@ -1,0 +1,98 @@
+# Replays, step 2 (docs/specs/replays.md): a shipped card's before and after clip, made with no hand
+# step. On a push to main that changes what Dust draws, platform/explainer/scripts/replay-ship.mjs reads
+# the commit: only a dispatcher ship (a squash commit with a Card-Id trailer, not a revert) goes on. The
+# job draws the commit and its parent with seed-1's capture tool from this checkout (each drawn from
+# its own worktree with its own install), waits for the card's public document to say the card is
+# live, composes the clip with platform/explainer/scripts/replay.mjs and keeps it as a 90 day artifact
+# named replay-<card id's first 8>. Step 3 moves the files to public storage.
+#
+# Card code runs here (the capture tool builds and draws both commits), so the job holds nothing: it
+# reads contents only, persists no checkout credential and names no secret, like the gate
+# (platform/ops/test/ops.test.mjs). By hand (workflow_dispatch), it remakes the clip of any commit.
+name: replay
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'seed-1/config/**'
+      - 'seed-1/content/**'
+      - 'seed-1/render/**'
+      - 'seed-1/sim/**'
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'The card commit on main to make a clip of'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: replay
+  cancel-in-progress: false
+
+jobs:
+  replay:
+    name: replay
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SHA: ${{ inputs.sha || github.sha }}
+      BASE_URL: https://mobmachine.games
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Is this a card ship that changes what Dust draws
+        id: check
+        run: node platform/explainer/scripts/replay-ship.mjs check --sha "$SHA"
+      - name: Draw before and after
+        if: steps.check.outputs.card != ''
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pnpm --filter @backseat/seed-1 exec playwright install --with-deps chromium
+          port=4600
+          for side in before after; do
+            if [ "$side" = before ]; then ref="$SHA^"; else ref="$SHA"; fi
+            git worktree add --detach "$RUNNER_TEMP/$side" "$ref"
+            (cd "$RUNNER_TEMP/$side" && pnpm install --frozen-lockfile --ignore-scripts --filter '@backseat/seed-1...')
+            pnpm --filter @backseat/seed-1 capture -- --out "$RUNNER_TEMP/capture-$side" --root "$RUNNER_TEMP/$side/seed-1" \
+              --states 600,3600,21600 --widths 1280 --port "$port"
+            port=$((port + 1))
+          done
+      - name: Wait for the card to be live
+        id: card
+        if: steps.check.outputs.card != ''
+        run: node platform/explainer/scripts/replay-ship.mjs card --id "${{ steps.check.outputs.card }}" --out "$RUNNER_TEMP/card.json" --base-url "$BASE_URL"
+      # The composer refuses captures that draw the same at every state: such a card has no before and
+      # after to show, which is a skip, not a failure.
+      - name: Compose the clip
+        id: compose
+        if: steps.card.outputs.live == 'true'
+        run: |
+          set +e -uo pipefail
+          node platform/explainer/scripts/replay.mjs --before "$RUNNER_TEMP/capture-before" --after "$RUNNER_TEMP/capture-after" \
+            --card "$RUNNER_TEMP/card.json" --out "$RUNNER_TEMP/replay" 2> "$RUNNER_TEMP/compose.err"
+          status=$?
+          cat "$RUNNER_TEMP/compose.err" >&2
+          if [ "$status" -ne 0 ]; then
+            if grep -q 'nothing to show before and after' "$RUNNER_TEMP/compose.err"; then echo "skip: no picture differs"; exit 0; fi
+            exit "$status"
+          fi
+          card="${{ steps.check.outputs.card }}"
+          echo "name=replay-${card:0:8}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: steps.compose.outputs.name != ''
+        with:
+          name: ${{ steps.compose.outputs.name }}
+          path: ${{ runner.temp }}/replay/
+          retention-days: 90
+          if-no-files-found: error

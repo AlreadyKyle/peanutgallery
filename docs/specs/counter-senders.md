@@ -10,7 +10,7 @@ Draft: written, not yet agreed. Agreed: the contract for the work, settled by th
 
 ## Scope
 
-In: Dust's returning, session and seed counts (`seed-1/render/count.ts`, `render/main.ts`); the site's home, dwell, broadcast, QR and Discord counts (`platform/site/src/lib/count.ts`, mounted by `App.tsx`); the source tag on /broadcast's QR code; the Privacy page's section; the two dwell rows on the benchmark review's scoreboard (`platform/dispatcher/src/benchmarks.ts`). Added by the full pass (its finding M6): the funnel's three counts below, with their migration `20261019020000_funnel_counters.sql` and `PLAY_EVENTS` in `platform/site/netlify/functions/card.mts`.
+In: Dust's returning, session and seed counts (`seed-1/render/count.ts`, `render/main.ts`); the site's home, dwell, broadcast, QR and Discord counts (`platform/site/src/lib/count.ts`, mounted by `App.tsx`); the source tag on /broadcast's QR code; the Privacy page's section; the two dwell rows on the benchmark review's scoreboard (`platform/dispatcher/src/benchmarks.ts`). Added by the full pass (its finding M6): the funnel's three counts below, with their migration `20261019020000_funnel_counters.sql` and `PLAY_EVENTS` in `platform/site/netlify/functions/card.mts`. Added for QUEUE Q-053: /week's load below, with its migration `20261028170000_week_counter.sql`.
 Out: any migration for the first counts (their names are in production since `20261017200000_benchmark_counters.sql`); Stripe's `checkout.session.expired`; scoreboard rows for the funnel; any cookie, local storage key, identifier, fingerprint or address; distinct referrers on /broadcast and contributions from the QR source, which need a record of a visit; clicks from links inside Discord posts back to the site, which need a source tag on the posts' links and a counter name for it; scoreboard rows for the broadcast and Discord counts, whose benchmarks are counted per stream, contribution or member; the board panel's play counts table, which still lists the four play counts.
 
 ## Behaviour
@@ -43,6 +43,13 @@ The step from interest to payment: how many reach /contribute, how many press th
 - An automated browser is not a visitor (issue #240): both senders send nothing when `navigator.webdriver` is true, which WebDriver and Playwright set, so a screenshot run or any other robot opening production adds nothing to any count. Nothing about the browser is sent or stored; it is one more reason not to count. The e2e suites play a person's browser: their page reads `navigator.webdriver` as false, and one site test sets it back to true and sees no count.
 - The migration adds the three names to `play_counts_event_check` and `count_play_event`, the same list as `PLAY_EVENTS`; `refresh_daily_metrics` already copies every name into `daily_metrics` as `play.<name>`. Every statement runs twice without error.
 
+### This week
+
+/week, "This week, in public" (QUEUE Q-053), counts its own reach, so a change to it can carry a bet the Report routine scores.
+
+- `week_load`: /week is shown, once per page load, whether the page opened there or the visitor moved to it inside the site, as `contribute_load` counts.
+- The migration adds the name to `play_counts_event_check` and `count_play_event`, at the end of the funnel migration's list, the same list as `PLAY_EVENTS`. It drops no name, so the old site still counts on the new schema; `refresh_daily_metrics` copies it into `daily_metrics` as `play.week_load`. Every statement runs twice without error.
+
 ### Privacy and the scoreboard
 
 - The Privacy page's Play and share counts section names every count above, says the browser decides whether a count applies from what it already holds, that the save's own time is never sent, and keeps the rule: no cookie, no identifier, no IP address, nothing new stored in the browser.
@@ -67,6 +74,9 @@ The step from interest to payment: how many reach /contribute, how many press th
 - [x] The live check presses nothing and answers every count beacon in the browser (`platform/site/src/live-check-counts.test.ts`).
 - [x] An automated browser (`navigator.webdriver` true) sends no count from the site or from Dust, and a person's browser still counts (`platform/site/src/lib/count.test.tsx`, `seed-1/tests/count.test.ts`, `e2e/counts.spec.ts`).
 - [x] The Privacy page names the three counts (`platform/site/src/lib/legal.ts`).
+- [x] /week counts `week_load` once a page load, opened by address or reached inside the site (`count.test.tsx`, `e2e/counts.spec.ts`).
+- [x] `PLAY_EVENTS` and `count_play_event` take `week_load`, keep every earlier name and still drop others; the migration applies a second time; `refresh_daily_metrics` writes `play.week_load` (`netlify/card.test.ts`, `week_counter_test.ts`, `migration_test.ts`).
+- [x] The Privacy page names the This week page's count (`platform/site/src/lib/legal.ts`).
 
 ## Verification
 
@@ -81,6 +91,9 @@ The step from interest to payment: how many reach /contribute, how many press th
 - After merge, once both sites are deployed: the board's `board_daily_metrics` (or `daily_metrics_window`) shows `play.home_load` and `play.dust_session_2m` above 0 for the day after the deploy.
 - The funnel: `npx vitest run src/lib/count.test.tsx netlify/card.test.ts src/live-check-counts.test.ts` and `E2E_PORT=4462 npx playwright test e2e/counts.spec.ts e2e/money.spec.ts` in `platform/site`; `deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/funnel_counters_test.ts platform/supabase/functions/_shared/migration_test.ts`.
 - After the funnel merges, its migration applied and the site deployed: `board_daily_metrics` shows `play.contribute_load` above 0 for the day after the deploy, and the live check's first line still reads `PASS ... failed=0` with its beacon line held equal to sent.
+
+- /week's count: `npx vitest run src/lib/count.test.tsx netlify/card.test.ts` and `E2E_PORT=4410 npx playwright test e2e/counts.spec.ts e2e/text-pages.spec.ts` in `platform/site`; `deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/week_counter_test.ts platform/supabase/functions/_shared/migration_test.ts`.
+- After the release applies the migration and deploys the site: `daily_metrics` shows `play.week_load` above 0 for a day after the deploy.
 
 ## Evidence
 
@@ -97,3 +110,4 @@ Quoted in the branch's report.
 - 2026-10-19: `checkout_open` counts a link to the configured Payment Link's address with any query, so every path to checkout counts whatever its `client_reference_id`. It matches that address rather than Stripe's checkout host, because the gate's payment-host scan refuses any payment address in the build other than the Payment Link itself. Stripe's `checkout.session.expired` is left out by the board's call.
 - 2026-10-19: the live check is not a visitor. `platform/site/scripts/live-check.mjs` opened `/` at each width and once more at 1440, so each run added up to 3 `home_load` (19 runs on 18 October: up to 57 of 106). Every page it opens now answers `/api/count` with a 204 inside its own browser, and the run checks that no beacon got out. The check never read a count, so no check was dropped, and `count.ts` does not skip on `navigator.webdriver`, which the e2e suites need. Read `home_load` from before this change less 3 for each `live-check` workflow run that day.
 - 2026-10-19: the senders skip an automated browser after all (issue #240, from the weekly growth review). The live check already answered its own beacons, but threads' screenshot runs against production still counted: `home_load` read 159 for 13 to 19 October, mostly robots. Each sender returns early when `navigator.webdriver` is true; the site's e2e fixture and Dust's counting specs set it to false, so they still see every count. This replaces the line above that kept `navigator.webdriver` out for the e2e suites' sake.
+- 2026-10-28: /week counts its load (QUEUE Q-053's carry list), once a page load like `contribute_load`, so the page can carry a scored bet. A new migration restates both lists with the one name added rather than editing the funnel's, because a migration on `main` is never changed.

@@ -208,7 +208,8 @@ export const legal = {
   },
   // The explainer video (docs/specs/explainer-video.md): its words in the order it shows them. Its first and last lines are the owner's own for the video (PLAN.md
   // §10 decision 57); every line between is a sentence the site already says, word for word, and each
-  // step is a heading of howMoneyMoves (platform/explainer/src/data.test.ts). platform/explainer draws
+  // step is a heading of howMoneyMoves, in their order (platform/explainer/src/data.test.ts). It shows
+  // four of the six steps, to keep within 45 s. platform/explainer draws
   // these same strings. It lives here because some lines state money.
   explainer: {
     heading: 'Watch how it works',
@@ -216,18 +217,12 @@ export const legal = {
     // The preview loop's own control (WCAG 2.2.2): it names the loop, not the video.
     pauseLoop: 'Pause the preview',
     playLoop: 'Play the preview',
-    agents: 'The agents',
-    studio: 'The studio',
     beats: [
       { step: null, line: 'Watch AI agents build a game studio and free games.' },
-      { step: null, line: 'The AI agents do the creative work: they design, build and review the cards.' },
       { step: 'Pick a card', line: 'Each card is one change to the game or to this site, with a funding target.' },
-      { step: 'Contribute and choose the split', line: 'You choose how it splits between the agents and the studio, then an amount at checkout.' },
       { step: 'The bar fills', line: 'When the bar is full, the card joins the queue.' },
       { step: 'The agents build it', line: 'An AI agent takes the card and makes the change.' },
-      { step: 'Checks, then live', line: 'Before a change goes live it must pass automated checks, including a bot that plays the game.' },
       { step: 'It shows under Shipped', line: 'Once it is live, the card is listed under Shipped with what it cost and how many people funded it.' },
-      { step: null, line: 'The public ledger shows the money that comes in, where it goes and the cost of all agent work paid for with contributions.' },
       { step: null, line: 'Fund a card. Watch AI agents build it. Play it free.' },
     ],
   },
@@ -487,6 +482,13 @@ export const legal = {
       { key: 'live', label: 'Live', body: 'It ships in the game for everyone.' },
     ],
     nextNow: 'Now',
+    // Follow it live (docs/specs/supporter-loop.md, Q-052): the steps the card has passed, and what
+    // to open at the step it is on.
+    nextDone: 'Done',
+    watchBuild: 'Watch it being built',
+    liveSince: 'Live since {date}.',
+    seeShipped: 'See what shipped',
+    playIt: 'Play it in Dust',
     shipEmail: 'When it goes live, the studio emails you a ship notice.',
     shareLede: 'Share the card, so friends can follow it too.',
   },
@@ -558,7 +560,7 @@ export const legal = {
         heading: 'Play and share counts',
         paragraphs: [
           'The studio counts how many times a day Dust is opened, Share your run is pressed, a card is shared from the site, and a click goes from Dust to a card.',
-          'It also counts, a day at a time: how many times Dust is opened from a save a day or a week old, how many visits to Dust reach 2 and 4 minutes, how many times Save as seed is pressed and a seed link is opened, how many times the home page is shown and stays open 15 and 45 seconds, how many times the broadcast page is loaded and its QR code is followed, and how many clicks go to Discord.',
+          'It also counts, a day at a time: how many times Dust is opened from a save a day or a week old, how many visits to Dust reach 2 and 4 minutes, how many times Save as seed is pressed and a seed link is opened, how many times the home page is shown and stays open 15 and 45 seconds, how many times the broadcast page is loaded and its QR code is followed, how many times the This week page is opened, and how many clicks go to Discord.',
           "On the way to paying it counts, the same way, how many times the Contribute page is opened, how many times a button to Stripe's checkout is pressed, and how many times a link from the home page into Dust is pressed. What you pay is never part of a count.",
           "When a link the studio posted elsewhere brings you to the site or to Dust, the link carries the place it was posted, such as from=reddit, and the studio adds one to that place's total for the day. The tag is then removed from the address, so a reload or a link you share on is not counted again.",
           'Each is one running total for the day and nothing else. Your browser decides whether a count applies, from what it already holds: whether Dust was opened from a save a day or a week old comes from the time your own save records, and that time is never sent.',

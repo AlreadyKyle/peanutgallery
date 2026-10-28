@@ -1,8 +1,8 @@
-// The two cuts of the one video: 16:9 for wide screens and 4:5 for phones (the site picks one by
-// width). Every scene is choreographed once on a 900 by 820 stage; each cut places and scales that
-// stage beside or under the words.
+// The cuts of the one video: 16:9 for wide screens and 4:5 for phones (the site picks one by width),
+// and 9:16 for Instagram Reels and TikTok, posted only. Every scene is choreographed once on a 900 by
+// 820 stage; each cut places and scales that stage beside or under the words.
 
-export type FormatName = 'wide' | 'tall';
+export type FormatName = 'wide' | 'tall' | 'vertical';
 
 export type Format = {
   name: FormatName;
@@ -44,5 +44,18 @@ export const FORMATS: Record<FormatName, Format> = {
     text: { x: 72, y: 176, width: 936, size: 52, anchor: 'top' },
     stage: { cx: 540, cy: 880, scale: 0.96 },
     mark: { bar: 48, plate: 280 },
+  },
+  // Reels and TikTok lay their buttons down the right and the caption over the bottom fifth, so the
+  // words and the stage keep to the middle, above y 1560.
+  vertical: {
+    name: 'vertical',
+    id: 'explainer-vertical',
+    width: 1080,
+    height: 1920,
+    bar: 120,
+    margin: 72,
+    text: { x: 72, y: 240, width: 900, size: 62, anchor: 'top' },
+    stage: { cx: 540, cy: 1160, scale: 1 },
+    mark: { bar: 50, plate: 320 },
   },
 };

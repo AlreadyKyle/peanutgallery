@@ -34,7 +34,8 @@ export const SESSION_PATTERN = /^cs_(live|test)_[A-Za-z0-9]{10,250}$/;
  * started, finished and shared. The from_ names are landings from a channel's tagged link
  * (docs/specs/channel-counters.md). The last three are the funnel from interest to payment
  * (docs/specs/counter-senders.md): /contribute shown, a Payment Link pressed and a press from home into
- * the game. Each is one daily total with nothing that names a person.
+ * the game. The last is /week shown (docs/specs/counter-senders.md, This week). Each is one daily total
+ * with nothing that names a person.
  */
 export const PLAY_EVENTS = [
   'dust_load', 'dust_share', 'card_share', 'dust_next_card',
@@ -44,6 +45,7 @@ export const PLAY_EVENTS = [
   'from_x', 'from_bsky', 'from_threads', 'from_mastodon', 'from_discord', 'from_yt', 'from_tiktok', 'from_ig', 'from_linkedin',
   'from_reddit', 'from_hn', 'from_itch', 'from_ph', 'from_creator',
   'contribute_load', 'checkout_open', 'home_play_click',
+  'week_load',
 ] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CARD_PATH = /^\/api\/card\/([^/]+)$/;

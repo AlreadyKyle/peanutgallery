@@ -29,6 +29,10 @@ const FADE = 16;
  * it, scaled to fill.
  */
 function stageOf(g: WeeklyGeometry) {
+  if (g.stage !== undefined) {
+    const { left, top, width, height } = g.stage;
+    return { left, top, width, height, scale: Math.min((width - 24) / W, (height - 40) / H) };
+  }
   const f = g.format;
   const top = f.bar + 48;
   const left = g.text.x + g.text.width + 64;

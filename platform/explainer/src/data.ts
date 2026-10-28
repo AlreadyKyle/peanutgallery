@@ -9,12 +9,9 @@ import platformDirector from '../../agents/platform-director.json';
 import qa from '../../agents/qa.json';
 import { copy } from '../../site/src/lib/copy';
 import { legal } from '../../site/src/lib/legal';
-import { formatUsd } from '../../site/src/lib/format';
-import { exampleFromPaid } from '../../site/src/lib/payment';
 
 // Everything the video shows comes from the studio's own sources: the words from the site's copy and
-// legal files, the agents from their role specs, the card titles from the live deck, the money from
-// the site's worked example. Nothing is made up for the picture (docs/specs/explainer-video.md).
+// legal files, the agents from their role specs, the card titles from the live deck. Nothing is made up for the picture (docs/specs/explainer-video.md).
 
 export const script = legal.explainer;
 
@@ -24,7 +21,7 @@ export const script = legal.explainer;
 export const SITE_ADDRESS = 'mobmachine.games';
 export const stepHeadings = legal.howMoneyMoves.blocks.map((block) => block.heading);
 
-/** The agents drawn in the team scene: every role whose spec says it is running (data.test.ts). */
+/** Every role whose spec says it is running (data.test.ts), as the weekly video's studio draws them. */
 export const roster = [builderA, builderB, qa, gameDesigner, gameDirector, platformBuilder, platformDirector, janitor, curator].map((role) => ({
   title: role.title,
   note: role.species_note,
@@ -73,24 +70,5 @@ export const labels = {
     edited: eventLine('edited'),
     ran: eventLine('ran'),
     submitted: eventLine('submitted'),
-    smoke: eventLine('smoke_passed'),
-    passed: eventLine('gate_passed'),
   },
-};
-
-// The ledger scene draws /how-it-works' worked example: $5.00 paid with the default split, every
-// figure from payment.ts, labelled with that example's own row words.
-const example = exampleFromPaid(5);
-const rows = legal.howMoneyMoves.exampleRows;
-export const ledger = {
-  heading: legal.moneyIn,
-  caption: legal.howMoneyMoves.exampleCaption,
-  rows: [
-    { label: rows.paid, usd: example.paid },
-    { label: rows.fee, usd: example.fee },
-    { label: rows.reserve, usd: example.reserve },
-    { label: rows.studio, usd: example.studio },
-    { label: rows.incident, usd: example.incident },
-    { label: rows.credit, usd: example.credit },
-  ].map((row) => ({ ...row, figure: formatUsd(row.usd) })),
 };

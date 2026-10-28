@@ -3,8 +3,57 @@
     "SessionStart": [
       {
         "matcher": "startup|resume",
-        "hooks": [{ "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/cloud-setup.sh\"", "timeout": 600 }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/cloud-setup.sh\"",
+            "timeout": 600
+          }
+        ]
       }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(pnpm *)",
+      "Bash(npx playwright *)",
+      "Bash(E2E_PORT=* npx playwright *)",
+      "Bash(deno *)",
+      "Bash(node platform/*)",
+      "Bash(node scripts/*)",
+      "Bash(node seed-1/*)",
+      "Bash(bash scripts/*)",
+      "Bash(git status *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git branch *)",
+      "Bash(git checkout *)",
+      "Bash(git switch *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git pull *)",
+      "Bash(git fetch *)",
+      "Bash(git stash *)",
+      "Bash(git worktree *)",
+      "Bash(git rev-parse *)",
+      "Bash(git merge *)",
+      "Bash(git rebase *)",
+      "Bash(gh pr *)",
+      "Bash(gh api *)",
+      "Bash(gh run *)",
+      "Bash(gh workflow *)",
+      "Bash(gh issue *)",
+      "Bash(platform/ops/push-secrets.sh *)",
+      "Bash(bash platform/ops/push-secrets.sh *)"
+    ],
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(gh repo delete*)"
     ]
   }
 }

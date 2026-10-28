@@ -41,6 +41,7 @@ describe('the page table', () => {
       '/contact': legal.contact,
       '/goals': copy.goals,
       '/studio/history': copy.history,
+      '/week': copy.week,
       '/suggest': copy.suggest,
       '/seeds': copy.seeds,
       '/faq': faq,

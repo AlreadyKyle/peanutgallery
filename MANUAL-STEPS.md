@@ -62,3 +62,4 @@ A reminder fires that day.
 
 - **Anthropic credit (2026-10-20):** you confirmed the current key's organization has about $10 of credit. It stays in use until step 3.
 - **Stripe minimum balance (2026-10-20):** the Stripe API reads 2.00 CAD. The "Not yet reconciled" note on /ledger goes away once the first contribution arrives.
+- **New GitHub fine-grained token (added 2026-10-23):** it is the host token, `VPS_GITHUB_TOKEN` in `.env.vps` (gitignored, never committed); the old value had stopped authenticating. It goes into the Actions secrets `DISPATCHER_ENV` (environment `dispatcher`) and `QUOTA_ENV` (environment `ops`). It has no **Plan: Read** yet (the step above), so the quota check's Actions-minutes read still gets a 403 until that is added; editing the token keeps its value. It expires around **2027-01-21**: regenerate it before then (BOARD-SETUP.md, Reference: the GitHub tokens) and replace the value in `.env.vps` and both secrets.
