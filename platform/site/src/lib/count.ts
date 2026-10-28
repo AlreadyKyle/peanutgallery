@@ -33,7 +33,8 @@ export type PlayEvent =
   | ChannelEvent
   | 'contribute_load'
   | 'checkout_open'
-  | 'home_play_click';
+  | 'home_play_click'
+  | 'week_load';
 
 export const COUNT_PATH = '/api/count';
 
@@ -202,6 +203,7 @@ function pressedLink(event: MouseEvent): HTMLAnchorElement | null {
 const HOME_PATH = '/';
 const BROADCAST_PATH = '/broadcast';
 const CONTRIBUTE_PATH = '/contribute';
+const WEEK_PATH = '/week';
 // How often the dwell clock is read, in milliseconds.
 const DWELL_CHECK_MS = 1000;
 
@@ -214,7 +216,7 @@ function pageVisible(): boolean {
   return typeof document === 'undefined' || document.visibilityState !== 'hidden';
 }
 
-// The page load's own once-each sender: the broadcast's and /contribute's loads, a tagged landing, and
+// The page load's own once-each sender: the broadcast's, /contribute's and /week's loads, a tagged landing, and
 // a Discord or Payment Link press, each count once however many times this page load sees them.
 const perPageLoad = onceEach();
 const sendEach = (event: PlayEvent): void => countEvent(event);
@@ -226,7 +228,7 @@ export type CountLinks = { discordInvite: string; playUrl: string; stripePayment
  * The site's benchmark counters, mounted once by the frame (App.tsx):
  * - each view of home counts home_load once it is shown, and home_dwell_mid and home_dwell_long once the view has been
  *   visible 15 and 45 seconds; leaving home stops the clock;
- * - /broadcast counts broadcast_load, and /contribute contribute_load, once a page load;
+ * - /broadcast counts broadcast_load, /contribute contribute_load and /week week_load, once a page load;
  * - an address carrying the QR code's source tag counts broadcast_qr once, and a channel's tag counts
  *   from_<tag> once (docs/specs/channel-counters.md); either tag is then dropped;
  * - a press on a Discord link counts discord_click, and a press on a Payment Link checkout_open, once a
@@ -251,6 +253,7 @@ export function useSiteCounts(links: CountLinks, send: (event: PlayEvent) => voi
   useEffect(() => {
     if (path === BROADCAST_PATH) once('broadcast_load');
     if (path === CONTRIBUTE_PATH) once('contribute_load');
+    if (path === WEEK_PATH) once('week_load');
   }, [path, once]);
 
   useEffect(() => {

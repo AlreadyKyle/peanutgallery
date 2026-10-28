@@ -331,6 +331,8 @@ Deno.test("migrations on PGlite", {
         // governance-copy (docs/specs/governance-copy.md): six roles' words on /team, then Terms version 4.
         "20261020210000_governance_role_copy.sql",
         "20261020210100_terms_version_4.sql",
+        // week counter (docs/specs/counter-senders.md, This week): /week's load.
+        "20261028170000_week_counter.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);

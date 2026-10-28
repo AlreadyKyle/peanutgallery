@@ -4,7 +4,7 @@ import { expect, test } from './fixtures';
 
 // The site's benchmark counters (docs/specs/counter-senders.md): home views and their dwell, the
 // broadcast's load and its QR landing, a press on a Discord link, and the funnel: /contribute's load,
-// a press on a Payment Link and a press from home into the game. Each is a POST to the site's own
+// a press on a Payment Link and a press from home into the game; and /week's load. Each is a POST to the site's own
 // /api/count carrying the event's name alone, with no cookie and no query string.
 
 function countsOf(page: Page): { events: string[]; requests: Request[] } {
@@ -128,6 +128,27 @@ test('/contribute counts its load once, and a press on a Payment Link counts che
   await counted;
   await expect(page).toHaveURL(new RegExp(`^${PAYMENT_LINK}`));
   expect(seen.events).toEqual(['home_load', 'contribute_load', 'checkout_open']);
+  await plain(seen.requests);
+});
+
+test('/week counts its load once a page load, reached from the footer or opened by address (Q-053)', async ({ page }) => {
+  const seen = countsOf(page);
+  await page.goto('/faq');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  // The footer's This week moves inside the site: a view of /week, no new page load.
+  await page.getByRole('contentinfo').getByRole('link', { name: 'This week' }).click();
+  await expect(page).toHaveURL(/\/week$/);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect.poll(() => seen.events).toEqual(['week_load']);
+  await page.getByRole('contentinfo').getByRole('link', { name: 'Privacy' }).click();
+  await expect(page).toHaveURL(/\/privacy$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/week$/);
+  expect(seen.events).toEqual(['week_load']);
+  // A reload is another page load, so it counts again.
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect.poll(() => seen.events).toEqual(['week_load', 'week_load']);
   await plain(seen.requests);
 });
 
