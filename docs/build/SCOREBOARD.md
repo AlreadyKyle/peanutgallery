@@ -8,6 +8,7 @@ Columns are 7-day totals ending that day: home loads, Dust loads, presses into t
 |---|---|---|---|---|---|---|---|---|
 | 2026-10-26 | 185 | 70 | 6 | 6 | 4 | 7 | 0 | 0 |
 | 2026-10-26 (routine) | 101 | 58 | 5 | 6 | 3 | 6 | 0 | 0 |
+| 2026-10-27 | 76 | 44 | 4 | 6 | 2 | 6 | 0 | 0 |
 
 The baseline row was read by hand on 26 October 2026. No launch post had gone up, and no card had shipped since 10 October.
 

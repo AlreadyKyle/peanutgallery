@@ -4,3 +4,4 @@ Every pull request that changes what a player or visitor sees states a bet in it
 
 | Merged | Pull request | QUEUE | Bet | Day 7 | Day 14 | Result |
 |---|---|---|---|---|---|---|
+| 2026-10-27 | #277 | Q-052 | `card_share` in `play_counts`, from 0 in the 7 UTC days to 27 October to at least 3 in any 7-day window within 14 days of release | | | |
