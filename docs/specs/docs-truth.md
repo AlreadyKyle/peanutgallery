@@ -23,7 +23,7 @@ Out: any code change, any change of intent or strategy in PLAN.md, the specs of 
 
 - A newcomer can read the README and know what runs where, how a card ships, what to install, what `pnpm verify` runs and what the terms mean.
 - Every fact added is checked against the code, git history or a spec, and names its source where it stands.
-- `pnpm test:docs` fails when a spec has no valid Status line, when a ROADMAP row names a spec path at a status other than the spec's own or names a path that does not exist, when the seed-1 protected paths differ from the kernel list, or when README.md, CLAUDE.md or PLAN.md names one of the founder's other companies, or names Clayhouse outside the "Created by Clayhouse" credit.
+- `pnpm test:docs` fails when a spec has no valid Status line, when a ROADMAP row names a spec path at a status other than the spec's own or names a path that does not exist, when the seed-1 protected paths differ from the kernel list, or when README.md, CLAUDE.md or PLAN.md names one of the founder's other companies, or names Clayhouse outside the contact address hello@clayhouse.studio (the footer credit moved to "Created by Background World" on 2 November 2026, PLAN.md §10 decision 80).
 
 ## Acceptance criteria
 
