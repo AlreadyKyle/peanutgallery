@@ -1758,7 +1758,7 @@ describe('install.sh --jobs-only', () => {
     assert.match(first.stdout, /controller\.env is missing: the controller job is left out/);
     assert.match(first.stdout, /quota\.env is missing: the quota job is left out/);
     assert.deepEqual(readdirSync(h.agents), ['studio.mobmachine.backup.plist']);
-    assert.ok(h.callLines().some((line) => /^launchctl bootstrap gui\/\d+ .*studio\.peanutgallery\.backup\.plist$/.test(line)));
+    assert.ok(h.callLines().some((line) => /^launchctl bootstrap gui\/\d+ .*studio\.mobmachine\.backup\.plist$/.test(line)));
     assert.ok(!h.callLines().some((line) => /dispatcher|controller|quota/.test(line)), 'no dispatcher and no job without an env file');
     assert.equal(readFileSync(path.join(h.env, 'ntfy.url'), 'utf8'), 'https://ntfy.sh/fixture-topic\n');
     assert.ok(!existsSync(path.join(h.env, 'dispatcher.env')));
