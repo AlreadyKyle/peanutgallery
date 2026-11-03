@@ -1,0 +1,21 @@
+{
+  "name": "mob-machine-clips",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "music": "node scripts/music.mjs",
+    "render": "node scripts/render.mjs"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.526",
+    "@remotion/renderer": "4.0.526",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.526",
+    "tone": "15.1.22"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10",
+    "playwright-core": "1.55.0"
+  }
+}

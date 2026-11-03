@@ -1,0 +1,18 @@
+{
+  "id": "spotlight-d405fb97-ccad-4f6f-8838--discord",
+  "createdAt": "2026-10-18T16:37:40.189Z",
+  "status": "pending",
+  "problems": [],
+  "moment": {
+    "kind": "spotlight",
+    "ref": "d405fb97-ccad-4f6f-8838-929dfb281343:2026-10-18",
+    "priority": 30,
+    "at": "2026-10-18T16:37:40.189Z"
+  },
+  "channel": "discord",
+  "variant": "plain",
+  "text": "Open for funding: Lower the Mill's starting price from 2200 to 1500 dust. The Mill gets cheaper to buy, so your first one arrives sooner after it opens. $0.52 of $0.78 so far.",
+  "link": "https://mobmachine.games/card/d405fb97-ccad-4f6f-8838-929dfb281343?from=discord",
+  "image": "https://mobmachine.games/api/card/d405fb97-ccad-4f6f-8838-929dfb281343/preview.png",
+  "video": null
+}

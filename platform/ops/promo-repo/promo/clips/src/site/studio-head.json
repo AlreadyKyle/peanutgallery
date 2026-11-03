@@ -1,0 +1,16 @@
+{
+  "name": "Studio Head",
+  "title": "Studio Head",
+  "description": "Keeps the studio's roadmap and numbers.",
+  "species_note": "A small grey creature with one large eye and a flat, wide head.",
+  "model": "MODEL_DIRECTOR",
+  "budget_share": 0.10,
+  "voice": "terse",
+  "prompt_path": "platform/agents/prompts/studio-head.md",
+  "tools": ["Read", "Glob", "Grep"],
+  "metrics": ["estimate_accuracy", "cost_per_ship"],
+  "class": "planner",
+  "write_access": true,
+  "status": "planned",
+  "trigger": "Starts when its backlog entries are built: drafting cards from the roadmap and triaging board notes."
+}

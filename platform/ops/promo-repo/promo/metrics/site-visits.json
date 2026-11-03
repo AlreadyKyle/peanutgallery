@@ -1,0 +1,13 @@
+{
+  "window": "2026-10-13..2026-10-19",
+  "readAt": "2026-10-19T16:00:00Z",
+  "byChannel": {
+    "x": 0,
+    "bsky": 0,
+    "threads": 0,
+    "mastodon": 0,
+    "discord": 0,
+    "yt": 0,
+    "tiktok": 0
+  }
+}
