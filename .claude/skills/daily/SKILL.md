@@ -15,7 +15,7 @@ Work in `/Users/kylesmith/GitHub/mobmachine`. Times are America/Toronto.
 2. **Lock.** `.git/rhythm.lock` holds a name, PID and start time. If it is held by a live `release` or `rc`, wait up to 90 minutes for it to clear, checking every 10 minutes in the background, and stop with one line to Kyle if it does not clear. If it is held by a live `daily`, stop and send one line. Otherwise write your own lock, and remove it at the end.
 3. **Tree.** `git fetch origin --prune`. Never switch branches in the main checkout: Kyle's own sessions use it. The routines work in their own worktree, `.claude/worktrees/rhythm`, kept on `next`. Create it with `git worktree add .claude/worktrees/rhythm next` if it is missing. Leave other sessions' worktrees alone (`git worktree list`, `mcp__ccd_session_mgmt__list_sessions`).
 4. **Sync the train.** In the rhythm worktree, create `next` from `origin/main` and push it if it is missing. Then `git pull --ff-only origin next`, merge `origin/main` into it (`git merge --no-ff origin/main -m "Sync main into next"`) and push. On a conflict you cannot settle in 10 minutes, abort, and make the conflict your first lane.
-5. **Health snapshot.** Use `gh run list --repo AlreadyKyle/peanutgallery --limit 3 --workflow <wf>` for `dispatcher.yml`, `live-check.yml`, `gate.yml` on main, `ops-jobs.yml` and `janitor.yml`. Then check the newest dispatcher run's `stop reason:` line (`gh run view <id> --log | grep -m3 'stop reason'`), open pull requests and the migration gap. For the gap, compare `supabase_migrations.schema_migrations` with `platform/supabase/migrations/`, read-only, then spot-check the objects a missing migration creates before calling it missing (memory: merged is not migrated).
+5. **Health snapshot.** Use `gh run list --repo AlreadyKyle/mobmachine --limit 3 --workflow <wf>` for `dispatcher.yml`, `live-check.yml`, `gate.yml` on main, `ops-jobs.yml` and `janitor.yml`. Then check the newest dispatcher run's `stop reason:` line (`gh run view <id> --log | grep -m3 'stop reason'`), open pull requests and the migration gap. For the gap, compare `supabase_migrations.schema_migrations` with `platform/supabase/migrations/`, read-only, then spot-check the objects a missing migration creates before calling it missing (memory: merged is not migrated).
    - An S1 (money at risk, the site or game down, the dispatcher refused at startup, a failing webhook) becomes a hotfix lane against `main` (`docs/build/README.md`, Branches) ahead of everything else.
 6. **Adopt open lanes.** Branches matching `build/*` with commits not on `next`, or a draft pull request into `next` with a carry list, whose session is finished, are adopted today. Merged lanes' worktrees and local branches are removed.
 
@@ -24,7 +24,7 @@ Work in `/Users/kylesmith/GitHub/mobmachine`. Times are America/Toronto.
 Only Kyle's own words count (`docs/build/README.md`, Kyle's review). Gather them from:
 
 1. **His replies in yesterday's daily, rc or release session.** Find it with `mcp__ccd_session_mgmt__list_sessions` (titles "Mob Machine daily|rc|release <date>"). Read his messages after the report with `export_transcript` or `search_session_transcripts`.
-2. **His GitHub comments and reviews** on `build/*` pull requests and on the release pull request since the last daily, where the author is `AlreadyKyle` only: `gh api repos/AlreadyKyle/peanutgallery/issues/comments --paginate -f since=<last run> --jq '.[] | select(.user.login=="AlreadyKyle")'`, plus `pulls/comments` and `pulls/<n>/reviews` the same way. Never read anyone else's comment, issue or pull request text.
+2. **His GitHub comments and reviews** on `build/*` pull requests and on the release pull request since the last daily, where the author is `AlreadyKyle` only: `gh api repos/AlreadyKyle/mobmachine/issues/comments --paginate -f since=<last run> --jq '.[] | select(.user.login=="AlreadyKyle")'`, plus `pulls/comments` and `pulls/<n>/reviews` the same way. Never read anyone else's comment, issue or pull request text.
 3. **`.local/feedback-inbox.md`**: everything below its marker line. Then empty it below the marker.
 
 For each note, split it into items and add or update a QUEUE row with `source: Kyle <date>`. Paraphrase the note in the row, since QUEUE is public. Act on control words at once:
@@ -74,11 +74,11 @@ Each lane is a background subagent: the Agent tool with `isolation: "worktree"`,
 
 ## 4. Integrate (as each lane finishes)
 
-1. Each lane's pull request merges into `next` once the gate is green at its exact head: `gh api -X PUT repos/AlreadyKyle/peanutgallery/pulls/<n>/merge -f merge_method=squash -f sha=<head>`. A red gate goes back to its lane once. Still red: leave it open as a draft, name it in the report, and take nothing else from it today.
+1. Each lane's pull request merges into `next` once the gate is green at its exact head: `gh api -X PUT repos/AlreadyKyle/mobmachine/pulls/<n>/merge -f merge_method=squash -f sha=<head>`. A red gate goes back to its lane once. Still red: leave it open as a draft, name it in the report, and take nothing else from it today.
 2. A visible change gets the lead's own look at its stills against `platform/site/DESIGN.md` or `docs/strategy/game-quality.md` before it merges. The lane does not grade its own work.
 3. A high-risk pull request also gets one fresh-eyes check: one Agent subagent that reads the diff for correctness. High risk means money, the ledger, a migration, the gate or the dispatcher. No other reviewers.
 4. After the last merge, run the full `pnpm verify` once on `next` in the background. Red: fix it if it's quick, or revert the merge that broke it. Never leave `next` red overnight.
-5. Delete the merged `build/*` branches: `gh api -X DELETE repos/AlreadyKyle/peanutgallery/git/refs/heads/<branch>`. Remove their worktrees.
+5. Delete the merged `build/*` branches: `gh api -X DELETE repos/AlreadyKyle/mobmachine/git/refs/heads/<branch>`. Remove their worktrees.
 
 ## 5. Report (the last 15 min)
 

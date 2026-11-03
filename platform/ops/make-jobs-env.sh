@@ -12,7 +12,7 @@
 #   platform/ops/make-jobs-env.sh [backup|backup-mac|controller|quota|notices|marketing ...]
 # With no job named it writes the server's three. CONTROLLER_HEALTHCHECK_URL and QUOTA_HEALTHCHECK_URL
 # are copied when exported. The files go to a new temporary folder, or to JOBS_ENV_DIR when it names an
-# existing folder only its owner can open (the Mac host's ~/peanutgallery-host/env). DOTENV names
+# existing folder only its owner can open (the Mac host's ~/mobmachine-host/env). DOTENV names
 # another .env to read (default: .env at the repository root). The transform is jobs-env.mjs.
 set -euo pipefail
 
@@ -54,5 +54,5 @@ if [ -z "$(find "$OUT" -mindepth 1 -print -quit)" ]; then
   rmdir "$OUT"
   exit "$status"
 fi
-echo "next: scp each file to root@<vps-ip>:/etc/peanutgallery/, then delete $OUT (platform/ops/README.md, Backups and the Controller)"
+echo "next: scp each file to root@<vps-ip>:/etc/mobmachine/, then delete $OUT (platform/ops/README.md, Backups and the Controller)"
 exit "$status"

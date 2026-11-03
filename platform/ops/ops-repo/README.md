@@ -1,6 +1,6 @@
 # The daily jobs on GitHub Actions, and the ops repository
 
-The nightly backup, the Controller, the quota check, the ship notices and the marketing engine run on GitHub Actions in this public repository, as `.github/workflows/ops-jobs.yml` with `platform/ops/actions/run-ops-job.sh` (`docs/PLAN.md` §10 decision 78). From 6 October 2026 they ran in a private repository of the board's, `AlreadyKyle/mobmachine-ops`, from a template that lived here; that repository stopped when the account's free private Actions minutes ran out on 18 October 2026 with a budget of $0, and a public repository's standard runners are free, so they moved. `AlreadyKyle/mobmachine-ops` keeps the promotion and itch.io workflows (its own README), which use the private minutes.
+The nightly backup, the Controller, the quota check, the ship notices and the marketing engine run on GitHub Actions in this public repository, as `.github/workflows/ops-jobs.yml` with `platform/ops/actions/run-ops-job.sh` (`docs/PLAN.md` §10 decision 78). From 6 October 2026 they ran in a private repository of the board's, `AlreadyKyle/mobmachine-ops`, from a template that lived here; that repository stopped when the account's free private Actions minutes ran out on 18 October 2026 with a budget of $0, and a public repository's standard runners are free, so they moved. Its promotion and itch.io workflows stopped with the minutes; on 3 November 2026 the board merged that repository, with its history, into this one under `platform/ops/promo-repo/`, where GitHub never runs a workflow, and archived it.
 
 ## What runs
 
@@ -12,7 +12,7 @@ The nightly backup, the Controller, the quota check, the ship notices and the ma
 | `notices` | 09:07 daily | `jobs/check-env.mjs notices`, then `node --env-file jobs/main.mjs notices`: the ship notices (`docs/specs/ship-notices.md`), then the emails for cards players follow (`docs/specs/card-follows.md`), at most 50 a run in all, payers first |
 | `marketing` | minute 23 of every hour | `jobs/check-env.mjs marketing`, then `node --env-file jobs/main.mjs marketing`: the studio's ships, openings and weekly report on Bluesky, Mastodon and Discord, outbound only, at most 3 posts a channel a run (`docs/specs/marketing-engine.md`) |
 
-`workflow_dispatch` with the input `job` runs any one of them at once (`gh workflow run ops-jobs.yml --repo AlreadyKyle/peanutgallery -f job=backup`). A failure posts "Mob Machine job <job> failed on GitHub Actions: <run URL>" to ntfy.
+`workflow_dispatch` with the input `job` runs any one of them at once (`gh workflow run ops-jobs.yml --repo AlreadyKyle/mobmachine -f job=backup`). A failure posts "Mob Machine job <job> failed on GitHub Actions: <run URL>" to ntfy.
 
 ## Secrets and the public log
 
@@ -32,23 +32,23 @@ From the board's checkout of main on the Mac, with `.env` and `.env.vps` in plac
 
 1. **The environment.** Create `ops` with a deployment branch policy that allows main alone, before any secret goes in:
    ```sh
-   gh api -X PUT repos/AlreadyKyle/peanutgallery/environments/ops \
+   gh api -X PUT repos/AlreadyKyle/mobmachine/environments/ops \
      -F 'deployment_branch_policy[protected_branches]=false' -F 'deployment_branch_policy[custom_branch_policies]=true'
-   gh api -X POST repos/AlreadyKyle/peanutgallery/environments/ops/deployment-branch-policies -f name=main -f type=branch
-   gh api repos/AlreadyKyle/peanutgallery/environments/ops/deployment-branch-policies --jq '.branch_policies[].name'
+   gh api -X POST repos/AlreadyKyle/mobmachine/environments/ops/deployment-branch-policies -f name=main -f type=branch
+   gh api repos/AlreadyKyle/mobmachine/environments/ops/deployment-branch-policies --jq '.branch_policies[].name'
    ```
    The last line must print `main` and nothing else.
 2. **The env files.** With `.env.vps` exported (`set -a; . ./.env.vps; set +a`): `JOBS_ENV_DIR=<a new folder only you can open> platform/ops/make-jobs-env.sh backup-mac controller quota notices marketing`. The workflow replaces the backup's `BACKUP_DIR`. `marketing.env` holds each channel whose keys `.env` sets (`.env.example`, The marketing engine).
-3. **The secrets.** `gh secret set BACKUP_ENV --env ops --repo AlreadyKyle/peanutgallery < <folder>/backup-mac.env`, and the same for `CONTROLLER_ENV`, `QUOTA_ENV`, `NOTICES_ENV` and `MARKETING_ENV` from `controller.env`, `quota.env`, `notices.env` and `marketing.env`; `NTFY_TOPIC_URL` from `.env.vps`. Then delete the folder.
-4. **Run the backup once** (`gh workflow run ops-jobs.yml --repo AlreadyKyle/peanutgallery -f job=backup`) and read its log: it ends `ops-job: backup exited 0 (done)`, and the run keeps the artifact `backup-<run id>`.
+3. **The secrets.** `gh secret set BACKUP_ENV --env ops --repo AlreadyKyle/mobmachine < <folder>/backup-mac.env`, and the same for `CONTROLLER_ENV`, `QUOTA_ENV`, `NOTICES_ENV` and `MARKETING_ENV` from `controller.env`, `quota.env`, `notices.env` and `marketing.env`; `NTFY_TOPIC_URL` from `.env.vps`. Then delete the folder.
+4. **Run the backup once** (`gh workflow run ops-jobs.yml --repo AlreadyKyle/mobmachine -f job=backup`) and read its log: it ends `ops-job: backup exited 0 (done)`, and the run keeps the artifact `backup-<run id>`.
 
 `vars.BACKUP_AGE_RECIPIENT` is the dispatcher's, already set.
 
-**The marketing engine's channels.** Before `MARKETING_ENV` gets a Bluesky, Mastodon or Discord key, take that channel's `PROMO_*` keys out of the private repository's `PROMO_ENV`, so the two engines never post the same news. Then check what it would post: `gh workflow run ops-jobs.yml --repo AlreadyKyle/peanutgallery -f job=marketing` posts for real, so first run `node --env-file <folder>/marketing.env platform/ops/jobs/main.mjs marketing --dry-run` on the Mac, which prints every post in full and posts nothing.
+**The marketing engine's channels.** Before `MARKETING_ENV` gets a Bluesky, Mastodon or Discord key, take that channel's `PROMO_*` keys out of the private repository's `PROMO_ENV`, so the two engines never post the same news. Then check what it would post: `gh workflow run ops-jobs.yml --repo AlreadyKyle/mobmachine -f job=marketing` posts for real, so first run `node --env-file <folder>/marketing.env platform/ops/jobs/main.mjs marketing --dry-run` on the Mac, which prints every post in full and posts nothing.
 
 ## Restore
 
-Download the artifact (`gh run download <run id> --repo AlreadyKyle/peanutgallery -n backup-<run id>`), or, when the artifact is gone or GitHub is out of reach, take it from the bucket, signed in with `gcloud auth login` as the project's owner account: `gcloud storage ls gs://mobmachine-backups/`, then `gcloud storage cp gs://mobmachine-backups/peanutgallery-<UTC time>.tar.age .`. Then follow `platform/ops/README.md`, Restore a Mac backup, from step 2. A job's log: download `ops-log-<job>-<run id>-<attempt>` the same way and `age -d -i <the backup key> ops-job-log.age`. The weekly restore check is not on Actions yet (`docs/BACKLOG.md`, Weekly restore check on Actions).
+Download the artifact (`gh run download <run id> --repo AlreadyKyle/mobmachine -n backup-<run id>`), or, when the artifact is gone or GitHub is out of reach, take it from the bucket, signed in with `gcloud auth login` as the project's owner account: `gcloud storage ls gs://mobmachine-backups/`, then `gcloud storage cp gs://mobmachine-backups/peanutgallery-<UTC time>.tar.age .`. Then follow `platform/ops/README.md`, Restore a Mac backup, from step 2. A job's log: download `ops-log-<job>-<run id>-<attempt>` the same way and `age -d -i <the backup key> ops-job-log.age`. The weekly restore check is not on Actions yet (`docs/BACKLOG.md`, Weekly restore check on Actions).
 
 ## What it costs
 

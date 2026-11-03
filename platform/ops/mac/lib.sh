@@ -7,7 +7,7 @@
 # check_code_clone, check_quiet, supabase_get, github_get, check_gate, review_target, confirm_target
 # and probe_passed, the same checks the server runs, and points them at the Mac's folders.
 #
-# The host folder, ~/peanutgallery-host unless PEANUTGALLERY_HOST names another, outside the board's
+# The host folder, ~/mobmachine-host unless MOBMACHINE_HOST names another, outside the board's
 # own checkout:
 #   code/            the code clone: the dispatcher's code, node_modules, the pnpm store and the .env
 #                    the dispatcher reads. Made read-only (chmod -R a-w) after every install; only
@@ -26,7 +26,7 @@ OPS_DIR=$(dirname "$MAC_DIR")
 # shellcheck source=/dev/null
 DEPLOY_SOURCE_ONLY=1 . "$OPS_DIR/deploy.sh"
 
-HOST_ROOT=${PEANUTGALLERY_HOST:-$HOME/peanutgallery-host}
+HOST_ROOT=${MOBMACHINE_HOST:-$HOME/mobmachine-host}
 CODE_DIR=$HOST_ROOT/code
 WORK_DIR=$HOST_ROOT/work
 WORKTREE_DIR=$HOST_ROOT/work-worktrees
@@ -36,10 +36,10 @@ LOG_DIR=$HOST_ROOT/logs
 DISPATCHER_LOG=$LOG_DIR/dispatcher.log
 # What deploy.sh's env_value, supabase_get and github_get read: the dispatcher's own .env.
 ENV_FILE=$CODE_DIR/.env
-# Where the board writes it: platform/ops/make-dispatcher-env.sh ~/peanutgallery-host/env/dispatcher.env
+# Where the board writes it: platform/ops/make-dispatcher-env.sh ~/mobmachine-host/env/dispatcher.env
 HOST_ENV_FILE=$ENV_DIR/dispatcher.env
 AGENTS_DIR=${LAUNCH_AGENTS_DIR:-$HOME/Library/LaunchAgents}
-DISPATCHER_LABEL=studio.peanutgallery.dispatcher
+DISPATCHER_LABEL=studio.mobmachine.dispatcher
 MAC_JOBS="backup controller quota"
 PROBE_WAIT_SECONDS=${PROBE_WAIT_SECONDS:-600}
 # The folders the dispatcher's read-only check looks at (CODE_PATHS in platform/dispatcher/src/startup.ts).
@@ -60,7 +60,7 @@ job_minute() {
   esac
 }
 
-job_label() { echo "studio.peanutgallery.$1"; }
+job_label() { echo "studio.mobmachine.$1"; }
 
 # launch_path: the PATH the LaunchAgents run with: node's folder first, so they run the node this
 # install checked, then Homebrew's and the system's.

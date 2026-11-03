@@ -341,7 +341,7 @@ describe('the session process group', () => {
 });
 
 describe('the attended sandbox', () => {
-  const paths = { worktree: '/work/card-4c2f5a1e', repoRoot: '/Users/board/peanutgallery', home: '/Users/board', tmpdir: '/var/folders/tmp', uid: 501 };
+  const paths = { worktree: '/work/card-4c2f5a1e', repoRoot: '/Users/board/mobmachine', home: '/Users/board', tmpdir: '/var/folders/tmp', uid: 501 };
 
   // These paths do not exist on the machine running the test, so they are taken as already resolved.
   const asIs = (target: string) => target;
@@ -355,8 +355,8 @@ describe('the attended sandbox', () => {
       autoAllowBashIfSandboxed: false,
       network: { allowedDomains: [], allowUnixSockets: ['/tmp/claude-501/tsx-501', '/private/tmp/claude-501/tsx-501', '/var/folders/tmp/tsx-501'] },
       filesystem: {
-        denyRead: ['/Users/board', '/Users/board/peanutgallery'],
-        allowRead: ['/work/card-4c2f5a1e', '/Users/board/peanutgallery/.git', '/Users/board/Library/pnpm/store', '/Users/board/.cache/node/corepack', '/Users/board/Library/Caches/node/corepack', '/var/folders/tmp'],
+        denyRead: ['/Users/board', '/Users/board/mobmachine'],
+        allowRead: ['/work/card-4c2f5a1e', '/Users/board/mobmachine/.git', '/Users/board/Library/pnpm/store', '/Users/board/.cache/node/corepack', '/Users/board/Library/Caches/node/corepack', '/var/folders/tmp'],
         allowWrite: ['/work/card-4c2f5a1e', '/var/folders/tmp'],
       },
     });
@@ -380,7 +380,7 @@ describe('the attended sandbox', () => {
   it('denies the Read, Glob and Grep tools the credential paths, the .env files and the dispatcher, and Edit the git folder', () => {
     const { permissions } = attendedSettings(paths, asIs) as { permissions: { deny: string[] } };
     for (const rel of ['.ssh/**', '.config/**', 'Library/Keychains/**', '.claude/**', '.claude.json', '.netrc']) expect(HOME_DENY).toContain(rel);
-    expect(permissions.deny).toEqual([...HOME_DENY.map((rel) => `Read(~/${rel})`), 'Read(//Users/board/peanutgallery/.env*)', 'Read(//Users/board/peanutgallery/platform/dispatcher/**)', 'Edit(//Users/board/peanutgallery/.git/**)']);
+    expect(permissions.deny).toEqual([...HOME_DENY.map((rel) => `Read(~/${rel})`), 'Read(//Users/board/mobmachine/.env*)', 'Read(//Users/board/mobmachine/platform/dispatcher/**)', 'Edit(//Users/board/mobmachine/.git/**)']);
   });
 
   // On the Mac host the dispatcher runs from its code clone, whose .env holds the service-role key, the
@@ -388,15 +388,15 @@ describe('the attended sandbox', () => {
   // runs there (main.ts), so the code clone, the host's env folder, the dumps and every .env file under
   // the home folder are denied too.
   it('denies the Read, Glob and Grep tools the code clone, the host env folder, the dumps and every .env file under the home folder', () => {
-    const host = { ...paths, worktree: '/Users/board/peanutgallery-host/work-worktrees/job-1a2b3c4d', repoRoot: '/Users/board/peanutgallery-host/work', codeRoot: '/Users/board/peanutgallery-host/code' };
+    const host = { ...paths, worktree: '/Users/board/mobmachine-host/work-worktrees/job-1a2b3c4d', repoRoot: '/Users/board/mobmachine-host/work', codeRoot: '/Users/board/mobmachine-host/code' };
     const { permissions } = attendedSettings(host, asIs) as { permissions: { deny: string[] } };
     for (const rule of [
-      'Read(//Users/board/peanutgallery-host/code/.env*)',
-      'Read(//Users/board/peanutgallery-host/code/platform/dispatcher/**)',
-      'Read(//Users/board/peanutgallery-host/work/.env*)',
-      'Read(//Users/board/peanutgallery-host/work/platform/dispatcher/**)',
-      'Read(~/peanutgallery-host/env/**)',
-      'Read(~/peanutgallery-dumps/**)',
+      'Read(//Users/board/mobmachine-host/code/.env*)',
+      'Read(//Users/board/mobmachine-host/code/platform/dispatcher/**)',
+      'Read(//Users/board/mobmachine-host/work/.env*)',
+      'Read(//Users/board/mobmachine-host/work/platform/dispatcher/**)',
+      'Read(~/mobmachine-host/env/**)',
+      'Read(~/mobmachine-dumps/**)',
       'Read(~/**/.env)',
       'Read(~/**/.env.*)',
       'Read(~/**/*.env)',
@@ -477,7 +477,7 @@ describe('the attended sandbox', () => {
     try {
       const adapter = new AttendedAdapter({
         claudeBin: 'claude',
-        repoRoot: '/Users/board/peanutgallery',
+        repoRoot: '/Users/board/mobmachine',
         home: '/Users/board',
         tmpdir: '/var/folders/tmp',
         install: async (dir) => {

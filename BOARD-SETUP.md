@@ -47,9 +47,9 @@ gone with it. Two ways to stop the agents without Netlify, either one enough:
    host):
 
    ```sh
-   gh variable set DISPATCHER_HOST --repo AlreadyKyle/peanutgallery --body off
-   gh run list --repo AlreadyKyle/peanutgallery --workflow dispatcher.yml --status in_progress
-   gh run cancel <run id> --repo AlreadyKyle/peanutgallery
+   gh variable set DISPATCHER_HOST --repo AlreadyKyle/mobmachine --body off
+   gh run list --repo AlreadyKyle/mobmachine --workflow dispatcher.yml --status in_progress
+   gh run cancel <run id> --repo AlreadyKyle/mobmachine
    ```
 
    No run starts while it is off; healthchecks.io emails that the dispatcher is down. Set it `on` and

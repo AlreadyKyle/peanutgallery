@@ -42,4 +42,4 @@ if ! node "$OPS_DIR/dispatcher-env.mjs" "$DOTENV" "$OUT"; then
   exit 1
 fi
 chmod 600 "$OUT"
-echo "next: scp \"$OUT\" root@<vps-ip>:/etc/peanutgallery/dispatcher.env, then delete the local copy (platform/ops/README.md)"
+echo "next: scp \"$OUT\" root@<vps-ip>:/etc/mobmachine/dispatcher.env, then delete the local copy (platform/ops/README.md)"

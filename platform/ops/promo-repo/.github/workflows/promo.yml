@@ -1,0 +1,123 @@
+# Mob Machine's promo engine (promo/README.md): drafts posts from the studio's public documents,
+# sends the approved ones, reads back how they did and updates the playbook. Every run commits its
+# state to promo/ so the next run, and the marketer routine, pick up from git alone.
+# Secrets: PROMO_ENV holds the channel credentials as KEY=value lines (promo/README.md, Credentials).
+name: promo
+
+on:
+  schedule:
+    - cron: '23 13 * * *'      # harvest: draft today's posts
+    - cron: '41 */3 * * *'     # publish: send what is approved
+    - cron: '53 5 * * *'       # metrics: read back and learn
+  push:
+    branches: [main]
+    paths: ['promo/outbox/**', 'promo/config.json']
+  workflow_dispatch:
+    inputs:
+      job:
+        description: harvest, publish or metrics
+        required: true
+        type: choice
+        options: [harvest, publish, metrics]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promo
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Pick the job
+        id: pick
+        env:
+          ASKED: ${{ github.event.inputs.job }}
+          SCHEDULE: ${{ github.event.schedule }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          case "$EVENT:$ASKED:$SCHEDULE" in
+            workflow_dispatch:*) job="$ASKED" ;;
+            push:*) job=publish ;;
+            *':23 13 * * *') job=harvest ;;
+            *':41 */3 * * *') job=publish ;;
+            *':53 5 * * *') job=metrics ;;
+            *) echo "no job for '$EVENT' '$ASKED' '$SCHEDULE'"; exit 1 ;;
+          esac
+          echo "job=$job" >> "$GITHUB_OUTPUT"
+          echo "job: $job"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Check out the studio's deny-list
+        if: steps.pick.outputs.job != 'metrics'
+        uses: actions/checkout@v4
+        with:
+          repository: AlreadyKyle/mobmachine
+          ref: ${{ vars.STUDIO_REF }}
+          path: studio
+          persist-credentials: false
+          sparse-checkout: platform/gate
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: promo/clips/package-lock.json
+
+      # Clips (promo/clips) render just before they are sent, so the renderer is installed only
+      # when a clip could go out: on harvest days, and whenever the outbox holds a clip draft.
+      - name: Check for clips to render
+        id: clips
+        if: steps.pick.outputs.job != 'metrics'
+        run: |
+          if [ "${{ steps.pick.outputs.job }}" = harvest ] || grep -qs '"clip"' promo/outbox/*.json; then echo 'needed=true' >> "$GITHUB_OUTPUT"; fi
+
+      - name: Install the clip renderer
+        if: steps.clips.outputs.needed == 'true'
+        working-directory: promo/clips
+        run: npm ci --no-audit --no-fund
+
+      - name: Run
+        env:
+          JOB: ${{ steps.pick.outputs.job }}
+          PROMO_ENV: ${{ secrets.PROMO_ENV }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$PROMO_ENV" > "$RUNNER_TEMP/promo.env"
+          if [ "$JOB" = harvest ]; then node promo/src/cli.mjs harvest; fi
+          if [ "$JOB" != metrics ]; then node promo/src/scan.mjs studio; fi
+          if [ "$JOB" != metrics ]; then node --env-file="$RUNNER_TEMP/promo.env" promo/src/cli.mjs publish; fi
+          if [ "$JOB" = metrics ]; then node --env-file="$RUNNER_TEMP/promo.env" promo/src/cli.mjs metrics; fi
+          node promo/src/cli.mjs status
+
+      - name: Commit the engine's state
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name 'mob-machine-promo'
+          git config user.email 'promo@users.noreply.github.com'
+          git add promo
+          if git diff --cached --quiet; then echo 'no change'; exit 0; fi
+          git commit -q -m "promo: ${{ steps.pick.outputs.job }} run ${{ github.run_id }}"
+          for attempt in 1 2 3; do
+            git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0
+            sleep $((attempt * 5))
+          done
+          exit 1
+
+      - name: Alert the board
+        if: failure()
+        env:
+          NTFY_TOPIC_URL: ${{ secrets.NTFY_TOPIC_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -n "$NTFY_TOPIC_URL" ] || exit 0
+          curl -fsS --max-time 20 -H 'Title: Mob Machine promo' -d "Promo run failed: $RUN_URL" "$NTFY_TOPIC_URL" > /dev/null || true

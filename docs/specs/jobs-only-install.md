@@ -6,7 +6,7 @@ Superseded by `actions-host.md` (PLAN.md §10 decision 61): since 6 October 2026
 
 ## Problem
 
-Contributions are open, so the money database is live, but it has no scheduled backup. `platform/ops/mac/install.sh` installs the nightly backup, Controller and quota LaunchAgents only after `check_host_env` passes on `~/peanutgallery-host/env/dispatcher.env`. That file needs `MANAGED_AGENT_ID`, `MANAGED_AGENT_VERSION` and `MANAGED_ENVIRONMENT_ID` from `managed:apply`, which fails until the studio's Anthropic organisation has Console credit (`BOARD-SETUP.md` step 22), and the code clone is cloned with that file's `GITHUB_TOKEN`. So until the cutover (step 23) a backup runs only by hand (`sweep-27-sep.md`, Scope, Out).
+Contributions are open, so the money database is live, but it has no scheduled backup. `platform/ops/mac/install.sh` installs the nightly backup, Controller and quota LaunchAgents only after `check_host_env` passes on `~/mobmachine-host/env/dispatcher.env`. That file needs `MANAGED_AGENT_ID`, `MANAGED_AGENT_VERSION` and `MANAGED_ENVIRONMENT_ID` from `managed:apply`, which fails until the studio's Anthropic organisation has Console credit (`BOARD-SETUP.md` step 22), and the code clone is cloned with that file's `GITHUB_TOKEN`. So until the cutover (step 23) a backup runs only by hand (`sweep-27-sep.md`, Scope, Out).
 
 ## Scope
 
@@ -34,7 +34,7 @@ A plain `install.sh` (and `--start`) first refuses a code clone made by `--jobs-
 
 ## Acceptance criteria
 
-- [x] With only `backup-mac.env` and no `dispatcher.env`, `--jobs-only` clones with `GITHUB_READ_TOKEN` (the host token also exported), loads only `studio.peanutgallery.backup`, writes `ntfy.url`, leaves no `.env`, `node_modules`, work clone or dispatcher LaunchAgent, leaves nothing in the clone writable, records the commit, puts no token in `.git/config` or the output, and a second run with no token reports `0 change(s)`.
+- [x] With only `backup-mac.env` and no `dispatcher.env`, `--jobs-only` clones with `GITHUB_READ_TOKEN` (the host token also exported), loads only `studio.mobmachine.backup`, writes `ntfy.url`, leaves no `.env`, `node_modules`, work clone or dispatcher LaunchAgent, leaves nothing in the clone writable, records the commit, puts no token in `.git/config` or the output, and a second run with no token reports `0 change(s)`.
 - [x] A job whose env file exists and passes is installed too; with only `VPS_GITHUB_TOKEN` exported, the clone uses it.
 - [x] It stops, writing no LaunchAgent and printing no value, on: a missing `backup-mac.env`; one at 0644; one that is a symlink; another job's key in it; the owner's connection string; a Stripe secret key in `controller.env`; no token to clone with; a classic token; no `NTFY_TOPIC_URL` and no `ntfy.url`; an `http` alert address.
 - [x] It refuses a dirty code clone and leaves it read-only on the way out.
@@ -48,11 +48,11 @@ A plain `install.sh` (and `--start`) first refuses a code clone made by `--jobs-
 - `pnpm verify`
 - `node --test --test-name-pattern="jobs-only" platform/ops/test/ops.test.mjs`
 - `shellcheck platform/ops/mac/*.sh`
-- On the Mac, from a local session: `platform/ops/mac/install.sh --jobs-only` twice, then `~/peanutgallery-host/code/platform/ops/mac/run-job.sh backup --now; tail -n 10 ~/peanutgallery-host/logs/backup.log`, quoted (waits on: the board).
+- On the Mac, from a local session: `platform/ops/mac/install.sh --jobs-only` twice, then `~/mobmachine-host/code/platform/ops/mac/run-job.sh backup --now; tail -n 10 ~/mobmachine-host/logs/backup.log`, quoted (waits on: the board).
 
 ## Production steps
 
-1. After the board's step 3 and the backup login's password (`money-safety.md`, production step 3): `JOBS_ENV_DIR=~/peanutgallery-host/env platform/ops/make-jobs-env.sh backup-mac` (and `controller`, `quota` once their keys exist), then, with `.env.vps` exported, `platform/ops/mac/install.sh --jobs-only` twice. Quote both.
+1. After the board's step 3 and the backup login's password (`money-safety.md`, production step 3): `JOBS_ENV_DIR=~/mobmachine-host/env platform/ops/make-jobs-env.sh backup-mac` (and `controller`, `quota` once their keys exist), then, with `.env.vps` exported, `platform/ops/mac/install.sh --jobs-only` twice. Quote both.
 2. `run-job.sh backup --now` and the file in the Drive folder. Quote them.
 3. At the cutover (step 23): move the jobs-only clone aside as the refusal prints, then the plain install as the runbook lists it.
 

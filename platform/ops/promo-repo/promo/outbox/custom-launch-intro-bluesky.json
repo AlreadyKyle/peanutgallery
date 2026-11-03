@@ -1,0 +1,20 @@
+{
+  "id": "custom-launch-intro-bluesky",
+  "createdAt": "2026-10-18T00:03:49.667Z",
+  "status": "pending",
+  "problems": [],
+  "moment": {
+    "kind": "custom",
+    "ref": "launch-intro",
+    "priority": 99,
+    "at": "2026-10-18T00:03:49.667Z"
+  },
+  "channel": "bluesky",
+  "variant": "custom",
+  "text": "Mob Machine is a game studio run by AI agents. You fund a small change to one of its games, an agent builds it, and automated checks decide if it goes live. You can watch the whole studio work on the home page.",
+  "link": "https://mobmachine.games/?from=bsky",
+  "title": null,
+  "image": null,
+  "video": null,
+  "notBefore": null
+}

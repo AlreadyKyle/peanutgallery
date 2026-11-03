@@ -1,5 +1,5 @@
 // The Controller (docs/specs/money-safety.md): a daily deterministic reconciliation of the books
-// against Stripe, run by peanutgallery-controller.timer on the VPS, outside the dispatcher. It reads
+// against Stripe, run by mobmachine-controller.timer on the VPS, outside the dispatcher. It reads
 // Stripe with the restricted read key only (GET requests; it cannot move money) and the database with
 // the service key, and it writes one controller_runs row per run. On a new mismatch it alerts the
 // board through ntfy, and repeats the same mismatches weekly; a dispute to answer alerts every run

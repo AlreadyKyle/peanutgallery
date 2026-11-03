@@ -219,11 +219,11 @@ Criteria to tests:
 - Image, provision and CI: `ops.test.mjs` "the image installs no claude CLI, no sandbox tools and no Claude Code settings", "provision.sh read_token_verdict", and "the CI workflows that run card code"; `unattended.test.ts` "has no process-spawn path".
 - Attended settings: `attended.test.ts` "the attended sandbox", five tests.
 
-The attended sandbox, live on the Mac, `SANDBOX_CHECK_REPO_ROOT=/Users/kylesmith/GitHub/peanutgallery pnpm --filter @backseat/dispatcher sandbox:check --positive`, run again on this branch's final attended code, against Claude Code 2.1.139 with `claude-haiku-4-5`. The attempts are listed twice: first as plain Bash, then retried with `dangerouslyDisableSandbox`:
+The attended sandbox, live on the Mac, `SANDBOX_CHECK_REPO_ROOT=/Users/kylesmith/GitHub/mobmachine pnpm --filter @backseat/dispatcher sandbox:check --positive`, run again on this branch's final attended code, against Claude Code 2.1.139 with `claude-haiku-4-5`. The attempts are listed twice: first as plain Bash, then retried with `dangerouslyDisableSandbox`:
 
 ```
 PASS: attended sandbox
-claude: /Users/kylesmith/.local/bin/claude; model claude-haiku-4-5; repository /Users/kylesmith/GitHub/peanutgallery
+claude: /Users/kylesmith/.local/bin/claude; model claude-haiku-4-5; repository /Users/kylesmith/GitHub/mobmachine
 targets present outside the sandbox: id_ed25519=true, .env=true, .env.vps=true
 bash sandbox: attempt=ssh-key outcome=blocked detail=EPERM
 bash sandbox: attempt=repo-env outcome=blocked detail=EPERM

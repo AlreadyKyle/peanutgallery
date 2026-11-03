@@ -15,7 +15,7 @@
 //                                                                 pnpm verify's line once the domain moves
 //
 // Only the display name (any case, with a space or a "+" between the words) and the domain are
-// rewritten. Internal identifiers such as peanutgallery_backup, studio.peanutgallery.*, the
+// rewritten. Internal identifiers such as peanutgallery_backup, studio.mobmachine.*, the
 // @backseat/* packages and the Netlify site slugs are tier 3: counted, never rewritten here.
 // History is never rewritten: specs, applied migrations, the posted Terms versions, and the lines in
 // KEEP_LINES.
@@ -103,13 +103,13 @@ export const TIERS = {
     'platform/ops/jobs/quota.mjs',
     'platform/ops/mac/run-dispatcher.sh',
     'platform/ops/mac/run-job.sh',
-    'platform/ops/peanutgallery-backup.service',
-    'platform/ops/peanutgallery-backup.timer',
-    'platform/ops/peanutgallery-controller.service',
-    'platform/ops/peanutgallery-controller.timer',
-    'platform/ops/peanutgallery-job-alert@.service',
-    'platform/ops/peanutgallery-quota.service',
-    'platform/ops/peanutgallery-quota.timer',
+    'platform/ops/mobmachine-backup.service',
+    'platform/ops/mobmachine-backup.timer',
+    'platform/ops/mobmachine-controller.service',
+    'platform/ops/mobmachine-controller.timer',
+    'platform/ops/mobmachine-job-alert@.service',
+    'platform/ops/mobmachine-quota.service',
+    'platform/ops/mobmachine-quota.timer',
     'platform/ops/test/jobs.test.mjs',
     'platform/ops/test/load.test.mjs',
     'platform/ops/test/mac.test.mjs',

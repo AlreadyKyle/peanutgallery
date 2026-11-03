@@ -289,7 +289,7 @@ function inside(target: string, root: string): boolean {
 export type Roots = Pick<DispatcherConfig, 'codeRoot' | 'codeReadonly' | 'repoRoot' | 'worktreeRoot'>;
 
 // The default worktree root: a folder beside the clone, named after it (<clone>-worktrees), as the
-// VPS's /srv/peanutgallery-worktrees sits beside its clone.
+// VPS's /srv/mobmachine-worktrees sits beside its clone.
 export function defaultWorktreeRoot(repoRoot: string): string {
   return path.join(path.dirname(repoRoot), `${path.basename(repoRoot)}-worktrees`);
 }

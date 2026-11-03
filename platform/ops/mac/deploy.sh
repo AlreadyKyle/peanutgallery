@@ -11,7 +11,7 @@
 # true and no card is building or gated, and while the dispatcher's LaunchAgent is not loaded (before
 # the cutover, a start would run a second dispatcher beside the attended one).
 #
-# In the code clone only (~/peanutgallery-host/code), with fsmonitor, hooks and optional locks off:
+# In the code clone only (~/mobmachine-host/code), with fsmonitor, hooks and optional locks off:
 # it refuses the clone when it has an uncommitted or untracked file or git state a clone does not
 # have; fetches main from the repository's own URL; checks through the GitHub API that the target's
 # gate check concluded success; prints the commits it adds and removes and a diff stat, and moves only
@@ -47,7 +47,7 @@ check_ref_mac() {
     echo "$ref is not a commit on origin/main"
     return 1
   fi
-  for file in run-dispatcher.sh run-job.sh backup-mac.sh studio.peanutgallery.dispatcher.plist studio.peanutgallery.job.plist; do
+  for file in run-dispatcher.sh run-job.sh backup-mac.sh studio.mobmachine.dispatcher.plist studio.mobmachine.job.plist; do
     if ! code_git cat-file -e "$ref:platform/ops/mac/$file" 2> /dev/null; then
       echo "$ref has no platform/ops/mac/$file, so it is older than the Mac host; take the change out with a revert on main instead"
       return 1
@@ -63,11 +63,11 @@ rewrite_agents() {
   for job in dispatcher $MAC_JOBS; do
     if [ "$job" = dispatcher ]; then
       label=$DISPATCHER_LABEL
-      code_git show "HEAD:platform/ops/mac/studio.peanutgallery.dispatcher.plist" > "$WORK/template"
+      code_git show "HEAD:platform/ops/mac/studio.mobmachine.dispatcher.plist" > "$WORK/template"
       render_plist "$WORK/template" "$WORK/$label.plist" "$path" > /dev/null || die "the dispatcher's LaunchAgent does not render"
     else
       label=$(job_label "$job")
-      code_git show "HEAD:platform/ops/mac/studio.peanutgallery.job.plist" > "$WORK/template"
+      code_git show "HEAD:platform/ops/mac/studio.mobmachine.job.plist" > "$WORK/template"
       render_plist "$WORK/template" "$WORK/$label.plist" "$path" "$job" > /dev/null || die "the $job LaunchAgent does not render"
     fi
     rendered=$WORK/$label.plist

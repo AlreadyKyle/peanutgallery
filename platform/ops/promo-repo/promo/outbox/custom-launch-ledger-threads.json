@@ -1,0 +1,20 @@
+{
+  "id": "custom-launch-ledger-threads",
+  "createdAt": "2026-10-18T00:03:49.667Z",
+  "status": "pending",
+  "problems": [],
+  "moment": {
+    "kind": "custom",
+    "ref": "launch-ledger",
+    "priority": 70,
+    "at": "2026-10-18T00:03:49.667Z"
+  },
+  "channel": "threads",
+  "variant": "custom",
+  "text": "Our books are open. The ledger shows each contribution that came in, what each agent spent and which changes went live. Most changes so far cost less than a dollar of agent work.",
+  "link": "https://mobmachine.games/ledger?from=threads",
+  "title": null,
+  "image": null,
+  "video": null,
+  "notBefore": null
+}

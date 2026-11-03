@@ -188,7 +188,7 @@ Production:
 ## Production steps
 
 1. Confirm the studio is paused (`select paused from studio_state`) and no dispatcher is ticking (`dispatcher_seen_at` older than three minutes).
-2. Dump with the read-only backup login: `pg_dump "$BACKUP_DB_URL" --no-owner --format=custom --file ~/peanutgallery-dumps/<UTC stamp>-before-money-logic.dump`; run `pg_restore --list` on it and quote the size and the money-table lines.
+2. Dump with the read-only backup login: `pg_dump "$BACKUP_DB_URL" --no-owner --format=custom --file ~/mobmachine-dumps/<UTC stamp>-before-money-logic.dump`; run `pg_restore --list` on it and quote the size and the money-table lines.
 3. Quote read-only checks: `select public.ledger_identity()`; `select count(*), max(created_at) from contributions`; the board's test payment row and whether it has refund rows; that `terms_versions` exists.
 4. Apply the migration through the Management API query endpoint in one request. If its closing identity check fails, it rolls back and nothing has changed.
 5. Quote: `select public.ledger_identity()`; `select destination, card_id, amount_usd, reason from contribution_allocations order by seq` (one `board_test` row of 0.5019 unless the board refunded first); `select count(*) from supporters` (0); `select jobname, schedule from cron.job`; `select * from public_money` (`payments` 0), `public_stopped_cards` and `public_studio` (`pause_reason` `awaiting_credit`).
@@ -315,7 +315,7 @@ psql:schema-public-only.sql:3062: ERROR:  schema "money" does not exist
 Before the merge: legal-copy had squash-merged as e14019b and its branch was deleted, which closed #69 (its base). I merged legal-copy's final head 07acbd0 into the branch (clean), then `origin/main` at 0fe4b59: the conflicts were only where the branch carried legal-copy's lines, resolved to the branch's version (main equals 07acbd0 outside `docs/ROADMAP.md` and `docs/specs/legal-copy.md`), with #70's two doc edits applied on top. I restored `launch/legal-copy` at 07acbd0 for a moment to reopen #69, set its base to main and deleted that branch again. `pnpm verify` exit 0 at 8febb2f (board 71, supabase 286, site 382, seed-1 77, dispatcher 619, gate passed=508, agents 117, ops 124, functions 97 passed, secret-scan files=551, docs 15, rename 6, `verify exit 0`); `money_logic_test.ts` `ok | 12 passed (22 steps) | 0 failed`; `BOARD_E2E_PORT=4473 pnpm --filter @backseat/board e2e` `6 passed (4.1s)`. The gate at the head sha 8febb2f passed (run 35927819781: detect, build, seed-code, platform, gate). The production steps ran after the gate and before the merge, the studio paused throughout.
 
 1. `select paused, launched_at, dispatcher_seen_at, now() - dispatcher_seen_at > interval '3 minutes' as dispatcher_idle from public.studio_state`: `[{"paused":true,"launched_at":null,"dispatcher_seen_at":"2026-09-16 04:19:38.678+00","dispatcher_idle":true}]`.
-2. `pg_dump "$BACKUP_DB_URL" --no-owner --format=custom` wrote `~/peanutgallery-dumps/pre-money-logic-20260923T223410Z.dump` (597392 bytes, mode 600); `pg_restore --list` exit 0, 967 lines, with `TABLE DATA public cards`, `contributions`, `controller_runs`, `ledger`, `pool` and `terms_versions`.
+2. `pg_dump "$BACKUP_DB_URL" --no-owner --format=custom` wrote `~/mobmachine-dumps/pre-money-logic-20260923T223410Z.dump` (597392 bytes, mode 600); `pg_restore --list` exit 0, 967 lines, with `TABLE DATA public cards`, `contributions`, `controller_runs`, `ledger`, `pool` and `terms_versions`.
 3. Read-only, before the apply:
 
 ```
@@ -379,7 +379,7 @@ The first `waterfall-sweep` run: `cron.job_run_details` `succeeded`, "1 row", 20
 10. The dispatcher and Controller changes wait for the cutover's `install.sh --start`, as the spec says; nothing was installed.
 11. Every Verification line has run with its output quoted above or in the build Evidence, so the status is done.
 
-After the docs follow-up (#72, https://github.com/AlreadyKyle/peanutgallery/pull/72) merged as e56ebcf at 2026-09-23T22:56:41Z (both Netlify builds cancelled for no content change), the live check on main at e56ebcf again: `PASS live-check https://peanutgallery.games passed=222 failed=0 skipped=0`. Recorded in money-surfaces' branch (#71), which merged main after #72.
+After the docs follow-up (#72, https://github.com/AlreadyKyle/mobmachine/pull/72) merged as e56ebcf at 2026-09-23T22:56:41Z (both Netlify builds cancelled for no content change), the live check on main at e56ebcf again: `PASS live-check https://peanutgallery.games passed=222 failed=0 skipped=0`. Recorded in money-surfaces' branch (#71), which merged main after #72.
 
 ## Decisions
 

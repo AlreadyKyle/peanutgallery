@@ -1,6 +1,6 @@
 #!/bin/bash
 # run-job.sh: the daily jobs on the board's Mac (docs/specs/mac-host.md), run by the LaunchAgents
-# studio.peanutgallery.backup, .controller and .quota:
+# studio.mobmachine.backup, .controller and .quota:
 #   run-job.sh backup|controller|quota [--now]
 #
 # launchd's calendar runs in the Mac's local time, which moves with daylight saving and travel, so
@@ -17,11 +17,11 @@
 # - backup: platform/ops/mac/backup-mac.sh with env/backup-mac.env.
 #
 # A job that fails posts "Mob Machine job <job> failed on <host>" to ntfy, as
-# peanutgallery-job-alert@.service does. Output goes to ~/peanutgallery-host/logs/<job>.log, rotated at
-# 5 MB. PEANUTGALLERY_HOST names another host folder (the ops tests use it).
+# mobmachine-job-alert@.service does. Output goes to ~/mobmachine-host/logs/<job>.log, rotated at
+# 5 MB. MOBMACHINE_HOST names another host folder (the ops tests use it).
 set -euo pipefail
 
-HOST_ROOT=${PEANUTGALLERY_HOST:-$HOME/peanutgallery-host}
+HOST_ROOT=${MOBMACHINE_HOST:-$HOME/mobmachine-host}
 ENV_DIR=$HOST_ROOT/env
 STATE_DIR=$HOST_ROOT/state
 LOG_DIR=$HOST_ROOT/logs

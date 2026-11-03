@@ -5,17 +5,17 @@
 # changes, so a second run reports 0. It enables the dispatcher unit and never starts it: starting
 # it is the cutover (platform/ops/README.md).
 #
-# From the Mac, at the repository root, once /etc/peanutgallery/dispatcher.env is uploaded:
+# From the Mac, at the repository root, once /etc/mobmachine/dispatcher.env is uploaded:
 #   ssh root@<vps-ip> 'bash -s' < platform/ops/provision.sh
 # or copy it over and run it there:
 #   scp platform/ops/provision.sh root@<vps-ip>:/root/ && ssh root@<vps-ip> 'bash /root/provision.sh'
 #
 # The host holds two clones and a worktree folder (docs/specs/ops-separation.md):
-#   /srv/peanutgallery-code       the code clone: root-owned, cloned by root, mounted read-only into
+#   /srv/mobmachine-code       the code clone: root-owned, cloned by root, mounted read-only into
 #                                 the container. The dispatcher and its node_modules run from here.
-#   /srv/peanutgallery            the work clone: uid 10001's, cloned inside the image as uid 10001.
+#   /srv/mobmachine            the work clone: uid 10001's, cloned inside the image as uid 10001.
 #                                 The dispatcher fetches, pushes and adds worktrees here.
-#   /srv/peanutgallery-worktrees  uid 10001's: card, smoke and probe worktrees.
+#   /srv/mobmachine-worktrees  uid 10001's: card, smoke and probe worktrees.
 # Root never runs git or any other program from the work clone or the worktree folder: agent-written
 # code can write to both.
 #
@@ -24,14 +24,14 @@
 # NODE_IMAGE=node:22-bookworm-slim@sha256:<digest> pins the base image for the build.
 set -euo pipefail
 
-REPO_URL=https://github.com/AlreadyKyle/peanutgallery.git
-REPO_SLUG=AlreadyKyle/peanutgallery
-CODE_DIR=/srv/peanutgallery-code
-CODE_MOUNT=/opt/peanutgallery
-WORK_DIR=/srv/peanutgallery
-WORKTREE_DIR=/srv/peanutgallery-worktrees
+REPO_URL=https://github.com/AlreadyKyle/mobmachine.git
+REPO_SLUG=AlreadyKyle/mobmachine
+CODE_DIR=/srv/mobmachine-code
+CODE_MOUNT=/opt/mobmachine
+WORK_DIR=/srv/mobmachine
+WORKTREE_DIR=/srv/mobmachine-worktrees
 BUILD_UID=10002
-ETC_DIR=/etc/peanutgallery
+ETC_DIR=/etc/mobmachine
 ENV_FILE=$ETC_DIR/dispatcher.env
 NTFY_FILE=$ETC_DIR/ntfy.url
 AGENT_UID=10001
@@ -39,11 +39,11 @@ IMAGE=peanutgallery/dispatcher
 NODE_IMAGE=${NODE_IMAGE:-node:22-bookworm-slim}
 # The dispatcher's units, then the jobs' (docs/specs/money-safety.md): the backup, the Controller and
 # the quota check, each a oneshot service run by its timer, and the alert their failures start.
-UNITS="dispatcher.service dispatcher-alert.service peanutgallery-job-alert@.service peanutgallery-backup.service peanutgallery-backup.timer peanutgallery-controller.service peanutgallery-controller.timer peanutgallery-quota.service peanutgallery-quota.timer"
+UNITS="dispatcher.service dispatcher-alert.service mobmachine-job-alert@.service mobmachine-backup.service mobmachine-backup.timer mobmachine-controller.service mobmachine-controller.timer mobmachine-quota.service mobmachine-quota.timer"
 # Every unit but the alert template, which systemd-analyze verify cannot load on its own.
-VERIFY_UNITS="dispatcher.service dispatcher-alert.service peanutgallery-backup.service peanutgallery-backup.timer peanutgallery-controller.service peanutgallery-controller.timer peanutgallery-quota.service peanutgallery-quota.timer"
+VERIFY_UNITS="dispatcher.service dispatcher-alert.service mobmachine-backup.service mobmachine-backup.timer mobmachine-controller.service mobmachine-controller.timer mobmachine-quota.service mobmachine-quota.timer"
 # Where root runs the backup script from: installed from the commit, like the units.
-JOB_LIB=/usr/local/lib/peanutgallery
+JOB_LIB=/usr/local/lib/mobmachine
 SSHD_DROPIN=/etc/ssh/sshd_config.d/10-peanutgallery.conf
 
 # The keys loadConfig requires (requireEnv in platform/dispatcher/src/config.ts, the managed agent ids
@@ -54,7 +54,7 @@ REQUIRED_KEYS="GITHUB_REPO SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY GITHUB_TOKEN N
 # Secrets the dispatcher never needs: payments, the Supabase management token, the founder's key, the
 # jobs' own secrets, which live in their env files only, and the database owner's password.
 FORBIDDEN_KEYS="STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET SUPABASE_ACCESS_TOKEN ANTHROPIC_API_KEY STRIPE_READ_KEY BACKUP_DB_URL SUPABASE_DB_PASSWORD"
-# The jobs, each with its env file /etc/peanutgallery/<job>.env and its timer peanutgallery-<job>.timer.
+# The jobs, each with its env file /etc/mobmachine/<job>.env and its timer peanutgallery-<job>.timer.
 JOBS="backup controller quota"
 # The Supabase CLI the backup dumps with, pinned; provision.sh checks its package against the release's
 # own checksum file before installing it.
@@ -737,7 +737,7 @@ build_image() {
   fi
 }
 
-# The units as committed at the code clone's HEAD, and the backup script peanutgallery-backup.service
+# The units as committed at the code clone's HEAD, and the backup script mobmachine-backup.service
 # runs. systemd-analyze verify refuses a unit whose ExecStart does not exist, so the script goes in
 # before the units are verified, on a fresh host too.
 install_units() {
@@ -797,13 +797,13 @@ install_supabase_cli() {
   changed "Supabase CLI $SUPABASE_CLI_VERSION installed"
 }
 
-# check_job_env <job>: returns 0 when /etc/peanutgallery/<job>.env exists and passes the job's checks
+# check_job_env <job>: returns 0 when /etc/mobmachine/<job>.env exists and passes the job's checks
 # (platform/ops/jobs/check-env.mjs, in the image, as nobody, with no network; the file goes in on
 # stdin, so it stays root 0600), 1 when it is missing. Stops on a file that fails.
 check_job_env() {
   local job=$1 file=$ETC_DIR/$1.env problems
   if [ ! -f "$file" ]; then
-    say "note: $file is missing, so peanutgallery-$job.timer stays off (README.md, Backups and the Controller)"
+    say "note: $file is missing, so mobmachine-$job.timer stays off (README.md, Backups and the Controller)"
     return 1
   fi
   [ "$(stat -c '%U:%G %a' "$file")" = "root:root 600" ] || die "$file must be owned by root:root with mode 0600"
@@ -822,7 +822,7 @@ install_jobs() {
   local job timer
   install_supabase_cli
   for job in $JOBS; do
-    timer=peanutgallery-$job.timer
+    timer=mobmachine-$job.timer
     if check_job_env "$job" && ! systemctl is-enabled --quiet "$timer"; then
       systemctl enable --now "$timer"
       changed "$timer enabled"

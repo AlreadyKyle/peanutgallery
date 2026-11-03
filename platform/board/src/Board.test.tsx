@@ -699,7 +699,7 @@ describe('Activity', () => {
   });
 
   it('lists the open findings with their detail, and a GitHub address as a link', async () => {
-    const run = 'https://github.com/AlreadyKyle/peanutgallery/actions/runs/7';
+    const run = 'https://github.com/AlreadyKyle/mobmachine/actions/runs/7';
     fake.findings = [
       { fingerprint: 'scan:osv', kind: 'scan', subject: "The weekly scan's osv job failed", detail: { run, job: null }, opened_at: '2026-10-09T08:00:00Z', last_seen_at: '2026-10-10T08:00:00Z' },
       { fingerprint: 'bad', kind: 'gossip', subject: 'not a kind', detail: {}, opened_at: '2026-10-09T08:00:00Z' },

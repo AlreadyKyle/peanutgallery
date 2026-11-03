@@ -85,7 +85,7 @@ const FINDINGS = [
     fingerprint: 'scan:links',
     kind: 'scan',
     subject: "The weekly scan's links job failed (failure)",
-    detail: { run: 'https://github.com/AlreadyKyle/peanutgallery/actions/runs/12', conclusion: 'failure' },
+    detail: { run: 'https://github.com/AlreadyKyle/mobmachine/actions/runs/12', conclusion: 'failure' },
     opened_at: '2026-10-08T11:30:00Z',
     last_seen_at: '2026-10-09T08:00:00Z',
   },

@@ -11,7 +11,7 @@
 # Pause from /board first and let any building card finish: the script refuses unless
 # studio_state.paused is true and no card is building or gated.
 #
-# It works in the code clone only, /srv/peanutgallery-code, which root owns and the container mounts
+# It works in the code clone only, /srv/mobmachine-code, which root owns and the container mounts
 # read-only. It refuses the clone when it has an uncommitted or untracked file or git state a clone
 # does not have. It fetches main from the repository's own URL, checks that the target commit's gate
 # check passed on GitHub, prints what the target changes, and moves only once a person confirms the
@@ -21,28 +21,28 @@
 # restarts the service, waits for this start's `code root is read-only` and `startup probe passed`
 # lines, and reminds you to resume.
 #
-# It never runs git or anything else in the work clone, /srv/peanutgallery: uid 10001 and
+# It never runs git or anything else in the work clone, /srv/mobmachine: uid 10001 and
 # agent-written code can write there, and the dispatcher fetches in it itself.
 # NODE_IMAGE=node:22-bookworm-slim@sha256:<digest> pins the base image when it rebuilds.
 set -euo pipefail
 
-REPO_URL=https://github.com/AlreadyKyle/peanutgallery.git
-REPO_SLUG=AlreadyKyle/peanutgallery
-CODE_DIR=/srv/peanutgallery-code
-CODE_MOUNT=/opt/peanutgallery
-WORK_DIR=/srv/peanutgallery
-WORKTREE_DIR=/srv/peanutgallery-worktrees
-ENV_FILE=/etc/peanutgallery/dispatcher.env
+REPO_URL=https://github.com/AlreadyKyle/mobmachine.git
+REPO_SLUG=AlreadyKyle/mobmachine
+CODE_DIR=/srv/mobmachine-code
+CODE_MOUNT=/opt/mobmachine
+WORK_DIR=/srv/mobmachine
+WORKTREE_DIR=/srv/mobmachine-worktrees
+ENV_FILE=/etc/mobmachine/dispatcher.env
 IMAGE=peanutgallery/dispatcher
 BUILD_UID=10002
 NODE_IMAGE=${NODE_IMAGE:-node:22-bookworm-slim}
 # The dispatcher's units, then the jobs' (docs/specs/money-safety.md): the backup, the Controller and
 # the quota check, each a oneshot service run by its timer, and the alert their failures start.
-UNITS="dispatcher.service dispatcher-alert.service peanutgallery-job-alert@.service peanutgallery-backup.service peanutgallery-backup.timer peanutgallery-controller.service peanutgallery-controller.timer peanutgallery-quota.service peanutgallery-quota.timer"
+UNITS="dispatcher.service dispatcher-alert.service mobmachine-job-alert@.service mobmachine-backup.service mobmachine-backup.timer mobmachine-controller.service mobmachine-controller.timer mobmachine-quota.service mobmachine-quota.timer"
 # Every unit but the alert template, which systemd-analyze verify cannot load on its own.
-VERIFY_UNITS="dispatcher.service dispatcher-alert.service peanutgallery-backup.service peanutgallery-backup.timer peanutgallery-controller.service peanutgallery-controller.timer peanutgallery-quota.service peanutgallery-quota.timer"
+VERIFY_UNITS="dispatcher.service dispatcher-alert.service mobmachine-backup.service mobmachine-backup.timer mobmachine-controller.service mobmachine-controller.timer mobmachine-quota.service mobmachine-quota.timer"
 # Where root runs the backup script from: installed from the commit, like the units.
-JOB_LIB=/usr/local/lib/peanutgallery
+JOB_LIB=/usr/local/lib/mobmachine
 PROBE_WAIT_SECONDS=${PROBE_WAIT_SECONDS:-600}
 CONFIRM_TTY=${CONFIRM_TTY:-/dev/tty}
 USAGE="usage: deploy.sh [--ref <commit sha>] [--confirm <first 12 characters of the target sha>]"
@@ -360,7 +360,7 @@ check_ref() {
   fi
   local unit file
   unit=$(code_git show "$ref:platform/ops/dispatcher.service" 2> /dev/null) || unit=""
-  if ! grep -qF -- '--volume /srv/peanutgallery-code:/opt/peanutgallery:ro' <<< "$unit"; then
+  if ! grep -qF -- '--volume /srv/mobmachine-code:/opt/mobmachine:ro' <<< "$unit"; then
     echo "$ref's platform/ops/dispatcher.service does not mount the code clone read-only"
     return 1
   fi

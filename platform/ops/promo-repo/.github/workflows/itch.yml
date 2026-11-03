@@ -1,0 +1,104 @@
+# Keeps Dust's itch.io page in step with the live game (promo/README.md, itch.io). Once a day it
+# builds Dust from the studio's main branch with relative paths, so it runs from itch's own host,
+# and pushes it with butler when the game changed since the last push. The page itself is made once
+# by hand on itch.io; this only uploads builds to it.
+# PROMO_ENV holds PROMO_ITCH_API_KEY (itch.io, Settings, API keys) and PROMO_ITCH_GAME (user/game).
+name: itch
+
+on:
+  schedule:
+    - cron: '17 14 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promo
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Read the itch.io settings
+        id: itch
+        env:
+          PROMO_ENV: ${{ secrets.PROMO_ENV }}
+        run: |
+          set -euo pipefail
+          key=$(printf '%s\n' "$PROMO_ENV" | sed -n 's/^PROMO_ITCH_API_KEY=//p' | head -1)
+          game=$(printf '%s\n' "$PROMO_ENV" | sed -n 's/^PROMO_ITCH_GAME=//p' | head -1)
+          if [ -z "$key" ] || [ -z "$game" ]; then echo 'no itch.io settings in PROMO_ENV; skipping'; exit 0; fi
+          echo "::add-mask::$key"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          echo "game=$game" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the studio
+        if: steps.itch.outputs.key != ''
+        uses: actions/checkout@v4
+        with:
+          repository: AlreadyKyle/mobmachine
+          ref: main
+          path: studio
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Has Dust changed since the last push?
+        if: steps.itch.outputs.key != ''
+        id: dust
+        run: |
+          set -euo pipefail
+          sha=$(git -C studio log -1 --format=%H -- seed-1)
+          last=$(jq -r '.sha // ""' promo/state/itch.json 2>/dev/null || true)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          if [ "$sha" = "$last" ] && [ "${{ github.event_name }}" != workflow_dispatch ]; then echo "Dust unchanged at $sha"; else echo 'changed=true' >> "$GITHUB_OUTPUT"; fi
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        if: steps.dust.outputs.changed == 'true'
+        with:
+          package_json_file: studio/package.json
+
+      - uses: actions/setup-node@v4
+        if: steps.dust.outputs.changed == 'true'
+        with:
+          node-version: 22
+
+      - name: Build Dust for itch.io
+        if: steps.dust.outputs.changed == 'true'
+        working-directory: studio
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile --filter '@backseat/seed-1...'
+          cd seed-1
+          pnpm exec vite build --base ./ --outDir "$RUNNER_TEMP/dust"
+          node -e "import('./scripts/postbuild.mjs').then((m) => m.runPostbuild('.', process.argv[1]))" "$RUNNER_TEMP/dust"
+
+      - name: Push to itch.io
+        if: steps.dust.outputs.changed == 'true'
+        env:
+          BUTLER_API_KEY: ${{ steps.itch.outputs.key }}
+          GAME: ${{ steps.itch.outputs.game }}
+          SHA: ${{ steps.dust.outputs.sha }}
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/butler.zip" https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q "$RUNNER_TEMP/butler.zip" -d "$RUNNER_TEMP/butler"
+          chmod +x "$RUNNER_TEMP/butler/butler"
+          "$RUNNER_TEMP/butler/butler" push "$RUNNER_TEMP/dust" "$GAME:html5" --userversion "${SHA:0:7}"
+          mkdir -p promo/state
+          printf '{ "sha": "%s", "pushedAt": "%s" }\n' "$SHA" "$(date -u +%FT%TZ)" > promo/state/itch.json
+          git config user.name 'mob-machine-promo'
+          git config user.email 'promo@users.noreply.github.com'
+          git add promo/state/itch.json
+          git commit -q -m "promo: itch.io push ${SHA:0:7}"
+          for attempt in 1 2 3; do
+            git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0
+            sleep $((attempt * 5))
+          done
+          exit 1

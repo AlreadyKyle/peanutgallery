@@ -103,8 +103,8 @@ export const HOME_DENY: readonly string[] = [
   '**/*.env',
   // The Mac host's env folder (platform/ops/mac/lib.sh) and the database dumps taken before
   // production steps.
-  'peanutgallery-host/env/**',
-  'peanutgallery-dumps/**',
+  'mobmachine-host/env/**',
+  'mobmachine-dumps/**',
 ];
 
 // A path with every symlink in it resolved, the way Claude Code resolves sandbox paths. A path that

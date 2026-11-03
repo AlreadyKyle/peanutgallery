@@ -72,7 +72,7 @@ export async function runQuota({ env, fetchFn = fetch, now = new Date(), dryRun 
     url.searchParams.set('month', String(now.getUTCMonth() + 1));
     const response = await fetchFn(url, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${env.GITHUB_BILLING_TOKEN}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'peanutgallery-quota' },
+      headers: { Authorization: `Bearer ${env.GITHUB_BILLING_TOKEN}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'mobmachine-quota' },
       signal: AbortSignal.timeout(30_000),
     });
     const text = await response.text();

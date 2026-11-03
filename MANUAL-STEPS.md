@@ -51,6 +51,13 @@ A reminder fires that day.
 
 ---
 
+## 5. After the repository is renamed to mobmachine
+
+1. On the Mac, in `~/GitHub/mobmachine`: `git remote set-url origin https://github.com/AlreadyKyle/mobmachine.git`, then `git fetch` to check it.
+2. In `.env`, change `GITHUB_REPO=AlreadyKyle/peanutgallery` to `GITHUB_REPO=AlreadyKyle/mobmachine`. Before the dispatcher is turned back on, rebuild its env and set the secret again (`platform/ops/README.md`, The GitHub Actions host). GitHub redirects the old name in the meantime.
+3. After the next nightly backup, check that its `offsite` job is green. The Google Cloud provider admits this repository by its id, which a rename keeps. If it fails, the service account's binding names the old repository: `gcloud iam service-accounts get-iam-policy backup-writer@mob-machine.iam.gserviceaccount.com` shows it.
+4. Netlify follows a renamed repository. If a deploy says it cannot find the repository, relink it in each site's Build settings.
+
 ## Done
 
 - **Google sign-in (2026-10-20):** Claude set up the Google Auth Platform on the Google Cloud project `peanut-gallery-509513`, with branding, privacy and terms links and authorized domains. It created the "Mob Machine web" client, loaded it into Supabase from the downloaded file (the file is deleted) and published the app, so it's in production. Check: `/api/community/auth/settings` returns `{"signIn":true,"providers":["google"]}`. The support email is kyle@clayhouse.studio, because the existing hello@ group doesn't list you as owner. Make yourself Owner in Admin → Groups → Hello if you want hello@ instead.

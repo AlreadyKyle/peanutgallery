@@ -28,13 +28,13 @@
 # There is no weekly restore check here: it needs a scratch Supabase Postgres, which the server ran
 # in Docker. The restore drill is a step the board runs by hand (platform/ops/README.md, The Mac host).
 #
-# Secrets come from BACKUP_ENV_FILE (default ~/peanutgallery-host/env/backup-mac.env: the owner's,
+# Secrets come from BACKUP_ENV_FILE (default ~/mobmachine-host/env/backup-mac.env: the owner's,
 # 0600, KEY=value lines), read line by line and never sourced. URLs with secrets reach curl through a
 # config file.
 set -euo pipefail
 
-ENV_FILE=${BACKUP_ENV_FILE:-$HOME/peanutgallery-host/env/backup-mac.env}
-STATE_DIR=${BACKUP_STATE_DIR:-$HOME/peanutgallery-host/state/backup}
+ENV_FILE=${BACKUP_ENV_FILE:-$HOME/mobmachine-host/env/backup-mac.env}
+STATE_DIR=${BACKUP_STATE_DIR:-$HOME/mobmachine-host/state/backup}
 PG_BIN=${BACKUP_PG_BIN:-/opt/homebrew/opt/libpq/bin}
 REQUIRED_KEYS="BACKUP_DB_URL BACKUP_AGE_RECIPIENT BACKUP_DIR BACKUP_HEALTHCHECK_URL"
 KEEP_NEWEST=7

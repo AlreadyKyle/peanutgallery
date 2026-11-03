@@ -301,7 +301,7 @@ describe('.github/workflows/load-test.yml', () => {
     assert.match(text, /workflow_dispatch:\n {4}inputs:\n {6}base_url:/);
     for (const input of ['rate', 'duration', 'max_requests']) assert.match(text, new RegExp(`\\n {6}${input}:\\n`));
     assert.match(text, /--i-mean-production/);
-    assert.match(text, /if: github\.event_name != 'pull_request' && github\.repository == 'AlreadyKyle\/peanutgallery'/);
+    assert.match(text, /if: github\.event_name != 'pull_request' && github\.repository_id == '1369060201'/);
   });
 
   test('hands the inputs to the tool through the environment, never into the script', () => {

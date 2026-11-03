@@ -14,13 +14,13 @@ The link carries `?from=claude-code` and nothing else. The mod sends nothing any
 At a Claude Code prompt:
 
 ```
-/plugin install dust --marketplace AlreadyKyle/peanutgallery
+/plugin install dust --marketplace AlreadyKyle/mobmachine
 ```
 
 Answer `y` to add the marketplace, then pick a scope (user is the usual one). From a shell, the same thing is:
 
 ```
-claude plugin install dust --marketplace AlreadyKyle/peanutgallery
+claude plugin install dust --marketplace AlreadyKyle/mobmachine
 ```
 
 To turn the long-turn hint on, install with `--config longTurnHint=true`, or later run `/plugin configure dust@mobmachine`, or change "Suggest Dust on long turns" in `/config`.

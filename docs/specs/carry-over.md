@@ -50,7 +50,7 @@ Out:
 ## Verification
 
 - `pnpm verify`
-- `SANDBOX_CHECK_REPO_ROOT=/Users/kylesmith/GitHub/peanutgallery pnpm --filter @backseat/dispatcher sandbox:check --positive` on Claude Code 2.1.280.
+- `SANDBOX_CHECK_REPO_ROOT=/Users/kylesmith/GitHub/mobmachine pnpm --filter @backseat/dispatcher sandbox:check --positive` on Claude Code 2.1.280.
 - The same with `SANDBOX_CHECK_SCRATCH=$HOME`.
 - The same two runs with `attended.ts` as it is on `main` before this change (a copy of `main`'s dispatcher source with this change's `sandbox-check.ts`).
 - From `platform/site`: `E2E_PORT=4391 npx playwright test` (the whole e2e suite, the team page among it).
@@ -64,7 +64,7 @@ Out:
 - The check, temp layout, this change:
   ```
   PASS: attended sandbox
-  claude: /Users/kylesmith/.local/bin/claude; model claude-haiku-4-5; repository /Users/kylesmith/GitHub/peanutgallery; scratch /private/var/folders/yv/6n3ds9hj6_75dzqx_9gvz7d00000gn/T/sandbox-check-z8OXeL
+  claude: /Users/kylesmith/.local/bin/claude; model claude-haiku-4-5; repository /Users/kylesmith/GitHub/mobmachine; scratch /private/var/folders/yv/6n3ds9hj6_75dzqx_9gvz7d00000gn/T/sandbox-check-z8OXeL
   targets present outside the sandbox: id_ed25519=true, .env=true, .env.vps=true
   bash sandbox: attempt=ssh-key outcome=blocked detail=EPERM
   bash sandbox: attempt=repo-env outcome=blocked detail=EPERM
@@ -83,7 +83,7 @@ Out:
 - The check, clone and worktree under `$HOME`, this change:
   ```
   PASS: attended sandbox
-  claude: /Users/kylesmith/.local/bin/claude; model claude-haiku-4-5; repository /Users/kylesmith/GitHub/peanutgallery; scratch /Users/kylesmith/sandbox-check-Ve7Kci
+  claude: /Users/kylesmith/.local/bin/claude; model claude-haiku-4-5; repository /Users/kylesmith/GitHub/mobmachine; scratch /Users/kylesmith/sandbox-check-Ve7Kci
   (the ten attempt lines as above, each outcome=blocked)
   read tool: 1 call(s), blocked; permission denials reported: 1; result: <tool_use_error>File is in a directory that is denied by your permission settings.</tool_use_error>
   positive: clone /Users/kylesmith/sandbox-check-Ve7Kci/peanutgallery; worktree /Users/kylesmith/sandbox-check-Ve7Kci/peanutgallery-worktrees/card-sandbox

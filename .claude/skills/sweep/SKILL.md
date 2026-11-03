@@ -9,7 +9,7 @@ A docs-and-hygiene lane. It keeps the repo and memory telling the truth, so the 
 
 ## 1. Stale things (fix them)
 
-- **Branches.** Delete remote branches that are fully merged into `origin/main`, or that have had no commit for 14 days and have no open pull request: `gh api -X DELETE repos/AlreadyKyle/peanutgallery/git/refs/heads/<b>`. Never delete `main`, `next`, `card/*` with an open card, or a branch another live session owns (`mcp__ccd_session_mgmt__list_sessions`). List what was deleted.
+- **Branches.** Delete remote branches that are fully merged into `origin/main`, or that have had no commit for 14 days and have no open pull request: `gh api -X DELETE repos/AlreadyKyle/mobmachine/git/refs/heads/<b>`. Never delete `main`, `next`, `card/*` with an open card, or a branch another live session owns (`mcp__ccd_session_mgmt__list_sessions`). List what was deleted.
 - **Pull requests** idle for 14 days. Adopt them into QUEUE as a row with the link, then close them with a one-line comment naming the row. A Dependabot pull request is left to the upkeep policy.
 - **Worktrees** of merged or deleted branches: `git worktree remove`, and `git worktree prune`.
 - **QUEUE.md.**

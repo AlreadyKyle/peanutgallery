@@ -8,15 +8,15 @@
 #                                          # before the cutover: only the jobs (docs/specs/jobs-only-install.md)
 #
 # First write the dispatcher's env file with
-#   platform/ops/make-dispatcher-env.sh ~/peanutgallery-host/env/dispatcher.env
-# (after `mkdir -m 700 -p ~/peanutgallery-host/env`), and the jobs' with
-#   JOBS_ENV_DIR=~/peanutgallery-host/env platform/ops/make-jobs-env.sh backup-mac controller quota
+#   platform/ops/make-dispatcher-env.sh ~/mobmachine-host/env/dispatcher.env
+# (after `mkdir -m 700 -p ~/mobmachine-host/env`), and the jobs' with
+#   JOBS_ENV_DIR=~/mobmachine-host/env platform/ops/make-jobs-env.sh backup-mac controller quota
 #
 # Every step checks before it acts, so a second run reports 0 changes. It prints key names and paths,
 # never a value. In order:
 # 1. Checks the Mac: macOS, not root, node 22 or later, the pnpm the repository pins, git, curl,
 #    caffeinate, launchctl and plutil.
-# 2. Creates ~/peanutgallery-host and its folders, 0700.
+# 2. Creates ~/mobmachine-host and its folders, 0700.
 # 3. Checks env/dispatcher.env with provision.sh's own rules (every key the
 #    dispatcher needs, two different fine-grained GitHub tokens, none of the forbidden keys, and each
 #    Discord webhook that is set a Discord webhook address), and writes env/ntfy.url from its
@@ -217,7 +217,7 @@ install_jobs() {
   local job label
   for job in $1; do
     label=$(job_label "$job")
-    if install_agent "$label" studio.peanutgallery.job.plist "$job" && agent_loaded "$label"; then
+    if install_agent "$label" studio.mobmachine.job.plist "$job" && agent_loaded "$label"; then
       launchctl bootout "$(gui_target)/$label" 2> /dev/null || true
     fi
     if ! agent_loaded "$label"; then
@@ -334,7 +334,7 @@ refuse_jobs_only_clone() {
   [ -f "$JOBS_ONLY_MARK" ] || return 0
   if [ -d "$CODE_DIR/.git" ] || [ -e "$CODE_DIR" ]; then
     die "$CODE_DIR was cloned by install.sh --jobs-only at $(head -c 12 "$JOBS_ONLY_MARK"), for the jobs only. Move it aside so this install clones main afresh:
-  chmod -R u+w $CODE_DIR && mv $CODE_DIR $(dirname "$HOST_ROOT")/peanutgallery-code.jobs-only
+  chmod -R u+w $CODE_DIR && mv $CODE_DIR $(dirname "$HOST_ROOT")/mobmachine-code.jobs-only
 then run install.sh again (platform/ops/README.md, The Mac host)"
   fi
   rm -f "$JOBS_ONLY_MARK"
@@ -369,7 +369,7 @@ studio_mode() {
 
 install_dispatcher() {
   local start=$1 label=$DISPATCHER_LABEL wrote=0 mode since
-  install_agent "$label" studio.peanutgallery.dispatcher.plist && wrote=1
+  install_agent "$label" studio.mobmachine.dispatcher.plist && wrote=1
   if [ "$start" = 0 ]; then
     if agent_loaded "$label"; then
       if [ "$wrote" = 1 ]; then
