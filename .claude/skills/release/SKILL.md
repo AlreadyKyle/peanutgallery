@@ -22,7 +22,7 @@ Work in the rhythm worktree, `/Users/kylesmith/GitHub/mobmachine/.claude/worktre
 
 1. **Backup.** Take a dump of production before any migration or write (`docs/specs/money-safety.md`). `pg_dump` comes from libpq (`brew install libpq` if it is missing; install it, don't ask). Keep the file where `money-safety.md` says. If the dump fails, stop: no migration runs without one.
 2. **Migrations.** Apply each new migration in filename order (the Supabase connector's `apply_migration`, or the Management API query endpoint, as ROADMAP's Standing facts say). After each one, read back `supabase_migrations.schema_migrations` and spot-check the objects it made. Migrations only add things, so `main`'s current code runs on the new schema while the merge is pending.
-3. **Merge.** `gh api -X PUT repos/AlreadyKyle/peanutgallery/pulls/<n>/merge -f merge_method=merge -f sha=<head>`, only on a green gate run at that exact head. A merge commit keeps `next` an ancestor of `main`.
+3. **Merge.** `gh api -X PUT repos/AlreadyKyle/mobmachine/pulls/<n>/merge -f merge_method=merge -f sha=<head>`, only on a green gate run at that exact head. A merge commit keeps `next` an ancestor of `main`.
 4. **Functions.** Deploy each Supabase function the train changed, from the main checkout's `platform/` at the merge commit: `npx supabase functions deploy <name> --project-ref lyxndueoeisyqzewflpu --use-api`.
 5. **Deploys.** Netlify builds `main`. Wait for the site's production deploy, and the game's if seed-1 changed, to finish on the merge sha (the Netlify API with `NETLIFY_AUTH_TOKEN`, or the `live-check` workflow's run for the merge commit).
 

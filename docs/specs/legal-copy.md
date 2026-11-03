@@ -88,7 +88,7 @@ Out, and what each waits on:
 
 The studio stays paused throughout.
 
-1. **Before the merge,** if the merge falls on a later day than 23 September 2026, change `privacyUpdated` in `legal.ts` to that day in a commit on the branch. Then, gate green at the head sha: read back `select paused, launched_at from public.studio_state` (paused true); `set -a; . ./.env; set +a; pg_dump "$BACKUP_DB_URL" -Fc -f ~/peanutgallery-dumps/pre-legal-copy-$(date -u +%Y%m%dT%H%M%SZ).dump`; `pg_restore --list` on it succeeds.
+1. **Before the merge,** if the merge falls on a later day than 23 September 2026, change `privacyUpdated` in `legal.ts` to that day in a commit on the branch. Then, gate green at the head sha: read back `select paused, launched_at from public.studio_state` (paused true); `set -a; . ./.env; set +a; pg_dump "$BACKUP_DB_URL" -Fc -f ~/mobmachine-dumps/pre-legal-copy-$(date -u +%Y%m%dT%H%M%SZ).dump`; `pg_restore --list` on it succeeds.
 2. **Apply `20260924100000_terms_versions.sql`** at the head sha through the Management API query endpoint. Read back the row and the two privileges.
 3. **Run the anon negative test and the ledger identity;** both PASS. Quote the new lines.
 4. **Merge** with the head sha; delete the branch.
@@ -218,7 +218,7 @@ All pass after the fixes, in the verify and e2e runs above. Screenshots of /term
 
 Before the merge, `main` (04368fb) merged into the branch, `pnpm verify` exit 0 (site 382 tests, supabase 273, dispatcher 619, gate 508), `E2E_PORT=4437 pnpm --filter @backseat/site e2e` 112 passed, 5 skipped, and the gate green at the head sha 07acbd0 (build, detect, gate, platform, seed-code all pass). The merge fell on 23 September 2026, so `privacyUpdated` stayed.
 
-1. `select paused, launched_at from public.studio_state` read `[{"paused":true,"launched_at":null}]`. `pg_dump` wrote `~/peanutgallery-dumps/pre-legal-copy-20260923T213117Z.dump` (593363 bytes, mode 600); `pg_restore --list` exit 0, 956 lines.
+1. `select paused, launched_at from public.studio_state` read `[{"paused":true,"launched_at":null}]`. `pg_dump` wrote `~/mobmachine-dumps/pre-legal-copy-20260923T213117Z.dump` (593363 bytes, mode 600); `pg_restore --list` exit 0, 956 lines.
 2. `20260924100000_terms_versions.sql` at 07acbd0, wrapped in `begin; … commit;`, one request to the Management API query endpoint: `HTTP 201 []`. Read back:
 
 ```
@@ -250,7 +250,7 @@ PASS /terms shows "Version 1, in force since 22 Sep 2026 at 21:32 Toronto time."
 PASS /terms/2 is the not found page: ["Not found"]
 ```
 
-7. A second dump, `~/peanutgallery-dumps/pre-legal-copy-v2-20260923T213428Z.dump` (597281 bytes, mode 600; `pg_restore --list` exit 0, 967 lines, the `terms_versions` table, view, triggers and row security listed), studio still paused. `20260924100100_terms_version_2.sql` at e14019b in one request: `HTTP 201 []`. Read back `[{"version":1,"posted_at":"2026-09-23 01:32:51+00"},{"version":2,"posted_at":"2026-09-23 21:34:48.452621+00"}]`.
+7. A second dump, `~/mobmachine-dumps/pre-legal-copy-v2-20260923T213428Z.dump` (597281 bytes, mode 600; `pg_restore --list` exit 0, 967 lines, the `terms_versions` table, view, triggers and row security listed), studio still paused. `20260924100100_terms_version_2.sql` at e14019b in one request: `HTTP 201 []`. Read back `[{"version":1,"posted_at":"2026-09-23 01:32:51+00"},{"version":2,"posted_at":"2026-09-23 21:34:48.452621+00"}]`.
 8. The live check again, then the anon negative test and the ledger identity again (both PASS, the same lines as step 3):
 
 ```

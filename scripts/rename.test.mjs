@@ -57,7 +57,7 @@ test('--check fails on the old name in a tier-1 file; --check-domain on the old 
 });
 
 test('rewrite leaves internal identifiers and the kept history lines alone', () => {
-  const identifiers = 'peanutgallery_backup studio.peanutgallery.dispatcher @backseat/site peanutgallerygames';
+  const identifiers = 'peanutgallery_backup studio.mobmachine.dispatcher @backseat/site peanutgallerygames';
   assert.equal(rewrite(identifiers, NEW), identifiers);
   for (const line of KEEP_LINES) assert.equal(rewrite(`x ${line} y`, NEW), `x ${line} y`);
 });

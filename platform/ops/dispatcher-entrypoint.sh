@@ -5,8 +5,8 @@
 # run as Claude Managed Agents sessions (docs/specs/launch-managed.md).
 #
 # The dispatcher's code and node_modules come from the root-owned code clone, mounted read-only at
-# /opt/peanutgallery; deploy.sh installs node_modules there in a throwaway container with no secret.
-# Nothing is installed here, and nothing runs from the work clone at /srv/peanutgallery, which uid
+# /opt/mobmachine; deploy.sh installs node_modules there in a throwaway container with no secret.
+# Nothing is installed here, and nothing runs from the work clone at /srv/mobmachine, which uid
 # 10001 and agent-written code can write to (docs/specs/ops-separation.md).
 #
 # Exit 78 when a check fails that no restart can fix (a missing clone, a non-https origin):
@@ -14,8 +14,8 @@
 # (src/exit-code.ts), 78 among others when its code root is writable.
 set -eu
 
-CODE=${DISPATCHER_CODE_ROOT:-/opt/peanutgallery}
-REPO=${DISPATCHER_REPO_ROOT:-/srv/peanutgallery}
+CODE=${DISPATCHER_CODE_ROOT:-/opt/mobmachine}
+REPO=${DISPATCHER_REPO_ROOT:-/srv/mobmachine}
 EXIT_FATAL=78
 
 fatal() {

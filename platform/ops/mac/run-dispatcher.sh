@@ -1,11 +1,11 @@
 #!/bin/bash
 # run-dispatcher.sh: the dispatcher on the board's Mac, run by launchd as the LaunchAgent
-# studio.peanutgallery.dispatcher (docs/specs/mac-host.md). It does for the Mac what
+# studio.mobmachine.dispatcher (docs/specs/mac-host.md). It does for the Mac what
 # dispatcher-entrypoint.sh and dispatcher.service do on a server:
 #
 # - It checks the code clone and the work clone's https origin, then runs the dispatcher from the code
 #   clone the way the entrypoint does (node --import tsx src/main.ts, with the tsx cache off), with
-#   DISPATCHER_CODE_READONLY=required and the three roots under ~/peanutgallery-host. The dispatcher
+#   DISPATCHER_CODE_READONLY=required and the three roots under ~/mobmachine-host. The dispatcher
 #   reads its .env from the code clone, and refuses to start (exit 78) when it can write to its code.
 # - It holds `caffeinate -i -s` for as long as it runs, so the Mac does not idle-sleep, or sleep at all
 #   while it is on power. Closing the lid still sleeps it.
@@ -17,15 +17,15 @@
 #   hours is refused with an ntfy post and exit 0, as StartLimitBurst=8 in 6 hours refuses it there.
 # - launchd stops it with SIGTERM (ExitTimeOut 90 seconds); the dispatcher gets the signal and has its
 #   50 seconds to stop running cards, and the wrapper exits 0.
-# - Its own lines and the dispatcher's go to ~/peanutgallery-host/logs/dispatcher.log, which is rotated
+# - Its own lines and the dispatcher's go to ~/mobmachine-host/logs/dispatcher.log, which is rotated
 #   at 10 MB, keeping three old files.
 #
-# State lives in ~/peanutgallery-host/state: dispatcher-starts (the start times in the last 6 hours)
+# State lives in ~/mobmachine-host/state: dispatcher-starts (the start times in the last 6 hours)
 # and dispatcher-failures (failures in a row). install.sh and deploy.sh clear both before a start they
-# ask for. PEANUTGALLERY_HOST names another host folder (the ops tests use it).
+# ask for. MOBMACHINE_HOST names another host folder (the ops tests use it).
 set -euo pipefail
 
-HOST_ROOT=${PEANUTGALLERY_HOST:-$HOME/peanutgallery-host}
+HOST_ROOT=${MOBMACHINE_HOST:-$HOME/mobmachine-host}
 STATE_DIR=$HOST_ROOT/state
 LOG_DIR=$HOST_ROOT/logs
 LOG=$LOG_DIR/dispatcher.log

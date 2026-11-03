@@ -43,7 +43,7 @@ jobs:
         if: steps.itch.outputs.key != ''
         uses: actions/checkout@v4
         with:
-          repository: AlreadyKyle/peanutgallery
+          repository: AlreadyKyle/mobmachine
           ref: main
           path: studio
           fetch-depth: 0

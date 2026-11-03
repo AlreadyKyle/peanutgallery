@@ -6,7 +6,7 @@
 # card mid-merge is better left to finish.
 #   platform/ops/mac/uninstall.sh
 #
-# It leaves ~/peanutgallery-host as it is, env files and backups' run folder included, and prints how
+# It leaves ~/mobmachine-host as it is, env files and backups' run folder included, and prints how
 # to remove it. It is the step before moving the dispatcher to a server, where only one dispatcher may
 # run: the lease keeps a second one from ticking, and this keeps it from starting.
 set -euo pipefail

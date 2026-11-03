@@ -51,7 +51,7 @@ concurrency:
 jobs:
   production:
     name: production
-    if: github.event_name != 'pull_request' && github.repository == 'AlreadyKyle/peanutgallery'
+    if: github.event_name != 'pull_request' && github.repository_id == '1369060201'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:

@@ -58,9 +58,9 @@ export const DEFAULT_DESIGNER_PRICE = { input: 2, output: 10, cache_read: 0.2, c
 export const NOT_COPIED = {
   ANTHROPIC_API_KEY: "the founder's key; the VPS bills the studio key only",
   CLAUDE_BIN: 'the hand-run attended tools only (the replay eval, sandbox:check); the dispatcher runs Managed Agents sessions and no claude CLI',
-  DISPATCHER_WORKTREE_ROOT: 'dispatcher.service sets /srv/peanutgallery-worktrees; a path on the Mac does not exist on the VPS',
-  DISPATCHER_CODE_ROOT: 'dispatcher.service sets /opt/peanutgallery, the read-only code clone',
-  DISPATCHER_REPO_ROOT: 'dispatcher.service sets /srv/peanutgallery, the work clone',
+  DISPATCHER_WORKTREE_ROOT: 'dispatcher.service sets /srv/mobmachine-worktrees; a path on the Mac does not exist on the VPS',
+  DISPATCHER_CODE_ROOT: 'dispatcher.service sets /opt/mobmachine, the read-only code clone',
+  DISPATCHER_REPO_ROOT: 'dispatcher.service sets /srv/mobmachine, the work clone',
   DISPATCHER_CODE_READONLY: 'dispatcher.service sets required',
 };
 

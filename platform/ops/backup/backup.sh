@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # backup.sh: the nightly backup of the money database (docs/specs/money-safety.md). Run as root on the
-# VPS by peanutgallery-backup.service; provision.sh and deploy.sh install it from the commit at
-# /usr/local/lib/peanutgallery/backup.sh.
+# VPS by mobmachine-backup.service; provision.sh and deploy.sh install it from the commit at
+# /usr/local/lib/mobmachine/backup.sh.
 #
 # 1. `supabase db dump` through the Session pooler as the read-only peanutgallery_backup login, and
 #    only that login: the roles, the schema, the data (--use-copy), the auth schema's data and the
@@ -24,11 +24,11 @@
 # 5. Ping BACKUP_HEALTHCHECK_URL on success and its /fail on failure; the unit's OnFailure posts to
 #    ntfy. The dump's query also counts as activity, which keeps a free Supabase project from pausing.
 #
-# Secrets come from /etc/peanutgallery/backup.env (root 0600, KEY=value lines), read line by line and
+# Secrets come from /etc/mobmachine/backup.env (root 0600, KEY=value lines), read line by line and
 # never sourced. URLs with secrets reach curl through a config file, never its command line.
 set -euo pipefail
 
-ENV_FILE=${BACKUP_ENV_FILE:-/etc/peanutgallery/backup.env}
+ENV_FILE=${BACKUP_ENV_FILE:-/etc/mobmachine/backup.env}
 STATE_DIR=${BACKUP_STATE_DIR:-/var/lib/peanutgallery-backup}
 SCRATCH_NAME=peanutgallery-restore-check
 RESTORE_IMAGE_REPO=public.ecr.aws/supabase/postgres

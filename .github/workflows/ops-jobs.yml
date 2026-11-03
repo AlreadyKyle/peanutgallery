@@ -43,7 +43,7 @@ permissions:
 jobs:
   run:
     name: ops job
-    if: github.ref == 'refs/heads/main' && github.repository == 'AlreadyKyle/peanutgallery'
+    if: github.ref == 'refs/heads/main' && github.repository_id == '1369060201'
     runs-on: ubuntu-24.04
     environment: ops
     timeout-minutes: 30

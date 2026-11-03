@@ -1,23 +1,23 @@
 # The quota check (docs/specs/money-safety.md): the database's size and this month's Actions minutes,
 # alerting the board through ntfy before a free-tier limit trips. It runs platform/ops/jobs/main.mjs
 # from the read-only code clone in the dispatcher image, as nobody, with a read-only root and no
-# capability; its secrets come only from /etc/peanutgallery/quota.env. Started by
-# peanutgallery-quota.timer.
+# capability; its secrets come only from /etc/mobmachine/quota.env. Started by
+# mobmachine-quota.timer.
 [Unit]
 Description=Mob Machine quota check
 After=docker.service network-online.target
 Requires=docker.service
 Wants=network-online.target
-ConditionPathExists=/etc/peanutgallery/quota.env
-OnFailure=peanutgallery-job-alert@%n.service
+ConditionPathExists=/etc/mobmachine/quota.env
+OnFailure=mobmachine-job-alert@%n.service
 
 [Service]
 Type=oneshot
 TimeoutStartSec=10min
-ExecStartPre=-/usr/bin/docker rm -f peanutgallery-quota
-ExecStart=/usr/bin/docker run --rm --name peanutgallery-quota \
+ExecStartPre=-/usr/bin/docker rm -f mobmachine-quota
+ExecStart=/usr/bin/docker run --rm --name mobmachine-quota \
   --pull never \
-  --env-file /etc/peanutgallery/quota.env \
+  --env-file /etc/mobmachine/quota.env \
   --user 65534:65534 \
   --read-only \
   --cap-drop ALL \
@@ -25,7 +25,7 @@ ExecStart=/usr/bin/docker run --rm --name peanutgallery-quota \
   --memory 256m \
   --pids-limit 64 \
   --log-opt max-size=10m \
-  --volume /srv/peanutgallery-code:/opt/peanutgallery:ro \
+  --volume /srv/mobmachine-code:/opt/mobmachine:ro \
   --entrypoint node \
   peanutgallery/dispatcher:current \
-  /opt/peanutgallery/platform/ops/jobs/main.mjs quota
+  /opt/mobmachine/platform/ops/jobs/main.mjs quota

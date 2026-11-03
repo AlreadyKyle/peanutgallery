@@ -1,10 +1,10 @@
 # Dispatcher image for the VPS (docs/specs/vps.md, docs/specs/ops-separation.md,
 # docs/specs/launch-managed.md): the toolchain only. The repository is not copied in.
 # dispatcher.service mounts three host folders:
-#   /srv/peanutgallery-code       at /opt/peanutgallery, read-only: the root-owned code clone the
+#   /srv/mobmachine-code       at /opt/mobmachine, read-only: the root-owned code clone the
 #                                 dispatcher and its node_modules run from
-#   /srv/peanutgallery            at the same path: the work clone uid 10001 fetches and pushes in
-#   /srv/peanutgallery-worktrees  at the same path: card worktrees
+#   /srv/mobmachine            at the same path: the work clone uid 10001 fetches and pushes in
+#   /srv/mobmachine-worktrees  at the same path: card worktrees
 # Worktree metadata lives in the work clone's .git, so it survives restarts.
 #
 # No agent runs here. Unattended cards run as Claude Managed Agents sessions in containers Anthropic
@@ -54,7 +54,7 @@ RUN git config --global user.name "Mob Machine agents" \
 # there and hard-links into node_modules on the same mount. No NODE_ENV=production: it would drop
 # devDependencies such as tsx.
 ENV CI=true \
-    pnpm_config_store_dir=/opt/peanutgallery/.pnpm-store
+    pnpm_config_store_dir=/opt/mobmachine/.pnpm-store
 
-WORKDIR /opt/peanutgallery
+WORKDIR /opt/mobmachine
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/dispatcher-entrypoint.sh"]

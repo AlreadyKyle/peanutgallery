@@ -8,7 +8,7 @@ The weekly update video (`docs/specs/weekly-video.md`): the explainer's plate, t
 
 ## Make next week's video
 
-1. **List what merged.** `git log --since=<last week's date> --format='%h %ad %s' --date=short origin/main`, then read each pull request's description (`gh pr view <n> --repo AlreadyKyle/peanutgallery`). Only what merged that week goes in. Note each beat's pull request beside it.
+1. **List what merged.** `git log --since=<last week's date> --format='%h %ad %s' --date=short origin/main`, then read each pull request's description (`gh pr view <n> --repo AlreadyKyle/mobmachine`). Only what merged that week goes in. Note each beat's pull request beside it.
 2. **Capture the live site.** Edit the constants at the top of `scripts/weekly-capture.mjs` (`CARD`, `CURATOR`, `TODAY`) and the shots in `SHOTS` for the week's features, then, in `platform/explainer`:
 
    ```sh

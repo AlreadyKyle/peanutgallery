@@ -22,7 +22,7 @@ These routines run on the Mac rather than in the cloud. They need `.env` for pro
 ## Branches
 
 - `main` is production. The site and the game deploy from it, the dispatcher merges funded cards into it, and nothing else reaches it except a release or a hotfix.
-- `next` is the train. Each daily lane opens a pull request into `next` from `build/<date>-<slug>` and merges once the gate is green at the exact head: `gh api -X PUT repos/AlreadyKyle/peanutgallery/pulls/<n>/merge -f merge_method=squash -f sha=<head>`. The gate runs on every pull request, whatever its base. Each such pull request gets a Netlify deploy preview, which is how Kyle looks at a change before it ships.
+- `next` is the train. Each daily lane opens a pull request into `next` from `build/<date>-<slug>` and merges once the gate is green at the exact head: `gh api -X PUT repos/AlreadyKyle/mobmachine/pulls/<n>/merge -f merge_method=squash -f sha=<head>`. The gate runs on every pull request, whatever its base. Each such pull request gets a Netlify deploy preview, which is how Kyle looks at a change before it ships.
 - The daily run merges `main` into `next` every morning, so the cards that shipped and any hotfix are on the train too.
 - The release pull request `next` into `main` merges with `merge_method=merge`, so `next` stays an ancestor of `main` and fast-forwards after the release. Nothing is ever force-pushed.
 - **Hotfix.** For an S1 incident (`docs/strategy/operating-system.md` §3), or a broken live check that a lane can fix in one session, branch from `main`. Open a pull request into `main` and merge it on a green gate, any day of the week. Then merge `main` into `next`. Nothing else skips the train.

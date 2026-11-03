@@ -4,7 +4,7 @@
 # VM.Standard.A1.Flex with 2 OCPUs and 12 GB, the Always Free limit, retries every availability
 # domain while Oracle answers "Out of host capacity", waits for RUNNING, and proves ssh as ubuntu and
 # as root. Idempotent: every step finds what exists before it creates, so a rerun reuses the network
-# and an instance already named peanutgallery-dispatcher, starts it if Oracle stopped it (retrying
+# and an instance already named mobmachine-dispatcher, starts it if Oracle stopped it (retrying
 # capacity the same way), and prints the same address.
 #
 # Before the first run, the board signs in once in a terminal (a browser login, no API key):
@@ -23,7 +23,7 @@ OCI_PROFILE=${OCI_PROFILE:-peanutgallery}
 SSH_PUBLIC_KEY=${SSH_PUBLIC_KEY:-$HOME/.ssh/id_ed25519.pub}
 ROUNDS=${ROUNDS:-240}
 ROUND_SECONDS=${ROUND_SECONDS:-60}
-NAME=peanutgallery-dispatcher
+NAME=mobmachine-dispatcher
 VCN_NAME=peanutgallery-vcn
 SHAPE=VM.Standard.A1.Flex
 # Oracle's Always Free Ampere allowance is 1,500 OCPU-hours and 9,000 GB-hours a month, which its

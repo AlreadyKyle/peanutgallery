@@ -22,7 +22,7 @@ Rules that never change (the kernel, PLAN.md §4 Kernel): the ledger, spend caps
 
 ## Names
 
-The name is the board's call (`docs/PLAN.md` §10 decision 43). The domain is mobmachine.games, with peanutgallery.games kept as a redirect (§10 decision 59). Internal identifiers keep the old `peanutgallery` spelling (`docs/specs/rename.md`). The package names (`@backseat/*`) use the earlier working name, Backseat.
+The name is the board's call (`docs/PLAN.md` §10 decision 43). The domain is mobmachine.games, with peanutgallery.games kept as a redirect (§10 decision 59). The repository is AlreadyKyle/mobmachine (renamed from peanutgallery on 3 November 2026; GitHub redirects the old address), and no repository, folder or file is named peanutgallery. Identifiers outside the repository's control keep the old spelling: the redirect domain, the database's `peanutgallery_*` roles and schemas, the Netlify site slugs, the Google Cloud identity provider and the backup file names (`docs/specs/rename.md`). The package names (`@backseat/*`) use the earlier working name, Backseat.
 
 ## Spec-driven development
 
@@ -50,8 +50,8 @@ Sessions that died mid-run (a usage limit or the machine shutting down stops a s
 - At most three agents run `pnpm verify` or e2e at once, each on its own port (`E2E_PORT`, 4400 to 4499).
 - Before pushing, run the e2e specs the change touches; the Actions gate is the full check, so do not also run the local gate. A full gate run takes about 8 minutes on Actions and 8 to 9 locally (`docs/ROADMAP.md`, Merging), so a predictable failure is expensive.
 - **The train.** Every pull request a Claude session opens targets `next`, not `main`, and ships in the Tuesday release (`docs/build/README.md`). The exceptions are a hotfix (an S1 or S2, a red live check, or a broken production job), which targets `main` and is merged back into `next`, and the dispatcher's card pull requests, which merge into `main` as they always have. A pull request into `next` merges the same way as below, on a green gate at its exact head.
-- One session merges to `main` at a time, on a green gate workflow run at the pull request's exact head (or, when Actions is down, a local gate PASS whose `base=` is still `origin/main`, quoted in the merge body): `gh api -X PUT repos/AlreadyKyle/peanutgallery/pulls/<pr>/merge -f merge_method=squash -f sha=<head>`, then `gh api -X DELETE repos/AlreadyKyle/peanutgallery/git/refs/heads/<branch>`. The REST form works in cloud sessions, whose GitHub proxy refuses the GraphQL `gh pr` commands; `sha` refuses a head that moved. If `main` moved, run the gate again.
-- After each merge, comment on the merged pull request with the merge sha and the live-check line (`gh api repos/AlreadyKyle/peanutgallery/issues/<pr>/comments -f body=...`). Merged branches and their worktrees are deleted. (`~/peanutgallery-launch/STATUS.md` is history up to #149.)
+- One session merges to `main` at a time, on a green gate workflow run at the pull request's exact head (or, when Actions is down, a local gate PASS whose `base=` is still `origin/main`, quoted in the merge body): `gh api -X PUT repos/AlreadyKyle/mobmachine/pulls/<pr>/merge -f merge_method=squash -f sha=<head>`, then `gh api -X DELETE repos/AlreadyKyle/mobmachine/git/refs/heads/<branch>`. The REST form works in cloud sessions, whose GitHub proxy refuses the GraphQL `gh pr` commands; `sha` refuses a head that moved. If `main` moved, run the gate again.
+- After each merge, comment on the merged pull request with the merge sha and the live-check line (`gh api repos/AlreadyKyle/mobmachine/issues/<pr>/comments -f body=...`). Merged branches and their worktrees are deleted. (`~/peanutgallery-launch/STATUS.md` is history up to #149.)
 
 ## Cloud sessions
 

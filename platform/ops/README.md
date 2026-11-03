@@ -2,7 +2,7 @@
 
 The dispatcher runs unattended on a small Ubuntu server in a Docker container under systemd, on the studio's Anthropic key (`docs/specs/vps.md`). Each card's agent runs as a Claude Managed Agents session in a container Anthropic hosts (`docs/specs/launch-managed.md`): the VPS holds the session's event stream, meters it, applies the patch the agent hands back, and drives the gate, merge and deploy. No agent-written code runs on the VPS. This page is how the board provisions it, cuts over from the Mac, deploys, rotates keys, reads logs, pauses and rolls back.
 
-**The host is GitHub Actions** (`docs/PLAN.md` §10 decision 61, `docs/specs/actions-host.md`): since 6 October 2026 the repository is public, its Actions minutes are free, and the dispatcher runs there one run of up to about six hours after another; [The GitHub Actions host](#the-github-actions-host) is its runbook. The daily jobs run on Actions in this repository too, in the main-only environment `ops` (`docs/PLAN.md` §10 decision 78, `ops-repo/README.md`); from 6 to 18 October 2026 they ran in the board's private repository AlreadyKyle/mobmachine-ops, which now holds the promotion workflows. The board's Mac host is retired and its LaunchAgents are removed; [The Mac host](#the-mac-host) is kept for the record, and `backup-mac.sh` is the backup the daily jobs run. The server sections are kept for a paid always-on host once player money pays the overhead, which reuses this Ubuntu provisioning (`docs/BACKLOG.md`, Move the dispatcher off the Mac); the Oracle-specific parts are kept for the record and are not run.
+**The host is GitHub Actions** (`docs/PLAN.md` §10 decision 61, `docs/specs/actions-host.md`): since 6 October 2026 the repository is public, its Actions minutes are free, and the dispatcher runs there one run of up to about six hours after another; [The GitHub Actions host](#the-github-actions-host) is its runbook. The daily jobs run on Actions in this repository too, in the main-only environment `ops` (`docs/PLAN.md` §10 decision 78, `ops-repo/README.md`); from 6 to 18 October 2026 they ran in the board's private repository AlreadyKyle/mobmachine-ops, merged into this repository under `promo-repo/` and archived on 3 November 2026. The board's Mac host is retired and its LaunchAgents are removed; [The Mac host](#the-mac-host) is kept for the record, and `backup-mac.sh` is the backup the daily jobs run. The server sections are kept for a paid always-on host once player money pays the overhead, which reuses this Ubuntu provisioning (`docs/BACKLOG.md`, Move the dispatcher off the Mac); the Oracle-specific parts are kept for the record and are not run.
 
 ## What runs where
 
@@ -11,15 +11,15 @@ The dispatcher runs unattended on a small Ubuntu server in a Docker container un
 
   | Host path | Owner | In the container | Holds |
   |---|---|---|---|
-  | `/srv/peanutgallery-code` | root, not writable by others | `/opt/peanutgallery`, read-only | the code clone: the dispatcher's code, `node_modules` and the pnpm store (`.pnpm-store`, excluded from git). Only `deploy.sh` and `provision.sh` change it. |
-  | `/srv/peanutgallery` | uid 10001 | same path, read-write | the work clone: the git state the dispatcher fetches, pushes and adds worktrees from. Nothing runs from it, and root runs no git in it. |
-  | `/srv/peanutgallery-worktrees` | uid 10001, 0700 | same path, read-write | card worktrees, where accepted patches are applied and committed. Their metadata lives in the work clone's `.git`, so both survive restarts. |
+  | `/srv/mobmachine-code` | root, not writable by others | `/opt/mobmachine`, read-only | the code clone: the dispatcher's code, `node_modules` and the pnpm store (`.pnpm-store`, excluded from git). Only `deploy.sh` and `provision.sh` change it. |
+  | `/srv/mobmachine` | uid 10001 | same path, read-write | the work clone: the git state the dispatcher fetches, pushes and adds worktrees from. Nothing runs from it, and root runs no git in it. |
+  | `/srv/mobmachine-worktrees` | uid 10001, 0700 | same path, read-write | card worktrees, where accepted patches are applied and committed. Their metadata lives in the work clone's `.git`, so both survive restarts. |
 
   The dispatcher starts with `DISPATCHER_CODE_READONLY=required` and exits 78 when it can write to its code root or its `node_modules`.
 - **Image.** `peanutgallery/dispatcher:current` (also tagged with the commit it was built or deployed at), built from `git archive <sha>:platform/ops`, never from a working tree. It holds Node 22, git, tini and pnpm 11.0.9, and no claude CLI: no agent runs on the VPS. Its entrypoint checks the code clone and the work clone's https origin, and starts `platform/dispatcher/src/main.ts` from the code clone. It installs nothing.
 - **Managed Agents.** One agent (`platform/agents/managed/agent.yaml`: bash, the five file tools and `submit_patch`; no web tool, MCP server or skill) and one environment (`environment.yaml`: a cloud container whose only egress is the package registries) in the studio's Console organization. The dispatcher runs with their ids and the agent's pinned version, and at every start refuses to run unless both match the files, the read-only token cannot write, and a probe session passes.
-- **Secrets.** `/etc/peanutgallery/dispatcher.env`, root 0600, read only by `docker run --env-file`. Format: `KEY=value`, no quotes, no `export`, JSON on one line.
-- **Units.** `dispatcher.service` runs the container. `dispatcher-alert.service` posts to ntfy when the dispatcher unit fails for good; it reads the topic URL from `/etc/peanutgallery/ntfy.url`.
+- **Secrets.** `/etc/mobmachine/dispatcher.env`, root 0600, read only by `docker run --env-file`. Format: `KEY=value`, no quotes, no `export`, JSON on one line.
+- **Units.** `dispatcher.service` runs the container. `dispatcher-alert.service` posts to ntfy when the dispatcher unit fails for good; it reads the topic URL from `/etc/mobmachine/ntfy.url`.
 
 | File | Runs on | Does |
 |---|---|---|
@@ -30,12 +30,13 @@ The dispatcher runs unattended on a small Ubuntu server in a Docker container un
 | `platform/agents/managed/*.yaml`, `pnpm --filter @backseat/dispatcher managed:apply` | the Mac | the Managed Agents agent and environment, applied to the studio organization |
 | `dispatcher.service`, `dispatcher-alert.service` | the VPS | the units |
 | `make-jobs-env.sh` | the Mac | writes the three jobs' env files (Backups and the Controller, below) |
-| `backup/backup.sh`, `peanutgallery-backup.service`, `.timer` | the VPS, as root | the nightly encrypted database backup and the weekly restore check |
-| `jobs/main.mjs`, `peanutgallery-controller.service`, `.timer` | the VPS, in the image, as nobody | the Controller: the daily reconciliation with Stripe |
-| `jobs/main.mjs`, `peanutgallery-quota.service`, `.timer` | the VPS, in the image, as nobody | the quota check: database size and Actions minutes |
-| `peanutgallery-job-alert@.service` | the VPS | posts to ntfy when a job fails |
+| `backup/backup.sh`, `mobmachine-backup.service`, `.timer` | the VPS, as root | the nightly encrypted database backup and the weekly restore check |
+| `jobs/main.mjs`, `mobmachine-controller.service`, `.timer` | the VPS, in the image, as nobody | the Controller: the daily reconciliation with Stripe |
+| `jobs/main.mjs`, `mobmachine-quota.service`, `.timer` | the VPS, in the image, as nobody | the quota check: database size and Actions minutes |
+| `mobmachine-job-alert@.service` | the VPS | posts to ntfy when a job fails |
 | `actions/run-dispatcher.sh`, `.github/workflows/dispatcher.yml` | GitHub Actions, this repository | the dispatcher's host (The GitHub Actions host, below) |
-| `ops-repo/` | GitHub Actions in this repository (`.github/workflows/ops-jobs.yml`, `actions/run-ops-job.sh`) | the daily jobs' runbook, and what the private repository AlreadyKyle/mobmachine-ops still holds |
+| `ops-repo/` | GitHub Actions in this repository (`.github/workflows/ops-jobs.yml`, `actions/run-ops-job.sh`) | the daily jobs' runbook |
+| `promo-repo/` | nowhere: kept for the record | the former private repository AlreadyKyle/mobmachine-ops with its history: the stopped promo engine and itch.io push |
 | `after-restore.sql` | the Mac, on a restored copy | what the migrations make outside the dumped schemas: the sign-in trigger, Realtime's tables, the backup login's reads and the pg_cron jobs |
 
 ## Operator inputs
@@ -71,20 +72,20 @@ The board supplies these; nothing in the repository holds them. Export them in t
    It prints the path it wrote (a new temporary folder) and the key names, never the values. It refuses when an exported value is missing, when `VPS_GITHUB_TOKEN` equals the Mac's token, when `GITHUB_READ_TOKEN` equals a token that can write, when either token is not fine-grained, when a `MANAGED_*` id from step 4 is missing, or when `MODEL_BUILDER`, or a `MODEL_DIRECTOR`, `MODEL_DESIGNER` or `MODEL_HOST` that `.env` sets, has no row in `PRICE_TABLE_JSON`. It copies no `ANTHROPIC_API_KEY`, `CLAUDE_BIN` or `DISPATCHER_WORKTREE_ROOT` from the Mac, and uses `SUPABASE_SECRET_KEY` as the service key when `.env` has one. The Game Designer drafts on `claude-sonnet-5-5` (`docs/PLAN.md` §10 decision 77): when `.env` leaves `MODEL_DESIGNER` unset, the file sets `MODEL_DESIGNER=claude-sonnet-5-5`, and `PRICE_TABLE_JSON` gains that model's row at list price (2 USD input, 10 output, 0.20 cache read, 2.50 and 4 for five-minute and one-hour cache writes, per million tokens) when it has none; a `MODEL_DESIGNER` in `.env` still wins. A file written before this has no `MODEL_DESIGNER`, so the dispatcher runs the Designer on `MODEL_DIRECTOR` until the file is made again.
 8. **Upload it** (replace `<path>` with the printed path), then delete the local copy:
    ```sh
-   ssh root@$VPS_IP 'install -d -m 0700 /etc/peanutgallery'
-   scp <path> root@$VPS_IP:/etc/peanutgallery/dispatcher.env
-   ssh root@$VPS_IP 'chown root:root /etc/peanutgallery/dispatcher.env && chmod 600 /etc/peanutgallery/dispatcher.env'
+   ssh root@$VPS_IP 'install -d -m 0700 /etc/mobmachine'
+   scp <path> root@$VPS_IP:/etc/mobmachine/dispatcher.env
+   ssh root@$VPS_IP 'chown root:root /etc/mobmachine/dispatcher.env && chmod 600 /etc/mobmachine/dispatcher.env'
    rm -r "$(dirname <path>)"
    ```
 9. **The ntfy URL for the alert unit:**
    ```sh
-   printf '%s\n' "$NTFY_TOPIC_URL" | ssh root@$VPS_IP 'umask 077 && cat > /etc/peanutgallery/ntfy.url'
+   printf '%s\n' "$NTFY_TOPIC_URL" | ssh root@$VPS_IP 'umask 077 && cat > /etc/mobmachine/ntfy.url'
    ```
 10. **Provision:**
    ```sh
    ssh root@$VPS_IP 'bash -s' < platform/ops/provision.sh
    ```
-   It clones the code clone as root with the token from the env file and refuses it if it has uncommitted or untracked files. It validates the env file (root 0600, no quoted value, every required key including `GITHUB_READ_TOKEN` and the three `MANAGED_*` ids, two different fine-grained GitHub tokens, `PRICE_TABLE_JSON` parsed by node with a row for `MODEL_BUILDER` and any `MODEL_DIRECTOR`, `MODEL_DESIGNER` or `MODEL_HOST` (it notes a file with no `MODEL_DESIGNER`, which leaves the Game Designer on `MODEL_DIRECTOR`), none of `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_ACCESS_TOKEN`, `ANTHROPIC_API_KEY`, and none of the `DISPATCHER_*_ROOT` or `DISPATCHER_CODE_READONLY` values the unit sets). It proves `GITHUB_READ_TOKEN` reads the repository and is denied a write. It builds the image from the commit, installs `node_modules` into the code clone in a throwaway container with no secret, and makes the code clone root-owned and not writable by others. It clones the work clone inside the image as uid 10001, creates `/srv/peanutgallery-worktrees`, installs both units from the commit, runs `systemd-analyze verify` and enables the dispatcher without starting it. Run it a second time: the last line must read `provision: done: 0 change(s)`.
+   It clones the code clone as root with the token from the env file and refuses it if it has uncommitted or untracked files. It validates the env file (root 0600, no quoted value, every required key including `GITHUB_READ_TOKEN` and the three `MANAGED_*` ids, two different fine-grained GitHub tokens, `PRICE_TABLE_JSON` parsed by node with a row for `MODEL_BUILDER` and any `MODEL_DIRECTOR`, `MODEL_DESIGNER` or `MODEL_HOST` (it notes a file with no `MODEL_DESIGNER`, which leaves the Game Designer on `MODEL_DIRECTOR`), none of `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_ACCESS_TOKEN`, `ANTHROPIC_API_KEY`, and none of the `DISPATCHER_*_ROOT` or `DISPATCHER_CODE_READONLY` values the unit sets). It proves `GITHUB_READ_TOKEN` reads the repository and is denied a write. It builds the image from the commit, installs `node_modules` into the code clone in a throwaway container with no secret, and makes the code clone root-owned and not writable by others. It clones the work clone inside the image as uid 10001, creates `/srv/mobmachine-worktrees`, installs both units from the commit, runs `systemd-analyze verify` and enables the dispatcher without starting it. Run it a second time: the last line must read `provision: done: 0 change(s)`.
 
 ### Pin the base image by digest
 
@@ -104,11 +105,11 @@ Pass the printed `node@sha256:...` reference with its tag, as `NODE_IMAGE=node:2
 3. **Set agent mode to unattended** from /board. Once the two-factor migration from `docs/specs/launch-pages.md` is applied to the live project, this needs the board's second factor.
 4. **The toolchain check,** once, before the first card, and again whenever `environment.yaml` or the agent's version changes. A session with the repository mounted at main's head runs node, pnpm, `pnpm install --frozen-lockfile` and the seed bot once; the dispatcher reads their output back and fails unless node is 22 or later, pnpm is 11.0.9 and both commands exit 0. It is billed as overhead:
    ```sh
-   ssh root@$VPS_IP 'docker run --rm --pull never --env-file /etc/peanutgallery/dispatcher.env --user 10001:10001 \
-     --volume /srv/peanutgallery-code:/opt/peanutgallery:ro --volume /srv/peanutgallery:/srv/peanutgallery \
-     --env DISPATCHER_CODE_ROOT=/opt/peanutgallery --env DISPATCHER_REPO_ROOT=/srv/peanutgallery \
-     --env DISPATCHER_WORKTREE_ROOT=/srv/peanutgallery-worktrees --env TSX_DISABLE_CACHE=1 \
-     --workdir /opt/peanutgallery/platform/dispatcher --entrypoint node peanutgallery/dispatcher:current \
+   ssh root@$VPS_IP 'docker run --rm --pull never --env-file /etc/mobmachine/dispatcher.env --user 10001:10001 \
+     --volume /srv/mobmachine-code:/opt/mobmachine:ro --volume /srv/mobmachine:/srv/mobmachine \
+     --env DISPATCHER_CODE_ROOT=/opt/mobmachine --env DISPATCHER_REPO_ROOT=/srv/mobmachine \
+     --env DISPATCHER_WORKTREE_ROOT=/srv/mobmachine-worktrees --env TSX_DISABLE_CACHE=1 \
+     --workdir /opt/mobmachine/platform/dispatcher --entrypoint node peanutgallery/dispatcher:current \
      --import tsx src/probe.ts --toolchain'
    ```
    The first line must read `PASS: toolchain`. Quote it in the spec. A `FAIL:` stops the cutover here, before any funded card runs.
@@ -126,7 +127,7 @@ After cutover, running `pnpm --filter @backseat/supabase seed` from the Mac leav
 
 1. Merge to main as usual (the gate green on the head sha).
 2. Pause from /board and let any building card finish.
-3. On the Mac, bring your checkout to the reviewed main: `git switch main && git pull --ff-only`. Read `git log` and the diff of `platform/ops/deploy.sh` since you last deployed. The script root runs is the one in this checkout, never a file on the VPS: the copy in `/srv/peanutgallery-code` sits in the clone the script exists to distrust.
+3. On the Mac, bring your checkout to the reviewed main: `git switch main && git pull --ff-only`. Read `git log` and the diff of `platform/ops/deploy.sh` since you last deployed. The script root runs is the one in this checkout, never a file on the VPS: the copy in `/srv/mobmachine-code` sits in the clone the script exists to distrust.
 4. From the repository root, run the review:
    ```sh
    ssh root@$VPS_IP 'bash -s' < platform/ops/deploy.sh
@@ -140,7 +141,7 @@ After cutover, running `pnpm --filter @backseat/supabase seed` from the Mac leav
 
 It refuses unless `studio_state.paused` is true and no card is building or gated, and while the dispatcher unit is stopped (before the cutover, a start would run a second dispatcher beside the Mac's). Then, in the code clone only, with `core.fsmonitor` and hooks off and no system or global git configuration:
 - It refuses the clone when it has any uncommitted or untracked file, or git state a fresh clone does not have: index flags other than `H`, configuration keys git does not write for a clone, `.git/info/attributes`, `.git/info/grafts`, `.git/commondir` or `.git/objects/info/alternates`, a setuid or setgid file, or a symlink that is absolute, does not resolve or resolves outside the clone. The refusal prints what it found.
-- It fetches `main` from `https://github.com/AlreadyKyle/peanutgallery.git` by name, not from whatever `remote.origin.url` says, with a one-off token header.
+- It fetches `main` from `https://github.com/AlreadyKyle/mobmachine.git` by name, not from whatever `remote.origin.url` says, with a one-off token header.
 - It checks through the GitHub API that the target's latest `gate` check run from GitHub Actions concluded `success`, prints the review, and moves only when `--confirm` (or the prompt) matches the target. If main moved since the review, the prefix no longer matches and nothing happens.
 - It fast-forwards to the target (checking out `main` first after a roll back) and checks that `HEAD` is the target.
 - It rebuilds the image from `git archive` of the new commit only when `platform/ops` changed (otherwise it tags `:current` with the new sha too).
@@ -158,7 +159,7 @@ When a deploy leaves the dispatcher failing or misbehaving:
 1. Pause from /board.
 2. Find the previous commit:
    ```sh
-   ssh root@$VPS_IP 'git -c safe.directory=/srv/peanutgallery-code -c core.fsmonitor=false -c core.hooksPath=/dev/null -C /srv/peanutgallery-code log --oneline -5 origin/main; docker image ls peanutgallery/dispatcher'
+   ssh root@$VPS_IP 'git -c safe.directory=/srv/mobmachine-code -c core.fsmonitor=false -c core.hooksPath=/dev/null -C /srv/mobmachine-code log --oneline -5 origin/main; docker image ls peanutgallery/dispatcher'
    ```
 3. From the Mac checkout (Deploy an update, step 3), review and then deploy it by its full sha (replace `<previous-sha>`):
    ```sh
@@ -171,13 +172,13 @@ When a deploy leaves the dispatcher failing or misbehaving:
 4. Resume from /board.
 5. Fix forward on main. The next plain `deploy.sh` checks out `main` again and fast-forwards to `origin/main`, so do not run it until the fix is merged.
 
-If `deploy.sh` refuses a dirty code clone, do not clean it by hand and deploy over it. Inspect the files it lists, find out how they changed, and if in doubt move the clone aside (`mv /srv/peanutgallery-code /root/peanutgallery-code.suspect`) and run `provision.sh` again, which clones it fresh.
+If `deploy.sh` refuses a dirty code clone, do not clean it by hand and deploy over it. Inspect the files it lists, find out how they changed, and if in doubt move the clone aside (`mv /srv/mobmachine-code /root/mobmachine-code.suspect`) and run `provision.sh` again, which clones it fresh.
 
 A card that failed after merge is reverted on main by the dispatcher itself (`docs/specs/launch-hardening.md`); this section is for the dispatcher's own code.
 
 ## Rotate a key
 
-Each rotation: pause from /board, change the value in `/etc/peanutgallery/dispatcher.env` on the VPS (for example `ssh -t root@$VPS_IP 'nano /etc/peanutgallery/dispatcher.env'`; the file keeps its owner and mode), run `provision.sh` again to validate it (it reports 0 changes), `systemctl restart dispatcher`, check `startup probe passed` and the heartbeat, resume, and only then revoke the old key.
+Each rotation: pause from /board, change the value in `/etc/mobmachine/dispatcher.env` on the VPS (for example `ssh -t root@$VPS_IP 'nano /etc/mobmachine/dispatcher.env'`; the file keeps its owner and mode), run `provision.sh` again to validate it (it reports 0 changes), `systemctl restart dispatcher`, check `startup probe passed` and the heartbeat, resume, and only then revoke the old key.
 
 - **GitHub token.** Create a new fine-grained token with the same repository and permissions (Provision, step 3), set `GITHUB_TOKEN`, restart, and check the next card pushes its branch from the work clone. The next `deploy.sh` fetches the code clone with the same value. Revoke the old token on GitHub. The token lives only in the env file on the VPS; neither clone stores it.
 - **The read-only GitHub token.** Create a new token from the read-only form (Provision, step 3), set `GITHUB_READ_TOKEN`, run `provision.sh` (it proves the token is denied a write), restart, and check `containment verified` in the log. Revoke the old token on GitHub. The dispatcher also re-checks the token before every session and halts, with an ntfy alert, if it ever finds it can write.
@@ -232,19 +233,19 @@ Kept for the record: Oracle is dropped (`docs/PLAN.md` §10 decision 38), and no
 
 Oracle stops an Always Free instance whose CPU (at the 95th percentile), network and memory all stay under 20% for 7 days, and the dispatcher is idle by design between funded cards. When that happens the healthchecks.io checks alert the board.
 
-**Recovery needs no laptop.** On a phone, sign in at cloud.oracle.com, then Compute, Instances, `peanutgallery-dispatcher`, Start. `dispatcher.service` and the job timers are enabled, so the dispatcher comes back on boot, and each timer's `Persistent=` runs the backup, the Controller or the quota check it missed while the instance was stopped. If Oracle answers that it has no capacity, try again later. From the Mac, `platform/ops/oracle-launch.sh` after `oci session authenticate` does the same and retries capacity by itself.
+**Recovery needs no laptop.** On a phone, sign in at cloud.oracle.com, then Compute, Instances, `mobmachine-dispatcher`, Start. `dispatcher.service` and the job timers are enabled, so the dispatcher comes back on boot, and each timer's `Persistent=` runs the backup, the Controller or the quota check it missed while the instance was stopped. If Oracle answers that it has no capacity, try again later. From the Mac, `platform/ops/oracle-launch.sh` after `oci session authenticate` does the same and retries capacity by itself.
 
 Oracle's documentation does not say that moving the tenancy to Pay As You Go ends idle reclaim, so nothing here relies on it; it would also put a card on file, which is the board's call (`BOARD-SETUP.md`).
 
 ## Backups and the Controller
 
-Three jobs run on the VPS beside the dispatcher and outside it (`docs/specs/money-safety.md`), each a oneshot unit started by its own timer, each with its own env file in `/etc/peanutgallery`, root 0600, holding only that job's keys. They do not need the dispatcher running, so they run before the cutover too. A job that cannot run posts "Mob Machine job <unit> failed" to ntfy through `peanutgallery-job-alert@.service`.
+Three jobs run on the VPS beside the dispatcher and outside it (`docs/specs/money-safety.md`), each a oneshot unit started by its own timer, each with its own env file in `/etc/mobmachine`, root 0600, holding only that job's keys. They do not need the dispatcher running, so they run before the cutover too. A job that cannot run posts "Mob Machine job <unit> failed" to ntfy through `mobmachine-job-alert@.service`.
 
 | Job | When (UTC) | Env file | Does |
 |---|---|---|---|
 | `peanutgallery-backup` | daily, 06:17 | `backup.env` | `backup/backup.sh`: dumps the database through the Session pooler as the read-only `peanutgallery_backup` login, encrypts the dumps to the board's age public key, uploads them to the backup bucket, pings the backup check. Once a week it first restores the plaintext into a scratch Postgres with no network and checks the ledger identity on it. |
-| `peanutgallery-controller` | daily, 07:07 | `controller.env` | the Controller: reconciles the books with Stripe, puts back won disputes, computes the next Console credit purchase and the Minimum balance, writes a `controller_runs` row, and alerts on any mismatch |
-| `peanutgallery-quota` | daily, 07:37 | `quota.env` | the database's size (alert at 350 MB) and this month's Actions minutes (alert under 400 left), written to `controller_runs` |
+| `mobmachine-controller` | daily, 07:07 | `controller.env` | the Controller: reconciles the books with Stripe, puts back won disputes, computes the next Console credit purchase and the Minimum balance, writes a `controller_runs` row, and alerts on any mismatch |
+| `mobmachine-quota` | daily, 07:37 | `quota.env` | the database's size (alert at 350 MB) and this month's Actions minutes (alert under 400 left), written to `controller_runs` |
 
 Supabase egress and Netlify bandwidth and build minutes are not measured here: they come from the providers' own usage emails to the board, so no account-wide token sits on the VPS.
 
@@ -273,19 +274,19 @@ With `oci session authenticate --region ca-toronto-1 --profile-name peanutgaller
 4. **The backup login's password.** Migration `20260923000010_backup_role.sql` creates `peanutgallery_backup` with no password. Set one once through the Management API query endpoint (`alter role peanutgallery_backup with password '<a new random password>'`), never in a file in the repository, and put the Session pooler string in `.env` as `BACKUP_DB_URL=postgresql://peanutgallery_backup.<project ref>:<password>@<the Session pooler host from Dashboard, Connect>:5432/postgres`. Read back what it can do: `select rolbypassrls, rolconfig from pg_roles where rolname = 'peanutgallery_backup'` and `select has_table_privilege('peanutgallery_backup', 'auth.users', 'select')`. Every dump runs as this login. The database owner's password never goes to the VPS or the backups repository: the owner can drop the append-only triggers. If the login cannot read the auth schema, put `BACKUP_SKIP_AUTH=1` in `.env` (and the same variable in the backups repository): the dumps then leave `auth` out, and a restore signs the board in afresh (Restore the database, step 6). The auth schema holds only the board's accounts; board membership itself is `board_members`, by email, in the public data.
 5. **The env files.** On the Mac, with `.env.vps` exported: `platform/ops/make-jobs-env.sh`. It prints the folder it wrote. Upload each file and delete the local copies:
    ```sh
-   scp <folder>/backup.env <folder>/controller.env <folder>/quota.env root@$VPS_IP:/etc/peanutgallery/
-   ssh root@$VPS_IP 'chown root:root /etc/peanutgallery/*.env && chmod 600 /etc/peanutgallery/*.env'
+   scp <folder>/backup.env <folder>/controller.env <folder>/quota.env root@$VPS_IP:/etc/mobmachine/
+   ssh root@$VPS_IP 'chown root:root /etc/mobmachine/*.env && chmod 600 /etc/mobmachine/*.env'
    rm -r <folder>
    ```
    A job whose keys are not all in `.env` yet (the Stripe read key, say) is refused and named, and the others are written.
 6. **Provision again:** `ssh root@$VPS_IP 'bash -s' < platform/ops/provision.sh`. It installs `age` and the pinned Supabase CLI (checked against its release's checksum file), installs the backup script from the commit, checks each job env file in the image, and enables each timer whose file passes.
 7. **The first runs, by hand, quoted in the spec:**
    ```sh
-   ssh root@$VPS_IP '/usr/local/lib/peanutgallery/backup.sh --restore-check'
-   ssh root@$VPS_IP 'docker run --rm --pull never --env-file /etc/peanutgallery/controller.env --user 65534:65534 --read-only --cap-drop ALL \
-     --volume /srv/peanutgallery-code:/opt/peanutgallery:ro --entrypoint node peanutgallery/dispatcher:current \
-     /opt/peanutgallery/platform/ops/jobs/main.mjs controller --dry-run'
-   ssh root@$VPS_IP 'systemctl start peanutgallery-quota.service; journalctl -u peanutgallery-quota -n 5 --no-pager'
+   ssh root@$VPS_IP '/usr/local/lib/mobmachine/backup.sh --restore-check'
+   ssh root@$VPS_IP 'docker run --rm --pull never --env-file /etc/mobmachine/controller.env --user 65534:65534 --read-only --cap-drop ALL \
+     --volume /srv/mobmachine-code:/opt/mobmachine:ro --entrypoint node peanutgallery/dispatcher:current \
+     /opt/mobmachine/platform/ops/jobs/main.mjs controller --dry-run'
+   ssh root@$VPS_IP 'systemctl start mobmachine-quota.service; journalctl -u mobmachine-quota -n 5 --no-pager'
    ```
    The backup's output must include `PASS: restore check`, and each job's first line must read `PASS:`. The Controller's dry run reads everything and writes, reinstates and alerts nothing; run it only after the board has been told what it reads (above).
 
@@ -298,7 +299,7 @@ Before the cutover `deploy.sh` refuses to run while the dispatcher is stopped, s
 - **A fee Stripe kept that the books do not carry:** record the adjustment the alert names with `record_adjustment` at /board.
 - **A missed or undelivered webhook event:** resend it from the Stripe Dashboard.
 
-Read the runs as the service role: `select job, started_at, ok, mismatches, figures from controller_runs order by created_at desc limit 5`, or `journalctl -u peanutgallery-controller -n 50 --no-pager` on the VPS.
+Read the runs as the service role: `select job, started_at, ok, mismatches, figures from controller_runs order by created_at desc limit 5`, or `journalctl -u mobmachine-controller -n 50 --no-pager` on the VPS.
 
 ## Restore the database
 
@@ -355,15 +356,15 @@ Each step is a command from the board's checkout of main. Nothing here sets a va
 
 1. **The environment.** Create `dispatcher` with a deployment branch policy that allows main alone:
    ```sh
-   gh api -X PUT repos/AlreadyKyle/peanutgallery/environments/dispatcher \
+   gh api -X PUT repos/AlreadyKyle/mobmachine/environments/dispatcher \
      -F 'deployment_branch_policy[protected_branches]=false' -F 'deployment_branch_policy[custom_branch_policies]=true'
-   gh api -X POST repos/AlreadyKyle/peanutgallery/environments/dispatcher/deployment-branch-policies -f name=main -f type=branch
-   gh api repos/AlreadyKyle/peanutgallery/environments/dispatcher/deployment-branch-policies --jq '.branch_policies[].name'
+   gh api -X POST repos/AlreadyKyle/mobmachine/environments/dispatcher/deployment-branch-policies -f name=main -f type=branch
+   gh api repos/AlreadyKyle/mobmachine/environments/dispatcher/deployment-branch-policies --jq '.branch_policies[].name'
    ```
    The last line must print `main` and nothing else.
 2. **The env file.** With the managed agent's ids in `.env` (The cutover, step 3, below) and `VPS_GITHUB_TOKEN`, `GITHUB_READ_TOKEN`, `HEALTHCHECK_URL` and `NTFY_TOPIC_URL` exported from `.env.vps`: `platform/ops/make-dispatcher-env.sh "$HOME/dispatcher.env"`. It writes the server's format, which `run-dispatcher.sh` checks with `check_env_lines` at every start.
-3. **The secret.** `gh secret set DISPATCHER_ENV --env dispatcher --repo AlreadyKyle/peanutgallery < "$HOME/dispatcher.env"`, then `rm "$HOME/dispatcher.env"`. GitHub never shows it again; to change a key, write the file and set the secret again.
-4. **The variables.** `gh variable set BACKUP_AGE_RECIPIENT --repo AlreadyKyle/peanutgallery --body '<the age1... public key>'` (the backup key's public half; it is public). `DISPATCHER_HOST` stays unset until the cutover.
+3. **The secret.** `gh secret set DISPATCHER_ENV --env dispatcher --repo AlreadyKyle/mobmachine < "$HOME/dispatcher.env"`, then `rm "$HOME/dispatcher.env"`. GitHub never shows it again; to change a key, write the file and set the secret again.
+4. **The variables.** `gh variable set BACKUP_AGE_RECIPIENT --repo AlreadyKyle/mobmachine --body '<the age1... public key>'` (the backup key's public half; it is public). `DISPATCHER_HOST` stays unset until the cutover.
 5. **The healthchecks.io check.** Give the dispatcher's check a grace of at least 15 minutes, so the minute or two between one run and the next never alerts.
 
 ### The cutover on GitHub Actions
@@ -382,17 +383,17 @@ Each step is a command from the board's checkout of main. Nothing here sets a va
    The first line must read `PASS: toolchain`. A `FAIL:` stops the cutover here.
 6. **Switch the host on and start it:**
    ```sh
-   gh variable set DISPATCHER_HOST --repo AlreadyKyle/peanutgallery --body on
-   gh workflow run dispatcher.yml --ref main --repo AlreadyKyle/peanutgallery
-   gh run watch "$(gh run list --workflow dispatcher.yml --repo AlreadyKyle/peanutgallery --limit 1 --json databaseId --jq '.[0].databaseId')" --repo AlreadyKyle/peanutgallery
+   gh variable set DISPATCHER_HOST --repo AlreadyKyle/mobmachine --body on
+   gh workflow run dispatcher.yml --ref main --repo AlreadyKyle/mobmachine
+   gh run watch "$(gh run list --workflow dispatcher.yml --repo AlreadyKyle/mobmachine --limit 1 --json databaseId --jq '.[0].databaseId')" --repo AlreadyKyle/mobmachine
    ```
-   Stop watching once the step "Run the dispatcher" shows them, and quote these lines from the run's log: `actions-host: the code clone is read-only`, `dispatcher: code root is read-only`, `dispatcher: containment verified` and `dispatcher: startup probe passed`. `gh run view <run id> --log --repo AlreadyKyle/peanutgallery | grep -E 'actions-host:|dispatcher:'` prints them.
+   Stop watching once the step "Run the dispatcher" shows them, and quote these lines from the run's log: `actions-host: the code clone is read-only`, `dispatcher: code root is read-only`, `dispatcher: containment verified` and `dispatcher: startup probe passed`. `gh run view <run id> --log --repo AlreadyKyle/mobmachine | grep -E 'actions-host:|dispatcher:'` prints them.
 7. **Heartbeat.** /board shows the dispatcher seen under 3 minutes ago; the healthchecks.io check is green.
 8. **The alert path:** `curl -fsS -H 'Title: Mob Machine test' -d "Test alert from the Actions host" "$NTFY_TOPIC_URL"` with the value from `.env.vps`; the board's phone shows it.
 9. **Resume** from /board.
-10. **Restart check.** `gh run cancel <run id> --repo AlreadyKyle/peanutgallery`, then `gh workflow run dispatcher.yml --ref main --repo AlreadyKyle/peanutgallery`; as the service role, `select paused, dispatcher_seen_at from studio_state`: `paused` is still false and `dispatcher_seen_at` moves within 5 minutes of the new run starting. A cancelled run starts no next run.
-11. **Liveness alert.** `gh variable set DISPATCHER_HOST --repo AlreadyKyle/peanutgallery --body off`, cancel the run, and wait out the check's grace: healthchecks.io emails the board. Set it `on` again and start a run as in step 6.
-12. **Soak for 24 hours**, across at least four drains: `gh run list --workflow dispatcher.yml --repo AlreadyKyle/peanutgallery --limit 10` shows each run succeeding and the next starting within minutes, each run's log ends with `dispatcher: dispatcher drained`, and no unexpected alert arrives. The first funded card built in this window must have `billed_to = 'studio'` ledger rows.
+10. **Restart check.** `gh run cancel <run id> --repo AlreadyKyle/mobmachine`, then `gh workflow run dispatcher.yml --ref main --repo AlreadyKyle/mobmachine`; as the service role, `select paused, dispatcher_seen_at from studio_state`: `paused` is still false and `dispatcher_seen_at` moves within 5 minutes of the new run starting. A cancelled run starts no next run.
+11. **Liveness alert.** `gh variable set DISPATCHER_HOST --repo AlreadyKyle/mobmachine --body off`, cancel the run, and wait out the check's grace: healthchecks.io emails the board. Set it `on` again and start a run as in step 6.
+12. **Soak for 24 hours**, across at least four drains: `gh run list --workflow dispatcher.yml --repo AlreadyKyle/mobmachine --limit 10` shows each run succeeding and the next starting within minutes, each run's log ends with `dispatcher: dispatcher drained`, and no unexpected alert arrives. The first funded card built in this window must have `billed_to = 'studio'` ledger rows.
 
 ### Deploy an update
 
@@ -409,9 +410,9 @@ Pause from /board. Write the env file again with `make-dispatcher-env.sh`, `gh s
 ### Read logs
 
 ```sh
-gh run list --workflow dispatcher.yml --repo AlreadyKyle/peanutgallery --limit 10
-gh run view <run id> --log --repo AlreadyKyle/peanutgallery | grep -E 'actions-host:|dispatcher:'   # the public lifecycle lines
-gh run download <run id> --repo AlreadyKyle/peanutgallery --name dispatcher-log-<run id>-1 --dir dispatcher-log
+gh run list --workflow dispatcher.yml --repo AlreadyKyle/mobmachine --limit 10
+gh run view <run id> --log --repo AlreadyKyle/mobmachine | grep -E 'actions-host:|dispatcher:'   # the public lifecycle lines
+gh run download <run id> --repo AlreadyKyle/mobmachine --name dispatcher-log-<run id>-1 --dir dispatcher-log
 age -d -i <path to the backup key> dispatcher-log/dispatcher-log.age | grep -v '"level":"info"' | tail -n 50
 ```
 
@@ -419,7 +420,7 @@ A failed run's public lines end with `dispatcher: stop reason: <phrase>`, which 
 
 ### Stop the host
 
-`gh variable set DISPATCHER_HOST --repo AlreadyKyle/peanutgallery --body off`, then `gh run cancel <run id>` for a run in progress (`gh run list --workflow dispatcher.yml --status in_progress`). No run starts while it is off: the schedule and a re-dispatch both skip the job.
+`gh variable set DISPATCHER_HOST --repo AlreadyKyle/mobmachine --body off`, then `gh run cancel <run id>` for a run in progress (`gh run list --workflow dispatcher.yml --status in_progress`). No run starts while it is off: the schedule and a re-dispatch both skip the job.
 
 ### What is weaker than a server
 
@@ -437,7 +438,7 @@ Until the studio has a server, the dispatcher runs unattended on the board's Mac
 
 ### What runs where
 
-Everything lives in `~/peanutgallery-host`, outside the board's own checkout, which the board keeps using for attended work and for running these scripts.
+Everything lives in `~/mobmachine-host`, outside the board's own checkout, which the board keeps using for attended work and for running these scripts.
 
 | Path | Holds |
 |---|---|
@@ -450,10 +451,10 @@ Everything lives in `~/peanutgallery-host`, outside the board's own checkout, wh
 
 | LaunchAgent (`~/Library/LaunchAgents`) | Runs | When |
 |---|---|---|
-| `studio.peanutgallery.dispatcher` | `code/platform/ops/mac/run-dispatcher.sh` | at login, and again after any exit but 0 |
-| `studio.peanutgallery.backup` | `run-job.sh backup`: `backup-mac.sh` | once per UTC day at 06:17, or at the first wake after it |
-| `studio.peanutgallery.controller` | `run-job.sh controller`: `jobs/main.mjs controller` | once per UTC day at 07:07, or at the first wake after it |
-| `studio.peanutgallery.quota` | `run-job.sh quota`: `jobs/main.mjs quota` | once per UTC day at 07:37, or at the first wake after it |
+| `studio.mobmachine.dispatcher` | `code/platform/ops/mac/run-dispatcher.sh` | at login, and again after any exit but 0 |
+| `studio.mobmachine.backup` | `run-job.sh backup`: `backup-mac.sh` | once per UTC day at 06:17, or at the first wake after it |
+| `studio.mobmachine.controller` | `run-job.sh controller`: `jobs/main.mjs controller` | once per UTC day at 07:07, or at the first wake after it |
+| `studio.mobmachine.quota` | `run-job.sh quota`: `jobs/main.mjs quota` | once per UTC day at 07:37, or at the first wake after it |
 
 launchd's calendar is in local time, which moves with daylight saving, so each job's LaunchAgent wakes `run-job.sh` every hour at the job's minute and the script runs the job once per UTC day at its UTC time, the same times as the server's timers. A wake missed while the Mac slept runs as soon as it wakes, as the timers' `Persistent=` makes up a run at boot. A job that fails posts "Mob Machine job <job> failed on <host>" to ntfy and is tried again the next UTC day.
 
@@ -461,11 +462,11 @@ launchd's calendar is in local time, which moves with daylight saving, so each j
 |---|---|
 | `install.sh` | creates the layout, clones both clones with the env file's token, installs `node_modules`, copies `env/dispatcher.env` to `code/.env` and checks the dispatcher's dotenv reads it as written, makes the code clone read-only and runs the dispatcher's read-only check, writes and loads the LaunchAgents; `--start` is the cutover; `--jobs-only` installs only the jobs, before the cutover. A second run reports `install: done: 0 change(s)`. It prints key names and paths, never a value. |
 | `deploy.sh` | the Mac's `platform/ops/deploy.sh`, with the same checks |
-| `uninstall.sh` | unloads and removes the four LaunchAgents, leaving `~/peanutgallery-host` |
+| `uninstall.sh` | unloads and removes the four LaunchAgents, leaving `~/mobmachine-host` |
 | `run-dispatcher.sh` | the dispatcher's wrapper: the entrypoint's checks, `caffeinate`, the exit codes and restarts |
 | `run-job.sh` | the jobs' wrapper: the UTC schedule, the env file checks, the ntfy alert |
 | `backup-mac.sh` | the nightly backup with Homebrew's libpq, to the board's backup folder |
-| `studio.peanutgallery.dispatcher.plist`, `studio.peanutgallery.job.plist` | the LaunchAgent templates `install.sh` fills in |
+| `studio.mobmachine.dispatcher.plist`, `studio.mobmachine.job.plist` | the LaunchAgent templates `install.sh` fills in |
 | `lib.sh` | what `install.sh`, `deploy.sh` and `uninstall.sh` share, including the server's `deploy.sh` checks |
 
 ### Prepare the Mac (the board, once)
@@ -484,11 +485,11 @@ These are `BOARD-SETUP.md` step 3.
 The full install needs `env/dispatcher.env`, and that needs the managed agent's ids, which `managed:apply` makes only once the studio's Anthropic organisation has Console credit (`BOARD-SETUP.md` step 22). Until then `install.sh --jobs-only` installs the nightly jobs alone (`docs/specs/jobs-only-install.md`), so the money database is backed up every night from the day contributions open. From the repository root of the board's checkout of reviewed main, with `GITHUB_READ_TOKEN` (or, failing it, `VPS_GITHUB_TOKEN`) and `NTFY_TOPIC_URL` exported from `.env.vps`:
 
 ```sh
-mkdir -p ~/peanutgallery-host/env && chmod 700 ~/peanutgallery-host ~/peanutgallery-host/env
-JOBS_ENV_DIR=~/peanutgallery-host/env platform/ops/make-jobs-env.sh backup-mac
+mkdir -p ~/mobmachine-host/env && chmod 700 ~/mobmachine-host ~/mobmachine-host/env
+JOBS_ENV_DIR=~/mobmachine-host/env platform/ops/make-jobs-env.sh backup-mac
 platform/ops/mac/install.sh --jobs-only
 platform/ops/mac/install.sh --jobs-only
-~/peanutgallery-host/code/platform/ops/mac/run-job.sh backup --now; tail -n 10 ~/peanutgallery-host/logs/backup.log
+~/mobmachine-host/code/platform/ops/mac/run-job.sh backup --now; tail -n 10 ~/mobmachine-host/logs/backup.log
 ```
 
 It keeps the full install's refusals: macOS and never root, each env file the board's, 0600, not a symlink and passing `check-env.mjs`, a clean clone with nothing git would act on, the whole clone `chmod -R a-w`. `backup-mac.env` must exist; the Controller and the quota check are installed too when their env files exist (add `controller` and `quota` to `make-jobs-env.sh` once `STRIPE_READ_KEY` is in, then run `--jobs-only` again). It clones `code/` from main with the read-only token, never keeps it, and needs no dispatcher env file, `.env`, `node_modules` or work clone; it writes no dispatcher LaunchAgent. The second run must end `install: done: 0 change(s)`.
@@ -496,20 +497,20 @@ It keeps the full install's refusals: macOS and never root, each env file the bo
 `deploy.sh` needs the dispatcher's LaunchAgent, so it does not update a jobs-only clone. To move the jobs to a newer main before the cutover, move the clone aside and install again:
 
 ```sh
-chmod -R u+w ~/peanutgallery-host/code && mv ~/peanutgallery-host/code ~/peanutgallery-code.jobs-only
+chmod -R u+w ~/mobmachine-host/code && mv ~/mobmachine-host/code ~/mobmachine-code.jobs-only
 platform/ops/mac/install.sh --jobs-only
 ```
 
-A plain `install.sh` refuses the clone `--jobs-only` made, printing the same two commands, so the cutover's install clones main afresh (The cutover on the Mac, step 3). Delete `~/peanutgallery-code.jobs-only` afterwards (`rm -rf`; it holds no secret).
+A plain `install.sh` refuses the clone `--jobs-only` made, printing the same two commands, so the cutover's install clones main afresh (The cutover on the Mac, step 3). Delete `~/mobmachine-code.jobs-only` afterwards (`rm -rf`; it holds no secret).
 
 ### Install
 
 From the repository root of the board's checkout of reviewed main, with the values in `.env.vps` exported (`VPS_GITHUB_TOKEN` is the host's own fine-grained token, `GITHUB_READ_TOKEN` the read-only one, `HEALTHCHECK_URL` the dispatcher check, `NTFY_TOPIC_URL`, `BACKUP_HEALTHCHECK_URL`):
 
 ```sh
-mkdir -p ~/peanutgallery-host/env && chmod 700 ~/peanutgallery-host ~/peanutgallery-host/env
-platform/ops/make-dispatcher-env.sh ~/peanutgallery-host/env/dispatcher.env
-JOBS_ENV_DIR=~/peanutgallery-host/env platform/ops/make-jobs-env.sh backup-mac controller quota
+mkdir -p ~/mobmachine-host/env && chmod 700 ~/mobmachine-host ~/mobmachine-host/env
+platform/ops/make-dispatcher-env.sh ~/mobmachine-host/env/dispatcher.env
+JOBS_ENV_DIR=~/mobmachine-host/env platform/ops/make-jobs-env.sh backup-mac controller quota
 platform/ops/mac/install.sh
 platform/ops/mac/install.sh
 ```
@@ -519,9 +520,9 @@ platform/ops/mac/install.sh
 The first job runs, by hand, quoted in `docs/specs/mac-host.md`:
 
 ```sh
-node --env-file="$HOME/peanutgallery-host/env/controller.env" ~/peanutgallery-host/code/platform/ops/jobs/main.mjs controller --dry-run
-~/peanutgallery-host/code/platform/ops/mac/run-job.sh quota --now; tail -n 5 ~/peanutgallery-host/logs/quota.log
-~/peanutgallery-host/code/platform/ops/mac/run-job.sh backup --now; tail -n 10 ~/peanutgallery-host/logs/backup.log
+node --env-file="$HOME/mobmachine-host/env/controller.env" ~/mobmachine-host/code/platform/ops/jobs/main.mjs controller --dry-run
+~/mobmachine-host/code/platform/ops/mac/run-job.sh quota --now; tail -n 5 ~/mobmachine-host/logs/quota.log
+~/mobmachine-host/code/platform/ops/mac/run-job.sh backup --now; tail -n 10 ~/mobmachine-host/logs/backup.log
 ```
 
 Each job's first line must read `PASS:`, and the backup must end `backup: done: peanutgallery-<time>.tar.age` with the file in the backup folder. Run the Controller's dry run only after the board has been told what it reads ([What the Controller reads from Stripe](#what-the-controller-reads-from-stripe)).
@@ -536,18 +537,18 @@ Each job's first line must read `PASS:`, and the backup must end `backup: done: 
 4. **Set the agent mode to unattended** at /board (second factor).
 5. **The toolchain check,** once, as on a server, from the code clone:
    ```sh
-   cd ~/peanutgallery-host/code/platform/dispatcher && env -i PATH="$PATH" HOME="$HOME" TSX_DISABLE_CACHE=1 \
-     DISPATCHER_CODE_ROOT="$(cd ../.. && pwd -P)" DISPATCHER_REPO_ROOT="$HOME/peanutgallery-host/work" \
-     DISPATCHER_WORKTREE_ROOT="$HOME/peanutgallery-host/work-worktrees" node --import tsx src/probe.ts --toolchain; cd -
+   cd ~/mobmachine-host/code/platform/dispatcher && env -i PATH="$PATH" HOME="$HOME" TSX_DISABLE_CACHE=1 \
+     DISPATCHER_CODE_ROOT="$(cd ../.. && pwd -P)" DISPATCHER_REPO_ROOT="$HOME/mobmachine-host/work" \
+     DISPATCHER_WORKTREE_ROOT="$HOME/mobmachine-host/work-worktrees" node --import tsx src/probe.ts --toolchain; cd -
    ```
    The first line must read `PASS: toolchain`.
 6. **Start it:** `platform/ops/mac/install.sh --start`. It refuses unless /board shows unattended, then starts the dispatcher and waits for this start's `code root is read-only` and `startup probe passed` lines, which it prints. Quote them.
 7. **Heartbeat.** /board shows the dispatcher seen under 3 minutes ago; the healthchecks.io check is green.
-8. **The alert path:** `curl -fsS -H 'Title: Mob Machine test' -d "Test alert from the Mac host" "$(head -n 1 ~/peanutgallery-host/env/ntfy.url)"`; the board's phone shows it.
+8. **The alert path:** `curl -fsS -H 'Title: Mob Machine test' -d "Test alert from the Mac host" "$(head -n 1 ~/mobmachine-host/env/ntfy.url)"`; the board's phone shows it.
 9. **Resume** from /board.
-10. **Restart checks.** `launchctl kickstart -k gui/$(id -u)/studio.peanutgallery.dispatcher`, then as the service role `select paused, dispatcher_seen_at from studio_state`: `paused` is still false and `dispatcher_seen_at` moves within 2 minutes. Then `pkill -9 -f 'src/main.ts'`: the wrapper sees the exit, waits 30 seconds and exits, launchd starts it again, and the log shows `failure 1 in a row`. Then log out and back in (or restart and log in): the dispatcher is running again with no command.
-11. **Liveness alert.** `launchctl bootout gui/$(id -u)/studio.peanutgallery.dispatcher` and wait out the check's grace: healthchecks.io emails the board. Start it again with `platform/ops/mac/install.sh --start`.
-12. **Soak for 24 hours** with the lid open and no restart loop (`grep -c 'failure' ~/peanutgallery-host/logs/dispatcher.log`) and no unexpected alert. The first funded card built in this window must have `billed_to = 'studio'` ledger rows.
+10. **Restart checks.** `launchctl kickstart -k gui/$(id -u)/studio.mobmachine.dispatcher`, then as the service role `select paused, dispatcher_seen_at from studio_state`: `paused` is still false and `dispatcher_seen_at` moves within 2 minutes. Then `pkill -9 -f 'src/main.ts'`: the wrapper sees the exit, waits 30 seconds and exits, launchd starts it again, and the log shows `failure 1 in a row`. Then log out and back in (or restart and log in): the dispatcher is running again with no command.
+11. **Liveness alert.** `launchctl bootout gui/$(id -u)/studio.mobmachine.dispatcher` and wait out the check's grace: healthchecks.io emails the board. Start it again with `platform/ops/mac/install.sh --start`.
+12. **Soak for 24 hours** with the lid open and no restart loop (`grep -c 'failure' ~/mobmachine-host/logs/dispatcher.log`) and no unexpected alert. The first funded card built in this window must have `billed_to = 'studio'` ledger rows.
 
 ### Deploy an update
 
@@ -559,20 +560,20 @@ Each job's first line must read `PASS:`, and the backup must end `backup: done: 
 
 ### Roll back
 
-Pause, then from the board's checkout `platform/ops/mac/deploy.sh --ref <full sha>` (review, then again with `--confirm <first 12>`). The sha must be on `origin/main` and have the Mac host's files; the gate and review apply as for a deploy. Resume, and fix forward on main: the next plain `deploy.sh` returns the clone to main. If `deploy.sh` refuses a dirty code clone, do not clean it by hand: find out how it changed, then move it aside (`chmod -R u+w ~/peanutgallery-host/code && mv ~/peanutgallery-host/code ~/peanutgallery-code.suspect`) and run `install.sh`, which clones it fresh.
+Pause, then from the board's checkout `platform/ops/mac/deploy.sh --ref <full sha>` (review, then again with `--confirm <first 12>`). The sha must be on `origin/main` and have the Mac host's files; the gate and review apply as for a deploy. Resume, and fix forward on main: the next plain `deploy.sh` returns the clone to main. If `deploy.sh` refuses a dirty code clone, do not clean it by hand: find out how it changed, then move it aside (`chmod -R u+w ~/mobmachine-host/code && mv ~/mobmachine-host/code ~/mobmachine-code.suspect`) and run `install.sh`, which clones it fresh.
 
 ### Rotate a key
 
-Pause from /board. Change the value in `~/peanutgallery-host/env/dispatcher.env` (or write it again with `make-dispatcher-env.sh`), run `platform/ops/mac/install.sh` (it copies it into the code clone and reports 1 change), then `launchctl kickstart -k gui/$(id -u)/studio.peanutgallery.dispatcher` and check `startup probe passed` in the log and the heartbeat. Resume, and only then revoke the old key. The keys are those of [Rotate a key](#rotate-a-key) above. A job's key changes in its own env file, written again with `make-jobs-env.sh`; the next run reads it.
+Pause from /board. Change the value in `~/mobmachine-host/env/dispatcher.env` (or write it again with `make-dispatcher-env.sh`), run `platform/ops/mac/install.sh` (it copies it into the code clone and reports 1 change), then `launchctl kickstart -k gui/$(id -u)/studio.mobmachine.dispatcher` and check `startup probe passed` in the log and the heartbeat. Resume, and only then revoke the old key. The keys are those of [Rotate a key](#rotate-a-key) above. A job's key changes in its own env file, written again with `make-jobs-env.sh`; the next run reads it.
 
 ### Read logs
 
 ```sh
-tail -f ~/peanutgallery-host/logs/dispatcher.log                                   # follow
-grep -v '"level":"info"' ~/peanutgallery-host/logs/dispatcher.log | tail -n 50    # warnings and errors
-grep '^run-dispatcher:' ~/peanutgallery-host/logs/dispatcher.log | tail            # starts, stops, restarts
-tail -n 20 ~/peanutgallery-host/logs/backup.log ~/peanutgallery-host/logs/controller.log ~/peanutgallery-host/logs/quota.log
-launchctl print gui/$(id -u)/studio.peanutgallery.dispatcher | grep -E 'state|pid|last exit'
+tail -f ~/mobmachine-host/logs/dispatcher.log                                   # follow
+grep -v '"level":"info"' ~/mobmachine-host/logs/dispatcher.log | tail -n 50    # warnings and errors
+grep '^run-dispatcher:' ~/mobmachine-host/logs/dispatcher.log | tail            # starts, stops, restarts
+tail -n 20 ~/mobmachine-host/logs/backup.log ~/mobmachine-host/logs/controller.log ~/mobmachine-host/logs/quota.log
+launchctl print gui/$(id -u)/studio.mobmachine.dispatcher | grep -E 'state|pid|last exit'
 ```
 
 ### Exit codes and restarts
@@ -610,7 +611,7 @@ There is no weekly restore check on the Mac: it needs a scratch Supabase Postgre
 
 ### Stop the host
 
-To move to a server, or to stop for good: pause from /board, then `platform/ops/mac/uninstall.sh`, which unloads and removes the four LaunchAgents. It leaves `~/peanutgallery-host` and prints how to remove it (the code clone must be made writable first). A server's cutover starts only after this, so two dispatchers never run.
+To move to a server, or to stop for good: pause from /board, then `platform/ops/mac/uninstall.sh`, which unloads and removes the four LaunchAgents. It leaves `~/mobmachine-host` and prints how to remove it (the code clone must be made writable first). A server's cutover starts only after this, so two dispatchers never run.
 
 ### What is weaker than a server
 

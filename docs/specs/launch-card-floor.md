@@ -61,7 +61,7 @@ Each SELECT goes through the Management API query endpoint and is read-only.
 
 ## Production steps
 
-1. Dump: `/opt/homebrew/opt/libpq/bin/pg_dump "$BACKUP_DB_URL" --format=custom --file ~/peanutgallery-dumps/pre-card-floor-<UTC>.dump`, then `chmod 600`, and quote its size.
+1. Dump: `/opt/homebrew/opt/libpq/bin/pg_dump "$BACKUP_DB_URL" --format=custom --file ~/mobmachine-dumps/pre-card-floor-<UTC>.dump`, then `chmod 600`, and quote its size.
 2. Quote `card_supply()` and the start time.
 3. Board: at /board, in Needs you, press Draft to the floor with a reason (second factor), and stay signed in while the run works. Start another run after a withdrawn draft if the board wants to.
 4. After the last run and the next tick, run the SELECTs, `ledger-identity.ts` and `card_supply()` from Verification, and quote them.

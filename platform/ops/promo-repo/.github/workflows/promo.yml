@@ -59,7 +59,7 @@ jobs:
         if: steps.pick.outputs.job != 'metrics'
         uses: actions/checkout@v4
         with:
-          repository: AlreadyKyle/peanutgallery
+          repository: AlreadyKyle/mobmachine
           ref: ${{ vars.STUDIO_REF }}
           path: studio
           persist-credentials: false

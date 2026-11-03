@@ -4,7 +4,7 @@
 // file make-dispatcher-env.sh writes; and make-jobs-env.sh writing the Mac's env files. Every tool the
 // scripts call that would reach a service or sleep (node for the dispatcher, caffeinate, curl, the
 // Postgres tools, age, sleep) is a fake on PATH that records what it was asked. Nothing here loads a
-// LaunchAgent, touches ~/peanutgallery-host or reaches a service. ops.test.mjs imports this file, so
+// LaunchAgent, touches ~/mobmachine-host or reaches a service. ops.test.mjs imports this file, so
 // `pnpm test:ops` runs it. Every value in the fixtures is made up.
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
@@ -66,7 +66,7 @@ function dispatcherHost() {
   writeFileSync(path.join(code, '.env'), 'AGENT_MODE=unattended\n');
   mkdirSync(work, { recursive: true });
   spawnSync('git', ['init', '-q', work], { env: { PATH: process.env.PATH, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' } });
-  spawnSync('git', ['-C', work, 'remote', 'add', 'origin', 'https://github.com/AlreadyKyle/peanutgallery.git'], { env: { PATH: process.env.PATH, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' } });
+  spawnSync('git', ['-C', work, 'remote', 'add', 'origin', 'https://github.com/AlreadyKyle/mobmachine.git'], { env: { PATH: process.env.PATH, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' } });
   mkdirSync(path.join(host, 'env'));
   writeFileSync(path.join(host, 'env', 'ntfy.url'), 'https://ntfy.sh/fixture-topic\n');
   const bin = path.join(root, 'bin');
@@ -85,7 +85,7 @@ function dispatcherHost() {
       `exit "$(cat "${exitFile}")"`,
     ].join('\n'),
   );
-  const env = { PATH: `${bin}:${process.env.PATH}`, HOME: process.env.HOME, PEANUTGALLERY_HOST: host, FIXTURE_SECRET: 'fixture-parent-secret' };
+  const env = { PATH: `${bin}:${process.env.PATH}`, HOME: process.env.HOME, MOBMACHINE_HOST: host, FIXTURE_SECRET: 'fixture-parent-secret' };
   const run = () => {
     const result = spawnSync(BASH, [path.join(MAC_DIR, 'run-dispatcher.sh')], { env, encoding: 'utf8' });
     return { ...result, calls: lines(log), log: existsSync(path.join(host, 'logs', 'dispatcher.log')) ? readFileSync(path.join(host, 'logs', 'dispatcher.log'), 'utf8') : '' };
@@ -189,7 +189,7 @@ describe('run-dispatcher.sh', () => {
     for (const breakIt of [
       (host) => rmSync(path.join(host.code, 'node_modules'), { recursive: true }),
       (host) => rmSync(path.join(host.code, '.env')),
-      (host) => spawnSync('git', ['-C', host.work, 'remote', 'set-url', 'origin', 'git@github.com:AlreadyKyle/peanutgallery.git'], { env: { PATH: process.env.PATH, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' } }),
+      (host) => spawnSync('git', ['-C', host.work, 'remote', 'set-url', 'origin', 'git@github.com:AlreadyKyle/mobmachine.git'], { env: { PATH: process.env.PATH, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' } }),
     ]) {
       const host = dispatcherHost();
       breakIt(host);
@@ -221,7 +221,7 @@ describe('run-dispatcher.sh', () => {
 // ---------------------------------------------------------------- run-job.sh
 
 describe('run-job.sh', () => {
-  const timerTime = (job) => /^OnCalendar=\*-\*-\* (\d{2}:\d{2}):00 UTC$/m.exec(read(`platform/ops/peanutgallery-${job}.timer`))?.[1];
+  const timerTime = (job) => /^OnCalendar=\*-\*-\* (\d{2}:\d{2}):00 UTC$/m.exec(read(`platform/ops/mobmachine-${job}.timer`))?.[1];
 
   test("runs each job at its systemd timer's UTC time, and launchd wakes it at that minute", () => {
     for (const job of ['backup', 'controller', 'quota']) {
@@ -257,7 +257,7 @@ describe('run-job.sh', () => {
     commonFakes(bin, log);
     fake(bin, 'node', `echo "node $*" >> "${log}"; exit "$(cat "${root}/node-exit" 2> /dev/null || echo 0)"`);
     const run = (...args) => {
-      const result = spawnSync(BASH, [path.join(MAC_DIR, 'run-job.sh'), ...args], { env: { PATH: `${bin}:${process.env.PATH}`, HOME: process.env.HOME, PEANUTGALLERY_HOST: host }, encoding: 'utf8' });
+      const result = spawnSync(BASH, [path.join(MAC_DIR, 'run-job.sh'), ...args], { env: { PATH: `${bin}:${process.env.PATH}`, HOME: process.env.HOME, MOBMACHINE_HOST: host }, encoding: 'utf8' });
       return { ...result, calls: lines(log) };
     };
     return { root, host, run, log };
@@ -309,12 +309,12 @@ describe('run-job.sh', () => {
 // ---------------------------------------------------------------- the LaunchAgents
 
 describe('the LaunchAgent templates', () => {
-  const HOST = '/Users/board/peanutgallery-host';
+  const HOST = '/Users/board/mobmachine-host';
   const PATH_VALUE = '/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
   const render = (template, job = '', host = HOST, pathValue = PATH_VALUE) => {
     const out = path.join(fresh('plist'), 'out.plist');
     const run = spawnSync(BASH, ['-c', '. "$1"; render_plist "$2" "$3" "$4" "$5"', 'x', path.join(MAC_DIR, 'lib.sh'), path.join(MAC_DIR, template), out, pathValue, job], {
-      env: { PATH: process.env.PATH, HOME: process.env.HOME, PEANUTGALLERY_HOST: host },
+      env: { PATH: process.env.PATH, HOME: process.env.HOME, MOBMACHINE_HOST: host },
       encoding: 'utf8',
     });
     return { ...run, out, text: existsSync(out) ? readFileSync(out, 'utf8') : '' };
@@ -334,7 +334,7 @@ describe('the LaunchAgent templates', () => {
     return {
       Label: scalar('Label'),
       ProgramArguments: [...(/<key>ProgramArguments<\/key>\s*<array>([\s\S]*?)<\/array>/.exec(text)?.[1] ?? '').matchAll(/<string>([^<]*)<\/string>/g)].map((match) => match[1]),
-      EnvironmentVariables: { PATH: scalar('PATH'), PEANUTGALLERY_HOST: scalar('PEANUTGALLERY_HOST') },
+      EnvironmentVariables: { PATH: scalar('PATH'), MOBMACHINE_HOST: scalar('MOBMACHINE_HOST') },
       RunAtLoad: scalar('RunAtLoad'),
       KeepAlive: { SuccessfulExit: scalar('SuccessfulExit') },
       ThrottleInterval: scalar('ThrottleInterval'),
@@ -345,14 +345,14 @@ describe('the LaunchAgent templates', () => {
   };
 
   test("the dispatcher's runs run-dispatcher.sh from the code clone at login, restarts only a failed exit, and gives the dispatcher its stop", () => {
-    const run = render('studio.peanutgallery.dispatcher.plist');
+    const run = render('studio.mobmachine.dispatcher.plist');
     assert.equal(run.status, 0, run.stdout + run.stderr);
     assert.doesNotMatch(run.text, /@[A-Z_]+@/);
     if (spawnSync('sh', ['-c', 'command -v plutil']).status === 0) assert.equal(spawnSync('plutil', ['-lint', '-s', run.out]).status, 0);
     const plist = asJson(run.out, run.text);
-    assert.equal(plist.Label, 'studio.peanutgallery.dispatcher');
+    assert.equal(plist.Label, 'studio.mobmachine.dispatcher');
     assert.deepEqual(plist.ProgramArguments, ['/bin/bash', `${HOST}/code/platform/ops/mac/run-dispatcher.sh`]);
-    assert.deepEqual(plist.EnvironmentVariables, { PATH: PATH_VALUE, PEANUTGALLERY_HOST: HOST });
+    assert.deepEqual(plist.EnvironmentVariables, { PATH: PATH_VALUE, MOBMACHINE_HOST: HOST });
     assert.equal(plist.RunAtLoad, true);
     assert.deepEqual(plist.KeepAlive, { SuccessfulExit: false });
     assert.equal(plist.ThrottleInterval, 30);
@@ -367,16 +367,16 @@ describe('the LaunchAgent templates', () => {
       ['controller', 7],
       ['quota', 37],
     ]) {
-      const run = render('studio.peanutgallery.job.plist', job);
+      const run = render('studio.mobmachine.job.plist', job);
       assert.equal(run.status, 0, run.stdout + run.stderr);
       assert.doesNotMatch(run.text, /@[A-Z_]+@/);
       const plist = asJson(run.out, run.text);
-      assert.equal(plist.Label, `studio.peanutgallery.${job}`);
+      assert.equal(plist.Label, `studio.mobmachine.${job}`);
       assert.deepEqual(plist.ProgramArguments, ['/bin/bash', `${HOST}/code/platform/ops/mac/run-job.sh`, job]);
       assert.deepEqual(plist.StartCalendarInterval, { Minute: minute });
       assert.equal(plist.RunAtLoad, false);
     }
-    assert.equal(render('studio.peanutgallery.job.plist', 'nightly').status, 1);
+    assert.equal(render('studio.mobmachine.job.plist', 'nightly').status, 1);
   });
 
   test('refuses a host folder or PATH a plist or sed would need escaped', () => {
@@ -387,7 +387,7 @@ describe('the LaunchAgent templates', () => {
       [HOST, '/usr/bin:/bin|x'],
       [HOST, '/usr/bin:<tag>'],
     ]) {
-      const run = render('studio.peanutgallery.dispatcher.plist', '', host, pathValue);
+      const run = render('studio.mobmachine.dispatcher.plist', '', host, pathValue);
       assert.equal(run.status, 1, `${host} ${pathValue}`);
       assert.match(run.stdout, /cannot carry/);
     }
@@ -643,7 +643,7 @@ describe('install.sh and deploy.sh on the Mac', () => {
     assert.deepEqual(listed, paths, 'lib.sh checks the folders the dispatcher checks');
     for (const relative of paths) mkdirSync(path.join(code, relative), { recursive: true });
     const check = () =>
-      spawnSync(BASH, ['-c', '. "$1"; check_readonly', 'x', path.join(MAC_DIR, 'lib.sh')], { env: { PATH: process.env.PATH, HOME: process.env.HOME, PEANUTGALLERY_HOST: host }, encoding: 'utf8' });
+      spawnSync(BASH, ['-c', '. "$1"; check_readonly', 'x', path.join(MAC_DIR, 'lib.sh')], { env: { PATH: process.env.PATH, HOME: process.env.HOME, MOBMACHINE_HOST: host }, encoding: 'utf8' });
     const writable = check();
     assert.equal(writable.status, 1);
     assert.match(writable.stdout, /^\. is writable$/m);
@@ -668,7 +668,7 @@ describe('install.sh and deploy.sh on the Mac', () => {
     const probeLine = '{"ts":"t","level":"info","scope":"probe","msg":"startup probe passed"}';
     const wait = (since) =>
       spawnSync(BASH, ['-c', '. "$1"; PROBE_WAIT_SECONDS=1; wait_for_start "$2"', 'x', path.join(MAC_DIR, 'lib.sh'), String(since)], {
-        env: { PATH: `${bin}:${process.env.PATH}`, HOME: process.env.HOME, PEANUTGALLERY_HOST: host },
+        env: { PATH: `${bin}:${process.env.PATH}`, HOME: process.env.HOME, MOBMACHINE_HOST: host },
         encoding: 'utf8',
       });
     writeFileSync(logFile, ['run-dispatcher: start 100', readonlyLine, probeLine, 'run-dispatcher: stopped by launchd; the dispatcher exited 0', 'run-dispatcher: start 200', readonlyLine].join('\n'));
@@ -699,7 +699,7 @@ describe('install.sh and deploy.sh on the Mac', () => {
       [
         'STUDIO_ANTHROPIC_API_KEY=fixture-studio-key',
         'GITHUB_TOKEN=fixture-mac-token',
-        'GITHUB_REPO=AlreadyKyle/peanutgallery',
+        'GITHUB_REPO=AlreadyKyle/mobmachine',
         'NETLIFY_AUTH_TOKEN=fixture-netlify',
         'NETLIFY_SITE_ID_SEED=fixture-seed',
         'NETLIFY_SITE_ID_PLATFORM=fixture-platform',
@@ -732,7 +732,7 @@ describe('install.sh and deploy.sh on the Mac', () => {
     // The Game Designer's default model's row joins the table (docs/PLAN.md §10 decision 77).
     assert.deepEqual(JSON.parse(parsed.PRICE_TABLE_JSON), { ...table, 'claude-sonnet-5-5': { input: 2, output: 10, cache_read: 0.2, cache_write_5m: 2.5, cache_write_1h: 4 } });
     assert.equal(parsed.MODEL_DESIGNER, 'claude-sonnet-5-5');
-    const check = () => spawnSync(BASH, ['-c', '. "$1"; check_dotenv', 'x', path.join(MAC_DIR, 'lib.sh')], { env: { PATH: process.env.PATH, HOME: process.env.HOME, PEANUTGALLERY_HOST: host }, encoding: 'utf8' });
+    const check = () => spawnSync(BASH, ['-c', '. "$1"; check_dotenv', 'x', path.join(MAC_DIR, 'lib.sh')], { env: { PATH: process.env.PATH, HOME: process.env.HOME, MOBMACHINE_HOST: host }, encoding: 'utf8' });
     const ok = check();
     assert.equal(ok.status, 0, ok.stdout + ok.stderr);
     assert.match(ok.stdout, /^the dispatcher reads all \d+ keys of \.env as written$/m);
@@ -754,7 +754,7 @@ describe('install.sh and deploy.sh on the Mac', () => {
     git(repo, 'add', '-A');
     git(repo, 'commit', '-q', '-m', 'before the Mac host');
     const before = git(repo, 'rev-parse', 'HEAD').stdout.trim();
-    for (const file of ['run-dispatcher.sh', 'run-job.sh', 'backup-mac.sh', 'studio.peanutgallery.dispatcher.plist', 'studio.peanutgallery.job.plist']) writeFileSync(path.join(repo, 'platform', 'ops', 'mac', file), '');
+    for (const file of ['run-dispatcher.sh', 'run-job.sh', 'backup-mac.sh', 'studio.mobmachine.dispatcher.plist', 'studio.mobmachine.job.plist']) writeFileSync(path.join(repo, 'platform', 'ops', 'mac', file), '');
     git(repo, 'add', '-A');
     git(repo, 'commit', '-q', '-m', 'the Mac host');
     const withMac = git(repo, 'rev-parse', 'HEAD').stdout.trim();
@@ -764,7 +764,7 @@ describe('install.sh and deploy.sh on the Mac', () => {
     git(repo, 'add', '-A');
     git(repo, 'commit', '-q', '-m', 'not on main');
     const side = git(repo, 'rev-parse', 'HEAD').stdout.trim();
-    const check = (sha) => sourced('deploy.sh', 'MAC_DEPLOY_SOURCE_ONLY', `check_ref_mac ${sha}`, { ...gitEnv, PEANUTGALLERY_HOST: host });
+    const check = (sha) => sourced('deploy.sh', 'MAC_DEPLOY_SOURCE_ONLY', `check_ref_mac ${sha}`, { ...gitEnv, MOBMACHINE_HOST: host });
     assert.equal(check(withMac).status, 0, check(withMac).stdout + check(withMac).stderr);
     assert.match(check(before).stdout, /older than the Mac host/);
     assert.match(check(side).stdout, /is not a commit on origin\/main/);
@@ -821,7 +821,7 @@ describe('install.sh and deploy.sh on the Mac', () => {
 
 describe("make-jobs-env.sh for the Mac host", () => {
   const DOTENV = {
-    GITHUB_REPO: 'AlreadyKyle/peanutgallery',
+    GITHUB_REPO: 'AlreadyKyle/mobmachine',
     SUPABASE_URL: 'https://fixture.supabase.local',
     SUPABASE_SECRET_KEY: 'sb_secret_fixture',
     STRIPE_READ_KEY: 'rk_live_fixture',

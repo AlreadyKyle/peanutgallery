@@ -195,18 +195,18 @@ describe('loadHandRunConfig', () => {
 
 describe('the code, repository and worktree roots', () => {
   const VPS = {
-    DISPATCHER_CODE_ROOT: '/opt/peanutgallery',
-    DISPATCHER_REPO_ROOT: '/srv/peanutgallery',
-    DISPATCHER_WORKTREE_ROOT: '/srv/peanutgallery-worktrees',
+    DISPATCHER_CODE_ROOT: '/opt/mobmachine',
+    DISPATCHER_REPO_ROOT: '/srv/mobmachine',
+    DISPATCHER_WORKTREE_ROOT: '/srv/mobmachine-worktrees',
     DISPATCHER_CODE_READONLY: 'required',
   };
 
   it('reads the roots dispatcher.service sets', () => {
-    expect(loadConfig({ ...FULL, ...VPS }, '/opt/peanutgallery')).toMatchObject({
-      codeRoot: '/opt/peanutgallery',
+    expect(loadConfig({ ...FULL, ...VPS }, '/opt/mobmachine')).toMatchObject({
+      codeRoot: '/opt/mobmachine',
       codeReadonly: true,
-      repoRoot: '/srv/peanutgallery',
-      worktreeRoot: '/srv/peanutgallery-worktrees',
+      repoRoot: '/srv/mobmachine',
+      worktreeRoot: '/srv/mobmachine-worktrees',
     });
   });
 
@@ -220,8 +220,8 @@ describe('the code, repository and worktree roots', () => {
   });
 
   it('puts card worktrees beside the clone by default, outside it', () => {
-    expect(defaultWorktreeRoot('/Users/board/peanutgallery')).toBe('/Users/board/peanutgallery-worktrees');
-    expect(loadConfig(FULL, '/Users/board/peanutgallery').worktreeRoot).toBe('/Users/board/peanutgallery-worktrees');
+    expect(defaultWorktreeRoot('/Users/board/mobmachine')).toBe('/Users/board/mobmachine-worktrees');
+    expect(loadConfig(FULL, '/Users/board/mobmachine').worktreeRoot).toBe('/Users/board/mobmachine-worktrees');
     expect(loadConfig({ ...FULL, DISPATCHER_REPO_ROOT: '../work' }, REPO).worktreeRoot).toBe('/work-worktrees');
   });
 
@@ -235,8 +235,8 @@ describe('the code, repository and worktree roots', () => {
   });
 
   it('refuses a code root other than the one the process runs from', () => {
-    expect(() => loadConfig({ ...FULL, ...VPS }, '/srv/peanutgallery')).toThrow(
-      new ConfigError('DISPATCHER_CODE_ROOT is /opt/peanutgallery but the dispatcher runs from /srv/peanutgallery'),
+    expect(() => loadConfig({ ...FULL, ...VPS }, '/srv/mobmachine')).toThrow(
+      new ConfigError('DISPATCHER_CODE_ROOT is /opt/mobmachine but the dispatcher runs from /srv/mobmachine'),
     );
   });
 
@@ -248,7 +248,7 @@ describe('the code, repository and worktree roots', () => {
     expect(() => loadConfig({ ...FULL, DISPATCHER_CODE_READONLY: 'required' }, REPO)).toThrow(
       new ConfigError('DISPATCHER_REPO_ROOT must be outside the code root when DISPATCHER_CODE_READONLY is required'),
     );
-    expect(() => loadConfig({ ...FULL, ...VPS, DISPATCHER_WORKTREE_ROOT: '/opt/peanutgallery/.worktrees' }, '/opt/peanutgallery')).toThrow(
+    expect(() => loadConfig({ ...FULL, ...VPS, DISPATCHER_WORKTREE_ROOT: '/opt/mobmachine/.worktrees' }, '/opt/mobmachine')).toThrow(
       new ConfigError('DISPATCHER_WORKTREE_ROOT must be outside the code root when DISPATCHER_CODE_READONLY is required'),
     );
   });

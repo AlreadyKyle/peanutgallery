@@ -41,7 +41,7 @@ const MAC_DOTENV = {
   SUPABASE_SECRET_KEY: 'fixture-supabase-secret-key',
   SUPABASE_ACCESS_TOKEN: 'fixture-management-token',
   GITHUB_TOKEN: 'fixture-mac-github-token',
-  GITHUB_REPO: 'AlreadyKyle/peanutgallery',
+  GITHUB_REPO: 'AlreadyKyle/mobmachine',
   NETLIFY_AUTH_TOKEN: 'fixture-netlify-token',
   NETLIFY_SITE_ID_SEED: 'fixture-site-seed',
   NETLIFY_SITE_ID_PLATFORM: 'fixture-site-platform',
@@ -54,7 +54,7 @@ const MAC_DOTENV = {
   AGENT_HOURLY_RATE_USD: '5',
   MODEL_BUILDER: 'builder-class',
   DISPATCHER_TICK_MS: '60000',
-  DISPATCHER_WORKTREE_ROOT: '/Users/board/peanutgallery/.worktrees',
+  DISPATCHER_WORKTREE_ROOT: '/Users/board/mobmachine/.worktrees',
   DISPATCHER_MAX_CONCURRENCY: '1',
   CLAUDE_BIN: '/Users/board/.local/bin/claude',
   MANAGED_AGENT_ID: 'agent_fixture',
@@ -114,7 +114,7 @@ describe('make-dispatcher-env.sh', () => {
     const entries = parseEnvFile(readFileSync(run.out, 'utf8'));
     assert.deepEqual(entries, [
       ['STUDIO_ANTHROPIC_API_KEY', 'fixture-studio-key'],
-      ['GITHUB_REPO', 'AlreadyKyle/peanutgallery'],
+      ['GITHUB_REPO', 'AlreadyKyle/mobmachine'],
       ['GITHUB_TOKEN', 'github_pat_-fixture-vps'],
       ['GITHUB_READ_TOKEN', 'github_pat_-fixture-read'],
       ['NETLIFY_AUTH_TOKEN', 'fixture-netlify-token'],
@@ -263,9 +263,9 @@ describe('provision.sh env file checks', () => {
       [good.replace(/^NTFY_TOPIC_URL=.*\n/m, ''), 'NTFY_TOPIC_URL is missing or empty'],
       [`${good}ANTHROPIC_API_KEY=fixture-founder-key\n`, "ANTHROPIC_API_KEY must not be in the dispatcher's env file"],
       [`${good}STRIPE_SECRET_KEY=fixture-stripe-key\n`, "STRIPE_SECRET_KEY must not be in the dispatcher's env file"],
-      [good.replace('GITHUB_REPO=AlreadyKyle/peanutgallery', 'GITHUB_REPO=someone/else'), 'GITHUB_REPO is not AlreadyKyle/peanutgallery'],
+      [good.replace('GITHUB_REPO=AlreadyKyle/mobmachine', 'GITHUB_REPO=someone/else'), 'GITHUB_REPO is not AlreadyKyle/mobmachine'],
       [good.replace('HEALTHCHECK_URL=https://', 'HEALTHCHECK_URL=http://'), 'HEALTHCHECK_URL must be an https URL'],
-      [good.replace('GITHUB_REPO=', 'GITHUB_REPO=AlreadyKyle/peanutgallery\r\nX='), 'carriage return'],
+      [good.replace('GITHUB_REPO=', 'GITHUB_REPO=AlreadyKyle/mobmachine\r\nX='), 'carriage return'],
       [`${good}DISPATCHER_REPO_ROOT=/srv/elsewhere\n`, 'DISPATCHER_REPO_ROOT is set by dispatcher.service'],
       [`${good}DISPATCHER_CODE_READONLY=off\n`, 'DISPATCHER_CODE_READONLY is set by dispatcher.service'],
       [good.replace('GITHUB_READ_TOKEN=github_pat_-fixture-read', 'GITHUB_READ_TOKEN=github_pat_-fixture-vps'), 'GITHUB_READ_TOKEN equals GITHUB_TOKEN'],
@@ -454,7 +454,7 @@ describe('deploy.sh wait_for_probe', () => {
     });
   const exited = (restart) =>
     `{"level":"error","scope":"main","msg":"dispatcher exited with an error","error":"startup probe failed","exitCode":${restart ? 1 : 78},"restart":${restart}}`;
-  const readonly = '{"ts":"t","level":"info","scope":"startup","msg":"code root is read-only","codeRoot":"/opt/peanutgallery"}';
+  const readonly = '{"ts":"t","level":"info","scope":"startup","msg":"code root is read-only","codeRoot":"/opt/mobmachine"}';
   const passed = '{"ts":"t","level":"info","scope":"probe","msg":"startup probe passed","apiKeySource":"ANTHROPIC_API_KEY"}';
 
   test('returns when this start logs the read-only check and then the probe', () => {
@@ -550,7 +550,7 @@ describe('values that must agree across files', () => {
     assert.match(dockerfile, /^ENTRYPOINT \["\/usr\/bin\/tini", "--", "\/usr\/local\/bin\/dispatcher-entrypoint\.sh"\]$/m);
     const instructions = dockerfile.split('\n').filter((line) => !line.startsWith('#')).join('\n');
     assert.doesNotMatch(instructions, /NODE_ENV|corepack|^COPY \. /m);
-    assert.match(dockerfile, /pnpm_config_store_dir=\/opt\/peanutgallery\/\.pnpm-store/);
+    assert.match(dockerfile, /pnpm_config_store_dir=\/opt\/mobmachine\/\.pnpm-store/);
   });
 
   test('the build context admits only the entrypoint', () => {
@@ -568,7 +568,7 @@ describe('values that must agree across files', () => {
     assert.equal(/^EXIT_FATAL=(\d+)$/m.exec(entrypoint)?.[1], fatal);
     assert.doesNotMatch(unit, /^EnvironmentFile=/m);
     assert.match(unit, /^OnFailure=dispatcher-alert\.service$/m);
-    for (const flag of ['--env-file /etc/peanutgallery/dispatcher.env', '--user 10001:10001', '--cap-drop ALL', '--pull never']) {
+    for (const flag of ['--env-file /etc/mobmachine/dispatcher.env', '--user 10001:10001', '--cap-drop ALL', '--pull never']) {
       assert.ok(unit.includes(flag), flag);
     }
   });
@@ -632,18 +632,18 @@ describe('the code clone and the work clone', () => {
   test('dispatcher.service mounts the code clone read-only and names the three roots', () => {
     const unit = read('platform/ops/dispatcher.service');
     for (const flag of [
-      '--volume /srv/peanutgallery-code:/opt/peanutgallery:ro ',
-      '--volume /srv/peanutgallery:/srv/peanutgallery ',
-      '--volume /srv/peanutgallery-worktrees:/srv/peanutgallery-worktrees ',
-      '--env DISPATCHER_CODE_ROOT=/opt/peanutgallery ',
-      '--env DISPATCHER_REPO_ROOT=/srv/peanutgallery ',
-      '--env DISPATCHER_WORKTREE_ROOT=/srv/peanutgallery-worktrees ',
+      '--volume /srv/mobmachine-code:/opt/mobmachine:ro ',
+      '--volume /srv/mobmachine:/srv/mobmachine ',
+      '--volume /srv/mobmachine-worktrees:/srv/mobmachine-worktrees ',
+      '--env DISPATCHER_CODE_ROOT=/opt/mobmachine ',
+      '--env DISPATCHER_REPO_ROOT=/srv/mobmachine ',
+      '--env DISPATCHER_WORKTREE_ROOT=/srv/mobmachine-worktrees ',
       '--env DISPATCHER_CODE_READONLY=required ',
     ]) {
       assert.ok(unit.includes(flag), flag);
     }
     const mounts = [...unit.matchAll(/--volume (\S+)/g)].map((match) => match[1]);
-    assert.deepEqual(mounts.filter((mount) => mount.startsWith('/srv/peanutgallery-code')), ['/srv/peanutgallery-code:/opt/peanutgallery:ro']);
+    assert.deepEqual(mounts.filter((mount) => mount.startsWith('/srv/mobmachine-code')), ['/srv/mobmachine-code:/opt/mobmachine:ro']);
     assert.equal(mounts.length, 3);
   });
 
@@ -734,7 +734,7 @@ describe('the code clone and the work clone', () => {
     const text = logicalLines(read('platform/ops/deploy.sh')).join('\n');
     // S2: the fetch names the repository's URL, and the clone's origin and the env file's repository are checked.
     assert.match(text, /code_git fetch --quiet "\$REPO_URL" \+refs\/heads\/main:refs\/remotes\/origin\/main/);
-    assert.match(read('platform/ops/deploy.sh'), /^REPO_URL=https:\/\/github\.com\/AlreadyKyle\/peanutgallery\.git$/m);
+    assert.match(read('platform/ops/deploy.sh'), /^REPO_URL=https:\/\/github\.com\/AlreadyKyle\/mobmachine\.git$/m);
     assert.match(text, /\[ "\$\(code_git config --local --get remote\.origin\.url\)" = "\$REPO_URL" \]/);
     assert.match(text, /\[ "\$\(env_value GITHUB_REPO\)" = "\$REPO_SLUG" \]/);
     assert.doesNotMatch(text, /fetch --quiet origin/);
@@ -751,7 +751,7 @@ describe('the code clone and the work clone', () => {
     assert.match(text, /chown -hR 0:0 "\$CODE_DIR"/);
     assert.match(read('platform/ops/Dockerfile.dispatcher'), /useradd --uid 10002 --gid 10002 /);
     for (const script of ['deploy.sh', 'provision.sh']) {
-      assert.match(read(`platform/ops/${script}`), /^CODE_DIR=\/srv\/peanutgallery-code$/m, script);
+      assert.match(read(`platform/ops/${script}`), /^CODE_DIR=\/srv\/mobmachine-code$/m, script);
       assert.match(read(`platform/ops/${script}`), /^BUILD_UID=10002$/m, script);
     }
 
@@ -828,7 +828,7 @@ describe('the code clone and the work clone', () => {
     const repo = fixtureRepo();
     const ops = path.join(repo, 'platform', 'ops');
     const unit = path.join(ops, 'dispatcher.service');
-    const readOnly = '[Service]\nExecStart=/usr/bin/docker run --rm \\\n  --volume /srv/peanutgallery-code:/opt/peanutgallery:ro \\\n  peanutgallery/dispatcher:current\n';
+    const readOnly = '[Service]\nExecStart=/usr/bin/docker run --rm \\\n  --volume /srv/mobmachine-code:/opt/mobmachine:ro \\\n  peanutgallery/dispatcher:current\n';
     const below = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
     writeFileSync(unit, readOnly);
     // Every file deploy.sh installs from the target.
@@ -839,13 +839,13 @@ describe('the code clone and the work clone', () => {
     hostGit(repo, 'add', '-A');
     hostGit(repo, 'commit', '-q', '-m', 'the floor');
     const floor = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
-    writeFileSync(unit, readOnly.replace('run --rm', 'run --rm --name peanutgallery-dispatcher'));
+    writeFileSync(unit, readOnly.replace('run --rm', 'run --rm --name mobmachine-dispatcher'));
     hostGit(repo, 'commit', '-q', '-am', 'after the floor');
     const after = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
     hostGit(repo, 'rm', '-q', 'platform/ops/backup/backup.sh');
     hostGit(repo, 'commit', '-q', '-m', 'no backup script');
     const noBackup = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
-    hostGit(repo, 'rm', '-q', 'platform/ops/peanutgallery-quota.timer');
+    hostGit(repo, 'rm', '-q', 'platform/ops/mobmachine-quota.timer');
     hostGit(repo, 'commit', '-q', '-m', 'no quota timer');
     const noTimer = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
     writeFileSync(unit, readOnly.replace(':ro', ''));
@@ -869,10 +869,10 @@ describe('the code clone and the work clone', () => {
     assert.match(check(side).stdout, /is not a commit on origin\/main/);
     assert.match(check(writable).stdout, /dispatcher\.service does not mount the code clone read-only/);
     assert.match(check(noBackup).stdout, new RegExp(`^${noBackup} has no platform/ops/backup/backup\\.sh, so it is older than the jobs`));
-    assert.match(check(noTimer).stdout, /has no platform\/ops\/peanutgallery-quota\.timer, so it is older than the jobs/);
+    assert.match(check(noTimer).stdout, /has no platform\/ops\/mobmachine-quota\.timer, so it is older than the jobs/);
     assert.equal(check(noTimer).status, 1);
     assert.match(check('0'.repeat(40)).stdout, /is not a commit in/);
-    assert.match(read('platform/ops/dispatcher.service'), /--volume \/srv\/peanutgallery-code:\/opt\/peanutgallery:ro/);
+    assert.match(read('platform/ops/dispatcher.service'), /--volume \/srv\/mobmachine-code:\/opt\/mobmachine:ro/);
   });
 
   // I4: the gate verdict, the review and the confirmation.
@@ -903,7 +903,7 @@ describe('the code clone and the work clone', () => {
       });
     const ok = gate({ check_runs: [{ id: 1, name: 'gate', status: 'completed', conclusion: 'success', app: { slug: 'github-actions' } }] });
     assert.equal(ok.status, 0, ok.stdout);
-    assert.match(ok.stderr, /^arg: https:\/\/api\.github\.com\/repos\/AlreadyKyle\/peanutgallery\/commits\/abc123\/check-runs\?check_name=gate/m);
+    assert.match(ok.stderr, /^arg: https:\/\/api\.github\.com\/repos\/AlreadyKyle\/mobmachine\/commits\/abc123\/check-runs\?check_name=gate/m);
     assert.match(ok.stderr, /^Authorization: Bearer fixture-gate-token$/m);
     assert.doesNotMatch(ok.stderr.split('\n').filter((line) => line.startsWith('arg:')).join('\n'), /fixture-gate-token/);
     const failed = gate({ check_runs: [{ id: 1, name: 'gate', status: 'completed', conclusion: 'failure', app: { slug: 'github-actions' } }] });
@@ -954,8 +954,8 @@ describe('the code clone and the work clone', () => {
 
   test('provision.sh creates both clones and the worktree folder with their owners, and accepts arm64', () => {
     const text = read('platform/ops/provision.sh');
-    assert.match(text, /^WORK_DIR=\/srv\/peanutgallery$/m);
-    assert.match(text, /^WORKTREE_DIR=\/srv\/peanutgallery-worktrees$/m);
+    assert.match(text, /^WORK_DIR=\/srv\/mobmachine$/m);
+    assert.match(text, /^WORKTREE_DIR=\/srv\/mobmachine-worktrees$/m);
     assert.match(text, /ensure_dir "\$CODE_DIR" 0 0755/);
     assert.match(text, /ensure_dir "\$WORK_DIR" "\$AGENT_UID" 0755/);
     assert.match(text, /ensure_dir "\$WORKTREE_DIR" "\$AGENT_UID" 0700/);
@@ -968,8 +968,8 @@ describe('the code clone and the work clone', () => {
     const entrypoint = read('platform/ops/dispatcher-entrypoint.sh');
     const commands = logicalLines(entrypoint).join('\n');
     assert.doesNotMatch(commands, /pnpm/);
-    assert.match(entrypoint, /^CODE=\$\{DISPATCHER_CODE_ROOT:-\/opt\/peanutgallery\}$/m);
-    assert.match(entrypoint, /^REPO=\$\{DISPATCHER_REPO_ROOT:-\/srv\/peanutgallery\}$/m);
+    assert.match(entrypoint, /^CODE=\$\{DISPATCHER_CODE_ROOT:-\/opt\/mobmachine\}$/m);
+    assert.match(entrypoint, /^REPO=\$\{DISPATCHER_REPO_ROOT:-\/srv\/mobmachine\}$/m);
     assert.match(commands, /^cd "\$CODE\/platform\/dispatcher"/m);
     assert.match(commands, /^exec node --import tsx src\/main\.ts$/m);
     assert.match(commands, /git -C "\$REPO" /);
@@ -1004,8 +1004,8 @@ describe('provision.sh read_token_verdict', () => {
   });
 
   test('refuses a token that can write, cannot read, or got any other answer', () => {
-    assert.match(verdict('200', '422', '{"message":"Object does not exist"}').stdout, /GITHUB_READ_TOKEN can write to AlreadyKyle\/peanutgallery/);
-    assert.match(verdict('404', '403', '{}').stdout, /cannot read AlreadyKyle\/peanutgallery \(GET returned 404\)/);
+    assert.match(verdict('200', '422', '{"message":"Object does not exist"}').stdout, /GITHUB_READ_TOKEN can write to AlreadyKyle\/mobmachine/);
+    assert.match(verdict('404', '403', '{}').stdout, /cannot read AlreadyKyle\/mobmachine \(GET returned 404\)/);
     assert.match(verdict('200', '403', '{"message":"API rate limit exceeded"}').stdout, /only a 403 permission denial proves/);
     assert.match(verdict('200', '000', '').stdout, /write check returned 000/);
     assert.match(read('platform/ops/provision.sh'), /^ {2}check_env_file\n {2}check_read_token\n/m);
@@ -1060,13 +1060,13 @@ describe('the CI workflows that run card code', () => {
 // docs/specs/money-safety.md: the backup, the Controller and the quota check on the VPS.
 describe('the jobs on the VPS', () => {
   const JOB_UNITS = [
-    'peanutgallery-job-alert@.service',
-    'peanutgallery-backup.service',
-    'peanutgallery-backup.timer',
-    'peanutgallery-controller.service',
-    'peanutgallery-controller.timer',
-    'peanutgallery-quota.service',
-    'peanutgallery-quota.timer',
+    'mobmachine-job-alert@.service',
+    'mobmachine-backup.service',
+    'mobmachine-backup.timer',
+    'mobmachine-controller.service',
+    'mobmachine-controller.timer',
+    'mobmachine-quota.service',
+    'mobmachine-quota.timer',
   ];
   const listed = (script, name) => new RegExp(`^${name}="([^"]+)"$`, 'm').exec(read(`platform/ops/${script}`))?.[1].split(' ');
 
@@ -1076,7 +1076,7 @@ describe('the jobs on the VPS', () => {
     for (const script of ['provision.sh', 'deploy.sh']) {
       assert.deepEqual([...listed(script, 'UNITS')].sort(), files, script);
       assert.deepEqual([...listed(script, 'VERIFY_UNITS')].sort(), files.filter((name) => !name.includes('@')), script);
-      assert.match(read(`platform/ops/${script}`), /^JOB_LIB=\/usr\/local\/lib\/peanutgallery$/m);
+      assert.match(read(`platform/ops/${script}`), /^JOB_LIB=\/usr\/local\/lib\/mobmachine$/m);
       assert.match(read(`platform/ops/${script}`), /verify_units \|\| die "systemd-analyze verify failed on/);
     }
     // The backup script root runs comes from the commit, like the units.
@@ -1123,41 +1123,41 @@ describe('the jobs on the VPS', () => {
 
   test('each job runs as a oneshot, only once its env file exists, and tells the board when it fails', () => {
     for (const job of ['backup', 'controller', 'quota']) {
-      const unit = read(`platform/ops/peanutgallery-${job}.service`);
+      const unit = read(`platform/ops/mobmachine-${job}.service`);
       assert.match(unit, /^Type=oneshot$/m, job);
-      assert.match(unit, new RegExp(`^ConditionPathExists=/etc/peanutgallery/${job}\\.env$`, 'm'), job);
-      assert.match(unit, /^OnFailure=peanutgallery-job-alert@%n\.service$/m, job);
+      assert.match(unit, new RegExp(`^ConditionPathExists=/etc/mobmachine/${job}\\.env$`, 'm'), job);
+      assert.match(unit, /^OnFailure=mobmachine-job-alert@%n\.service$/m, job);
       assert.doesNotMatch(unit, /^EnvironmentFile=/m, job);
-      const timer = read(`platform/ops/peanutgallery-${job}.timer`);
+      const timer = read(`platform/ops/mobmachine-${job}.timer`);
       assert.match(timer, /^OnCalendar=\*-\*-\* \d{2}:\d{2}:00 UTC$/m, job);
       assert.match(timer, /^Persistent=true$/m, job);
       assert.match(timer, /^WantedBy=timers\.target$/m, job);
     }
-    assert.match(read('platform/ops/peanutgallery-backup.service'), /^ExecStart=\/usr\/local\/lib\/peanutgallery\/backup\.sh$/m);
-    const alert = read('platform/ops/peanutgallery-job-alert@.service');
-    assert.match(alert, /f=\/etc\/peanutgallery\/ntfy\.url; \[ -s "\$\$f" \] \|\| exit 0/);
+    assert.match(read('platform/ops/mobmachine-backup.service'), /^ExecStart=\/usr\/local\/lib\/mobmachine\/backup\.sh$/m);
+    const alert = read('platform/ops/mobmachine-job-alert@.service');
+    assert.match(alert, /f=\/etc\/mobmachine\/ntfy\.url; \[ -s "\$\$f" \] \|\| exit 0/);
   });
 
   test('the Controller and the quota check run from the read-only code clone, as nobody, with their own env file and nothing else', () => {
     for (const job of ['controller', 'quota']) {
-      const unit = read(`platform/ops/peanutgallery-${job}.service`);
+      const unit = read(`platform/ops/mobmachine-${job}.service`);
       for (const flag of [
         '--pull never',
-        `--env-file /etc/peanutgallery/${job}.env`,
+        `--env-file /etc/mobmachine/${job}.env`,
         '--user 65534:65534',
         '--read-only',
         '--cap-drop ALL',
         '--security-opt no-new-privileges',
-        '--volume /srv/peanutgallery-code:/opt/peanutgallery:ro',
+        '--volume /srv/mobmachine-code:/opt/mobmachine:ro',
         '--entrypoint node',
         'peanutgallery/dispatcher:current',
-        `/opt/peanutgallery/platform/ops/jobs/main.mjs ${job}`,
+        `/opt/mobmachine/platform/ops/jobs/main.mjs ${job}`,
       ]) {
         assert.ok(unit.includes(flag), `${job}: ${flag}`);
       }
       const mounts = [...unit.matchAll(/--volume (\S+)/g)].map((match) => match[1]);
-      assert.deepEqual(mounts, ['/srv/peanutgallery-code:/opt/peanutgallery:ro'], job);
-      assert.doesNotMatch(unit, /dispatcher\.env|\/srv\/peanutgallery:|worktrees/, job);
+      assert.deepEqual(mounts, ['/srv/mobmachine-code:/opt/mobmachine:ro'], job);
+      assert.doesNotMatch(unit, /dispatcher\.env|\/srv\/mobmachine:|worktrees/, job);
     }
   });
 
@@ -1201,7 +1201,7 @@ function logicalLinesOf(text) {
 describe('make-jobs-env.sh', () => {
   const AGE = `age1${'q'.repeat(58)}`;
   const DOTENV = {
-    GITHUB_REPO: 'AlreadyKyle/peanutgallery',
+    GITHUB_REPO: 'AlreadyKyle/mobmachine',
     SUPABASE_URL: 'https://fixture.supabase.local',
     SUPABASE_SERVICE_ROLE_KEY: 'fixture-service-role-key',
     SUPABASE_SECRET_KEY: 'sb_secret_fixture',
@@ -1493,7 +1493,7 @@ describe('the Oracle instance', () => {
   test('the runbook says how to start a stopped instance from a phone, without the laptop', () => {
     const readme = read('platform/ops/README.md');
     assert.match(readme, /cloud\.oracle\.com/);
-    assert.match(readme, /Compute, Instances, `peanutgallery-dispatcher`, Start/);
+    assert.match(readme, /Compute, Instances, `mobmachine-dispatcher`, Start/);
     assert.doesNotMatch(readme, /Pay As You Go ends reclaims/);
   });
 });
@@ -1514,7 +1514,7 @@ describe('the daily jobs on GitHub Actions', () => {
     assert.deepEqual(Object.keys(workflow.on).sort(), ['schedule', 'workflow_dispatch']);
     assert.deepEqual(workflow.on.schedule, [{ cron: '17 6 * * *' }, { cron: '7 7 * * *' }, { cron: '37 7 * * *' }, { cron: '7 9 * * *' }, { cron: '23 * * * *' }]);
     assert.deepEqual(workflow.on.workflow_dispatch.inputs.job.options, ['backup', 'controller', 'quota', 'notices', 'marketing']);
-    assert.equal(job.if, "github.ref == 'refs/heads/main' && github.repository == 'AlreadyKyle/peanutgallery'");
+    assert.equal(job.if, "github.ref == 'refs/heads/main' && github.repository_id == '1369060201'");
     assert.equal(job.environment, 'ops');
     assert.equal(job['timeout-minutes'], 30);
     assert.deepEqual(workflow.permissions, { contents: 'read' });
@@ -1675,7 +1675,7 @@ describe('the daily jobs on GitHub Actions', () => {
 // Mac check is skipped (it asks for macOS, the pinned pnpm and not root, and runs first in both modes),
 // launchctl and plutil are fakes on PATH that record their calls, and clone_main clones a local
 // repository standing in for GitHub, recording the token header it was handed. Nothing here loads a
-// LaunchAgent or touches ~/peanutgallery-host.
+// LaunchAgent or touches ~/mobmachine-host.
 describe('install.sh --jobs-only', () => {
   const BASH = existsSync('/bin/bash') ? '/bin/bash' : 'bash';
   const IS_ROOT = typeof process.getuid === 'function' && process.getuid() === 0;
@@ -1699,7 +1699,7 @@ describe('install.sh --jobs-only', () => {
   const origin = path.join(scratch, 'jobs-only-origin');
   mkdirSync(path.join(origin, 'platform', 'ops', 'mac'), { recursive: true });
   mkdirSync(path.join(origin, 'platform', 'ops', 'jobs'), { recursive: true });
-  writeFileSync(path.join(origin, 'platform', 'ops', 'mac', 'studio.peanutgallery.job.plist'), read('platform/ops/mac/studio.peanutgallery.job.plist'));
+  writeFileSync(path.join(origin, 'platform', 'ops', 'mac', 'studio.mobmachine.job.plist'), read('platform/ops/mac/studio.mobmachine.job.plist'));
   writeFileSync(path.join(origin, 'platform', 'ops', 'jobs', 'main.mjs'), '');
   git(origin, 'init', '-q', '--initial-branch=main');
   git(origin, 'add', '-A');
@@ -1737,7 +1737,7 @@ describe('install.sh --jobs-only', () => {
           path.join(OPS_DIR, 'mac', 'install.sh'),
           ...args,
         ],
-        { env: { ...gitEnv, PATH: `${bin}:${process.env.PATH}`, PEANUTGALLERY_HOST: hostRoot, LAUNCH_AGENTS_DIR: agents, ...extra }, encoding: 'utf8' },
+        { env: { ...gitEnv, PATH: `${bin}:${process.env.PATH}`, MOBMACHINE_HOST: hostRoot, LAUNCH_AGENTS_DIR: agents, ...extra }, encoding: 'utf8' },
       );
     const callLines = () => (existsSync(calls) ? readFileSync(calls, 'utf8').split('\n').filter(Boolean) : []);
     return { root, hostRoot, env, agents, run, callLines, code: path.join(hostRoot, 'code') };
@@ -1757,7 +1757,7 @@ describe('install.sh --jobs-only', () => {
     assert.match(first.stdout, /backup-mac\.env: valid/);
     assert.match(first.stdout, /controller\.env is missing: the controller job is left out/);
     assert.match(first.stdout, /quota\.env is missing: the quota job is left out/);
-    assert.deepEqual(readdirSync(h.agents), ['studio.peanutgallery.backup.plist']);
+    assert.deepEqual(readdirSync(h.agents), ['studio.mobmachine.backup.plist']);
     assert.ok(h.callLines().some((line) => /^launchctl bootstrap gui\/\d+ .*studio\.peanutgallery\.backup\.plist$/.test(line)));
     assert.ok(!h.callLines().some((line) => /dispatcher|controller|quota/.test(line)), 'no dispatcher and no job without an env file');
     assert.equal(readFileSync(path.join(h.env, 'ntfy.url'), 'utf8'), 'https://ntfy.sh/fixture-topic\n');
@@ -1768,7 +1768,7 @@ describe('install.sh --jobs-only', () => {
     const writable = spawnSync('find', [h.code, '!', '-type', 'l', '-perm', '-0200', '-print'], { encoding: 'utf8' }).stdout.trim();
     assert.equal(writable, '', 'the whole clone is read-only');
     assert.equal(readFileSync(path.join(h.hostRoot, 'state', 'code-jobs-only'), 'utf8').trim(), git(origin, 'rev-parse', 'HEAD').stdout.trim());
-    assert.equal(git(h.code, 'config', '--get', 'remote.origin.url').stdout.trim(), 'https://github.com/AlreadyKyle/peanutgallery.git');
+    assert.equal(git(h.code, 'config', '--get', 'remote.origin.url').stdout.trim(), 'https://github.com/AlreadyKyle/mobmachine.git');
     assert.ok(!readFileSync(path.join(h.code, '.git', 'config'), 'utf8').includes('github_pat_'), 'the token is in no .git/config');
     assert.match(first.stdout, /install: done: \d+ change\(s\)$/m);
 
@@ -1784,7 +1784,7 @@ describe('install.sh --jobs-only', () => {
     assert.equal(run.status, 0, run.stdout + run.stderr);
     assert.match(run.stdout, /cloning main with VPS_GITHUB_TOKEN/);
     assert.equal(decoded(h.callLines().find((line) => line.startsWith('AUTHORIZATION: basic '))), `x-access-token:${HOST_TOKEN}`);
-    assert.deepEqual(readdirSync(h.agents).sort(), ['studio.peanutgallery.backup.plist', 'studio.peanutgallery.controller.plist']);
+    assert.deepEqual(readdirSync(h.agents).sort(), ['studio.mobmachine.backup.plist', 'studio.mobmachine.controller.plist']);
   });
 
   test('refuses what the full install refuses: a missing, open, linked or invalid env file, a missing or classic token, no alert address', { skip: IS_ROOT ? 'root can write anywhere' : false }, () => {
@@ -1831,9 +1831,9 @@ describe('install.sh --jobs-only', () => {
     assert.match(plain.stderr, /was cloned by install\.sh --jobs-only at [0-9a-f]{12}, for the jobs only\. Move it aside/);
     // As the refusal says: writable first, since a read-only folder cannot be moved to another.
     spawnSync('chmod', ['-R', 'u+w', h.code]);
-    assert.equal(spawnSync('mv', [h.code, path.join(h.root, 'peanutgallery-code.jobs-only')]).status, 0);
+    assert.equal(spawnSync('mv', [h.code, path.join(h.root, 'mobmachine-code.jobs-only')]).status, 0);
     const moved = spawnSync(BASH, ['-c', 'INSTALL_SOURCE_ONLY=1 . "$1"; refuse_jobs_only_clone; echo "changes $CHANGES"', 'x', path.join(OPS_DIR, 'mac', 'install.sh')], {
-      env: { ...gitEnv, PEANUTGALLERY_HOST: h.hostRoot },
+      env: { ...gitEnv, MOBMACHINE_HOST: h.hostRoot },
       encoding: 'utf8',
     });
     assert.equal(moved.status, 0, moved.stderr);
@@ -1870,7 +1870,7 @@ describe('the GitHub Actions host', () => {
     assert.deepEqual(Object.keys(workflow.on).sort(), ['schedule', 'workflow_dispatch']);
     assert.deepEqual(workflow.on.schedule, [{ cron: '*/30 * * * *' }]);
     assert.deepEqual(workflow.concurrency, { group: 'dispatcher', 'cancel-in-progress': false });
-    assert.equal(job.if, "github.ref == 'refs/heads/main' && github.repository == 'AlreadyKyle/peanutgallery' && vars.DISPATCHER_HOST == 'on'");
+    assert.equal(job.if, "github.ref == 'refs/heads/main' && github.repository_id == '1369060201' && vars.DISPATCHER_HOST == 'on'");
     assert.doesNotMatch(text, /pull_request|workflow_run/);
   });
 
@@ -1968,7 +1968,7 @@ describe('the GitHub Actions host', () => {
     chmodSync(path.join(dir, 'bin', 'gh'), 0o755);
     chmodSync(path.join(dir, 'bin', 'curl'), 0o755);
     writeFileSync(path.join(dir, 'output'), '');
-    const env = { PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`, ACTIONS_HOST_DIR: path.join(dir, 'host'), RUNNER_TEMP: dir, GITHUB_OUTPUT: path.join(dir, 'output'), GH_TOKEN: 'fixture-job-token', GITHUB_REPOSITORY: 'AlreadyKyle/peanutgallery', GITHUB_RUN_ID: '300' };
+    const env = { PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`, ACTIONS_HOST_DIR: path.join(dir, 'host'), RUNNER_TEMP: dir, GITHUB_OUTPUT: path.join(dir, 'output'), GH_TOKEN: 'fixture-job-token', GITHUB_REPOSITORY: 'AlreadyKyle/mobmachine', GITHUB_RUN_ID: '300' };
     const read = (name) => (existsSync(path.join(dir, name)) ? readFileSync(path.join(dir, name), 'utf8') : '');
     return { env, read };
   }
@@ -2134,7 +2134,7 @@ describe('the GitHub Actions host', () => {
     );
     chmodSync(path.join(bin, 'git'), 0o755);
     const env = path.join(scratch, 'actions-clone.env');
-    writeFileSync(env, 'GITHUB_REPO=AlreadyKyle/peanutgallery\nGITHUB_TOKEN=github_pat_-fixture-clone\n');
+    writeFileSync(env, 'GITHUB_REPO=AlreadyKyle/mobmachine\nGITHUB_TOKEN=github_pat_-fixture-clone\n');
     const target = path.join(scratch, 'actions-work');
     const run = spawnSync('bash', ['-c', 'set -euo pipefail; ACTIONS_HOST_SOURCE_ONLY=1 . "$1"; clone_work "$2" "$3"', 'ops-test', path.join(OPS_DIR, 'actions', 'run-dispatcher.sh'), env, target], {
       env: { PATH: `${bin}:${process.env.PATH}`, HOME: process.env.HOME },
@@ -2142,7 +2142,7 @@ describe('the GitHub Actions host', () => {
     });
     const calls = readFileSync(record, 'utf8');
     assert.equal(run.status, 0, `${run.stdout}${run.stderr}\n${calls}`);
-    assert.match(calls, /^-c core\.hooksPath=\/dev\/null -c core\.fsmonitor=false clone --quiet --branch main https:\/\/github\.com\/AlreadyKyle\/peanutgallery\.git /m);
+    assert.match(calls, /^-c core\.hooksPath=\/dev\/null -c core\.fsmonitor=false clone --quiet --branch main https:\/\/github\.com\/AlreadyKyle\/mobmachine\.git /m);
     assert.match(calls, /^header: http\.https:\/\/github\.com\/\.extraheader$/m);
     assert.doesNotMatch(calls, /fixture-clone/);
     assert.doesNotMatch(readFileSync(path.join(target, '.git', 'config'), 'utf8'), /extraheader|fixture-clone/);
